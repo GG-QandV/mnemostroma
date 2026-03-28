@@ -1,0 +1,40 @@
+# Databases & Storage
+*.db
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
+# Models & Weights
+models/
+weights/
+*.onnx
+*.safetensors
+*.bin
+*.h5
+*.pt
+
+# Secrets & Keys
+.env
+*.key
+*.pem
+credentials.json
+secret*
+
+# Commercial Specs & Private Workspace
+subconscious_layer_specification.md
+список_цен_по_доменам.md
+test_touch.txt
+*.md.bak
+instructions/
+docs/
+archive of documents/
+config_tuner*.md
+mnestroma_*.md
+tuner_specification*.md
+
+# Python & Environment
+__pycache__/
+*.pyc
+.venv/
+env/
+.pytest_cache/
