@@ -14,7 +14,6 @@ from ..core import SystemContext
 logger = logging.getLogger("mnemostroma.observer")
 
 from ..memory.scoring import calculate_score, get_importance_weight
-# Log writer removed for public release
 
 async def observer_pipeline(
     text: str, 

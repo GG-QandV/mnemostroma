@@ -12,7 +12,7 @@ class MockEmbedder:
     def encode(self, text: str) -> np.ndarray:
         # returns deterministic vectors based on string hash for simple testing
         np.random.seed(hash(text) & 0xFFFFFFFF)
-        return np.random.rand(512).astype(np.float16)
+        return np.random.rand(768).astype(np.float16)
 
 class MockHNSW:
     def __init__(self):
@@ -66,11 +66,11 @@ def test_decisions_contradict():
     sb1 = SessionBrief(
         session_id="s1", brief="Решили использовать PostgreSQL вместо MongoDB", 
         tags=["database"], importance="critical", score=0.9, resolution=1.0, created_at=0,
-        embedding=np.ones(512).astype(np.float16)
+        embedding=np.ones(768).astype(np.float16)
     )
     
     # Vector simulation for "highly similar topic"
-    sim_vec = np.ones(512).astype(np.float16)
+    sim_vec = np.ones(768).astype(np.float16)
     sim_vec[0] = 0.999 # slight perturbation
     
     sb2 = SessionBrief(
@@ -87,7 +87,7 @@ def test_decisions_contradict():
     sb3 = SessionBrief(
         session_id="s3", brief="Используем JWT для авторизации", 
         tags=["auth"], importance="critical", score=0.9, resolution=1.0, created_at=0,
-        embedding=np.zeros(512).astype(np.float16)
+        embedding=np.zeros(768).astype(np.float16)
     )
     
     contradict2 = decisions_contradict(sb1, sb3, embedder)

@@ -56,6 +56,8 @@ class Conductor:
         db_manager = DatabaseManager(db, config)
         await db_manager.start()
         
+        # 2.5 Logging (v1.0 spec)
+        
         # 3. Memory Indices
         hnsw_session = init_session_index(config)
         # Content HNSW init logic
@@ -74,11 +76,10 @@ class Conductor:
         )
         # Wire references
         self.ctx.db_manager = db_manager
-        self.ctx.log_writer = log_writer
         self.ctx.content = ContentManager(self.ctx)
         self.ctx.dissolver = Dissolver(self.ctx)
         
-        # Wire references
+        # Provide ctx to db_manager for log_event access
         db_manager.ctx = self.ctx
         
         # B01: Wire ImplicitFeedbackTracker (feedback_loop_v1.5.md § 4)
@@ -92,7 +93,9 @@ class Conductor:
         self.ctx.consolidation = ConsolidationWorker(self.ctx)
         await self.ctx.consolidation.start()
         
-        # System started
+        # Initial Bootstrap Log
+
+        # B02: Health Check Log (v1.0 spec — Point #17)
 
         logger.info("Mnemostroma system bootstrap complete.")
         return self.ctx

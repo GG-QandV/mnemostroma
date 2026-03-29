@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     urgency_expired         INTEGER DEFAULT 0,
     bare_entity             INTEGER DEFAULT 0,
     embedding_model_version TEXT    DEFAULT 'embeddinggemma-300m-int8-v1',
-    embedding               BLOB    -- float16 512d binary
+    embedding               BLOB    -- float16 768d binary
 );
 """
 
@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS content_versions (
     why_changed     TEXT,
     status          TEXT,     -- draft/active/rejected/archived
     rejected_reason TEXT,
-    embedding       BLOB,     -- float16 512d binary
+    embedding       BLOB,     -- float16 768d binary
     embedding_model_version TEXT DEFAULT 'bge-m3-int8-v1',
     created_at      INTEGER,
     PRIMARY KEY (content_id, version)
@@ -90,7 +90,7 @@ SCHEMA_MODEL_REGISTRY = """
 CREATE TABLE IF NOT EXISTS embedding_model_registry (
     model_key        TEXT PRIMARY KEY,   -- 'embeddinggemma-300m-int8-v1'
     model_name       TEXT,               -- human-readable
-    dim              INTEGER,            -- 512
+    dim              INTEGER,            -- 768
     quantization     TEXT,               -- 'int8'
     registered_at    INTEGER,            -- unix timestamp
     is_current       INTEGER DEFAULT 0   -- 1 = текущая активная модель
