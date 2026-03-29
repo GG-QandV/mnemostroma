@@ -58,6 +58,9 @@ class Conductor:
         await db_manager.start()
         
         # 2.5 Logging (v1.0 spec)
+        logs_path = getattr(config, 'logging', {}).get('db_path', "logs.db")
+        log_writer = LogWriter(logs_path)
+        await log_writer.start()
         
         # 3. Memory Indices
         hnsw_session = init_session_index(config)
@@ -77,6 +80,7 @@ class Conductor:
         )
         # Wire references
         self.ctx.db_manager = db_manager
+        self.ctx.log_writer = log_writer
         self.ctx.content = ContentManager(self.ctx)
         self.ctx.dissolver = Dissolver(self.ctx)
         
@@ -95,6 +99,11 @@ class Conductor:
         await self.ctx.consolidation.start()
         
         # Initial Bootstrap Log
+        from .storage.log_writer import log_event
+        await log_event(self.ctx, "conductor.bootstrap", "start", {
+            "db_path": str(db_path),
+            "logs_path": str(logs_path)
+        })
 
         # B02: Health Check Log (v1.0 spec — Point #17)
 

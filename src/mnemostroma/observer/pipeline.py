@@ -38,7 +38,13 @@ async def observer_pipeline(
     # 1. Deterministic filter
     filt = deterministic_filter(text)
     
-    # Log Filter (v1.0 Point #1)
+    # Log Filter
+    await log_event(ctx, "observer.filter", "classify", {
+        "importance": filt["importance"],
+        "conflict": filt["conflict"],
+        "urgency": filt["urgency"],
+        "text_preview": text[:50]
+    }, latency_ms=(time.time() - start_time)*1000, session_id=session_id)
 
     if filt["importance"] == "background" and not filt["precision_items"]:
         # Discard irrelevant content
@@ -53,7 +59,10 @@ async def observer_pipeline(
             threshold=ctx.config.importance.ner_score_threshold
         )
         
-    # Log NER (v1.0 Point #2)
+    # Log NER
+    await log_event(ctx, "observer.ner", "extract", {
+        "entities_count": len(entities)
+    }, latency_ms=(time.time() - ner_start)*1000, session_id=session_id)
 
     # 3. Compression
     brief, tags = compress_text(text, entities)
@@ -70,7 +79,11 @@ async def observer_pipeline(
         np.random.seed(42)
         embedding = np.random.rand(768).astype(np.float16)
 
-    # Log Embed (v1.0 Point #3)
+    # Log Embed
+    await log_event(ctx, "observer.embed", "encode", {
+        "model": "gte-multilingual-base-int8",
+        "output_dim": 768
+    }, latency_ms=(time.time() - vec_start)*1000, session_id=session_id)
 
     # 5. Scoring (Profile A: Write)
     score_start = time.time()
@@ -92,7 +105,11 @@ async def observer_pipeline(
         profile="write"
     )
 
-    # Log Score (v1.0 Point #4)
+    # Log Score
+    await log_event(ctx, "observer.score", "calculate", {
+        "relevance": round(relevance, 3), 
+        "score": round(score, 3)
+    }, latency_ms=(time.time() - score_start)*1000, session_id=session_id)
 
     # 6. Create SessionBrief
     # v1.3: Background with precision = Bare Entity (Precision Log)
@@ -146,7 +163,13 @@ async def observer_pipeline(
     if hasattr(ctx, 'db_manager') and ctx.db_manager:
         await ctx.db_manager.queue_write(sb)
 
-    # Log Save (v1.0 Point #5)
+    # Log Save
+    await log_event(ctx, "observer.save", "persist", {
+        "layer": "RAM_HOT",
+        "tags": sb.tags,
+        "brief": sb.brief,
+        "bare_entity": sb.bare_entity
+    }, session_id=session_id)
 
     latency = (time.time() - start_time) * 1000
     logger.info(f"Observer processed session {session_id} in {latency:.2f}ms")
