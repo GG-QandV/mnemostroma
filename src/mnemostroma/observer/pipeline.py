@@ -13,6 +13,7 @@ from ..core import SystemContext
 
 logger = logging.getLogger("mnemostroma.observer")
 
+from ..storage.log_writer import log_event
 from ..memory.scoring import calculate_score, get_importance_weight
 
 async def observer_pipeline(

@@ -9,6 +9,7 @@ from .core import SystemContext, ModelRegistry
 from .storage.sqlite import init_db, DatabaseManager
 from .storage.content_manager import ContentManager
 from .storage.log_writer import LogWriter
+from .storage.log_writer import LogWriter
 from .memory.hnsw import init_session_index, init_content_index
 from .memory.dissolver import Dissolver
 from .memory.consolidation import ConsolidationWorker
