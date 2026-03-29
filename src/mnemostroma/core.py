@@ -9,69 +9,75 @@ from .config import Config
 
 @dataclass
 class ModelRegistry:
-    """Registry for ONNX models with lazy loading.
+    """Registry for ONNX models with manifest-driven loading and shared sessions.
     
     Attributes:
         config: System configuration.
-        _embedder: Session vectorization model (EmbeddingGemma).
-        _ner: Zero-shot NER model (GLiNER).
-        _content_embedder: Content vectorization model (BGE-M3).
-        _reranker: Cross-encoder reranking model (TinyBERT).
+        _shared_session: Shared ONNX session for models using the same file.
+        _embedder: Session vectorization model.
+        _ner: Zero-shot NER model.
+        _content_embedder: Content vectorization model.
+        _reranker: Cross-encoder reranking model.
     """
     config: Config
+    _shared_session: Any = None
     _embedder: Any = None
     _ner: Any = None
     _content_embedder: Any = None
     _reranker: Any = None
 
-    def __post_init__(self):
-        """Ensure models directory exists."""
-        from pathlib import Path
-        model_root = Path.home() / ".mnemostroma" / "models"
-        model_root.mkdir(parents=True, exist_ok=True)
+    def _get_model_path(self, name: str) -> str:
+        """Resolve model path from manifest."""
+        if not self.config.manifest or name not in self.config.manifest.active_models:
+            raise ValueError(f"Model '{name}' not found in manifest")
+        return self.config.manifest.active_models[name].path
+
+    def _get_shared_session(self, model_path: str):
+        """Load or return shared ONNX session with memory arena hack."""
+        if self._shared_session is None:
+            import onnxruntime as ort
+            sess_options = ort.SessionOptions()
+            sess_options.enable_cpu_mem_arena = False
+            sess_options.enable_mem_pattern = False
+            self._shared_session = ort.InferenceSession(model_path, sess_options)
+        return self._shared_session
 
     @property
     def embedder(self) -> Any:
-        """Lazy load EmbeddingGemma-300M."""
+        """Lazy load shared embedder."""
         if self._embedder is None:
-            import os
-            from pathlib import Path
-            from .models.session_embedder import EmbeddingGemmaEncoder
-            model_dir = str(Path.home() / ".mnemostroma" / "models" / "embeddinggemma-300m")
-            self._embedder = EmbeddingGemmaEncoder(model_dir)
+            from .observer.embedder import Embedder
+            m_def = self.config.manifest.active_models["session_embedder"]
+            session = self._get_shared_session(m_def.path)
+            self._embedder = Embedder(session, m_def.tokenizer_path, dim=m_def.dim, max_length=m_def.max_length)
         return self._embedder
 
     @property
     def ner(self) -> Any:
-        """Lazy load GLiNER-small."""
+        """Lazy load GLiNER."""
         if self._ner is None:
-            import os
-            from pathlib import Path
             from .models.ner_observer import GLiNERObserver
-            model_dir = str(Path.home() / ".mnemostroma" / "models" / "gliner-small-v2.1")
-            self._ner = GLiNERObserver(model_dir)
+            path = self._get_model_path("ner")
+            self._ner = GLiNERObserver(path)
         return self._ner
 
     @property
     def content_embedder(self) -> Any:
-        """Lazy load BGE-M3."""
+        """Lazy load shared content embedder."""
         if self._content_embedder is None:
-            import os
-            from pathlib import Path
-            from .models.content_embedder import BGEM3Encoder
-            model_dir = str(Path.home() / ".mnemostroma" / "models" / "bge-m3-int8")
-            self._content_embedder = BGEM3Encoder(model_dir)
+            from .observer.embedder import Embedder
+            m_def = self.config.manifest.active_models["content_embedder"]
+            session = self._get_shared_session(m_def.path)
+            self._content_embedder = Embedder(session, m_def.tokenizer_path, dim=m_def.dim, max_length=m_def.max_length)
         return self._content_embedder
 
     @property
     def reranker(self) -> Any:
-        """Lazy load TinyBERT."""
+        """Lazy load Reranker."""
         if self._reranker is None:
-            import os
-            from pathlib import Path
             from .models.reranker import TinyBERTReranker
-            model_dir = str(Path.home() / ".mnemostroma" / "models" / "tinybert-l2-v2")
-            self._reranker = TinyBERTReranker(model_dir)
+            path = self._get_model_path("reranker")
+            self._reranker = TinyBERTReranker(path)
         return self._reranker
 
 @dataclass
@@ -109,6 +115,7 @@ class SystemContext:
     
     # Infrastructure
     db_manager: Optional['DatabaseManager'] = None
+    log_writer: Optional['LogWriter'] = None
     
     # v1.1 / v1.3 extensions
     urgency_index: Dict[str, Any] = field(default_factory=dict)  # sid -> UrgencyItem

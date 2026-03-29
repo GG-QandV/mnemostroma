@@ -48,7 +48,7 @@ def mock_ctx(config: Config) -> SystemContext:
     np.random.seed(42)
 
     models = MagicMock()
-    models.embedder.encode = lambda text: np.random.rand(512).astype(np.float16)
+    models.embedder.encode = lambda text: np.random.rand(768).astype(np.float16)
     models.reranker = None
     models.content_embedder = None
 
@@ -369,12 +369,12 @@ async def test_bt16_tuner_conflict_end_to_end(mock_ctx: SystemContext) -> None:
     import hnswlib
     
     # Initialize real HNSW mock index for the pipeline
-    mock_ctx.hnsw_session = hnswlib.Index(space="cosine", dim=512)
+    mock_ctx.hnsw_session = hnswlib.Index(space="cosine", dim=768)
     mock_ctx.hnsw_session.init_index(max_elements=100, ef_construction=200, M=16)
     mock_ctx.models.ner = None  # Prevent AsyncMock TypeError
     
     # Force embedder to return exact same embeddings for deterministic cosine sim > 0.85
-    base_embedding = np.random.rand(512).astype(np.float16)
+    base_embedding = np.random.rand(768).astype(np.float16)
     mock_ctx.models.embedder.encode = lambda text: base_embedding
     
     # 1. Observer processes first critical decision

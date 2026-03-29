@@ -1,0 +1,24 @@
+{
+  "active_models": {
+    "session_embedder": {
+      "path": "models/gte-multilingual-base/onnx/model_int8.onnx",
+      "tokenizer_path": "models/gte-multilingual-base/tokenizer.json",
+      "dim": 768,
+      "max_length": 512,
+      "pooling": "mean"
+    },
+    "content_embedder": {
+      "path": "models/gte-multilingual-base/onnx/model_int8.onnx",
+      "tokenizer_path": "models/gte-multilingual-base/tokenizer.json",
+      "dim": 768,
+      "max_length": 8192,
+      "pooling": "mean"
+    },
+    "ner": {
+      "path": "models/gliner-small-v2.1/model_int8.onnx"
+    },
+    "reranker": {
+      "path": "models/tinybert-l2-v2/onnx/model_quint8_avx2.onnx"
+    }
+  }
+}

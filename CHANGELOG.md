@@ -2,6 +2,21 @@
 
 All notable changes to the **Mnemostroma** project will be documented in this file.
 
+## [1.6.0] - 2026-03-29
+
+### Added
+- **Config-Driven Model Manifest**: Introduced `models_manifest.json` to decouple model paths and parameters from the code.
+- **Shared Model Architecture**: Transitioned to a single `gte-multilingual-base` (ONNX INT8) model shared between session and content embedding.
+- **ONNX Memory Optimization**: Implemented the `enable_cpu_mem_arena = False` hack in `ModelRegistry` to keep RAM usage within limits.
+
+### Changed
+- **Embedding Dimension**: Unified embedding dimension to **768d** (removing MRL truncation).
+- **RAM Limits**: Increased resource limits to **650MB (soft)** and **750MB (hard)** to accommodate the new model requirements.
+- **Model Registry**: Refactored `ModelRegistry` to use the manifest and provide pre-initialized shared sessions.
+
+### Fixed
+- **Content lazy-loading**: Unified the loading logic for all embedding operations.
+
 ## [1.5.1] - 2026-03-26
 
 ### Added

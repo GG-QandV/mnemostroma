@@ -6,28 +6,34 @@ from pathlib import Path
 from typing import Optional, Any
 
 class Embedder:
-    """EmbeddingGemma-300M ONNX wrapper for session vectorization.
+    """ONNX wrapper for vectorization (e.g. GTE-multilingual-base).
     
-    Uses 512d MRL (Matryoshka Representation Learning) truncation.
+    Supports shared sessions and configurable truncation.
     """
-    def __init__(self, model_path: str | Path, tokenizer_path: str | Path):
-        self.session = ort.InferenceSession(str(model_path))
+    def __init__(
+        self, 
+        session: ort.InferenceSession, 
+        tokenizer_path: str | Path, 
+        dim: int = 768, 
+        max_length: int = 512
+    ):
+        self.session = session
         self.tokenizer = Tokenizer.from_file(str(tokenizer_path))
-        self._dim = 512
+        self._dim = dim
+        self._max_length = max_length
 
     def encode(self, text: str) -> np.ndarray:
-        """Encode text into a 512d vector.
+        """Encode text into a vector.
         
         Args:
-            text: Input string (brief + tags).
+            text: Input string.
             
         Returns:
-            np.ndarray: float16[512] vector.
+            np.ndarray: float16 vector of dimension self._dim.
         """
+        self.tokenizer.enable_truncation(max_length=self._max_length)
         encoded = self.tokenizer.encode(text)
         input_ids = np.array([encoded.ids], dtype=np.int64)
-        
-        # Attention mask for models that require it
         attention_mask = np.array([encoded.attention_mask], dtype=np.int64)
         
         inputs = {
@@ -36,12 +42,9 @@ class Embedder:
         }
         
         outputs = self.session.run(None, inputs)
-        # Assuming output is [batch, tokens, hidden_dim] or [batch, hidden_dim]
-        # For EmbeddingGemma, we typically take the last token or use a specific pooling
-        # Most embedding models return [batch, hidden_dim] after pooling
         vector = outputs[0][0]
         
-        # MRL Truncation to 512d
+        # MRL Truncation / Fixed dimension
         if len(vector) > self._dim:
             vector = vector[:self._dim]
             
@@ -51,12 +54,3 @@ class Embedder:
             vector = vector / norm
             
         return vector.astype(np.float16)
-
-def load_embedder(config: Any, model_dir: Path) -> Embedder:
-    """Helper to load embedder from config."""
-    model_name = config.models.embedding_session
-    path = model_dir / model_name
-    return Embedder(
-        model_path=path / "model.onnx",
-        tokenizer_path=path / "tokenizer.json"
-    )

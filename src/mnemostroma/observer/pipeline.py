@@ -14,6 +14,7 @@ from ..core import SystemContext
 logger = logging.getLogger("mnemostroma.observer")
 
 from ..memory.scoring import calculate_score, get_importance_weight
+# Log writer removed for public release
 
 async def observer_pipeline(
     text: str, 
@@ -67,7 +68,7 @@ async def observer_pipeline(
     else:
         # Mock embedding for tests (Deterministic seed for reproducibility)
         np.random.seed(42)
-        embedding = np.random.rand(512).astype(np.float16)
+        embedding = np.random.rand(768).astype(np.float16)
 
     # Log Embed (v1.0 Point #3)
 
@@ -110,7 +111,7 @@ async def observer_pipeline(
         deadline_ts=filt["deadline_val"],
         bare_entity=is_bare,
         embedding=embedding,
-        embedding_model_version="embeddinggemma-300m-int8-v1"
+        embedding_model_version="gte-multilingual-base-int8"
     )
 
     # 6.5. Pass through Tuner checking for Conflicts

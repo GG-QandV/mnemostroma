@@ -1,0 +1,177 @@
+{
+  "_meta": {
+    "version": "1.4",
+    "product": "mnemostroma",
+    "generated": "2026-03-25",
+    "parameters_count": 80,
+    "config_profile": "free",
+    "specialization": null
+  },
+
+  "resources": {
+    "session_window_size": 200,
+    "content_max_blocks": 500,
+    "ram_soft_limit_mb": 650,
+    "ram_hard_limit_mb": 750,
+    "ram_eviction_threshold": 0.80,
+    "window_min": 50,
+    "sqlite_cache_mb": 64,
+    "sqlite_mmap_mb": 256,
+    "db_growth_budget_mb_per_day": 2.0
+  },
+
+  "score": {
+    "weight_relevance": 0.50,
+    "weight_temporal": 0.30,
+    "weight_importance": 0.20,
+    "temporal_decay_lambda": 0.05,
+    "weight_relevance_search": 0.60,
+    "weight_temporal_search": 0.30,
+    "weight_importance_search": 0.10
+  },
+
+  "importance": {
+    "weight_critical": 1.00,
+    "weight_important": 0.50,
+    "weight_background": 0.10,
+    "weight_principle": 1.00,
+    "ner_score_threshold": 0.70,
+    "tag_verification_threshold": 0.65,
+    "anchor_ttl_importance_multiplier_critical": 3.0,
+    "anchor_ttl_importance_multiplier_important": 1.5,
+    "anchor_ttl_importance_multiplier_background": 0.7
+  },
+
+  "temporal": {
+    "age_threshold_fresh_days": 1,
+    "age_threshold_actual_days": 7,
+    "age_threshold_stale_days": 30,
+    "age_threshold_archive_days": 90
+  },
+
+  "dissolver": {
+    "lambda_critical": 0.05,
+    "lambda_important": 0.15,
+    "lambda_background": 0.40,
+    "lambda_principle": 0.00,
+    "use_factor_coefficient": 0.80,
+    "prog_factor_max_successors": 10,
+    "prog_factor_weight": 0.30,
+    "resolution_floor_milestone": 0.05,
+    "resolution_floor_principle": 0.80,
+    "consolidation_interval_sec": 300,
+    "content_max_blocks": 500,
+    "content_evict_batch": 50,
+    "content_hot_protect_hours": 24,
+    "content_active_protect": true
+  },
+
+  "hnsw": {
+    "session_M": 16,
+    "session_ef_construction": 200,
+    "session_ef": 100,
+    "session_max_elements": 50000,
+    "content_M": 32,
+    "content_ef_construction": 400,
+    "content_ef": 200,
+    "content_max_elements": 10000,
+    "top_k_candidates": 20,
+    "embedding_dim": 768
+  },
+
+  "observer": {
+    "min_text_length": 20,
+    "ner_call_rate_target": 0.30,
+    "brief_max_chars": 50,
+    "active_variables_max": 9,
+    "tags_max_per_session": 7,
+    "tags_min_for_search": 1,
+    "urgency_score_modifier_expired": 0.50,
+    "urgency_score_modifier_principle": 1.30,
+    "session_type_classify_after_n": 5,
+    "gliner_mode": "small",
+    "gliner_auto_switch_precision_threshold": 0.70,
+    "gliner_auto_switch_after_sessions": 50
+  },
+
+  "tuner": {
+    "conflict_signal_threshold": 0.75,
+    "semantic_drift_threshold": 0.35,
+    "anchor_ttl_days_default": 30,
+    "anchor_ttl_days_decision": 90,
+    "anchor_ttl_days_principle": 36500,
+    "recalibration_drift_threshold": 0.40,
+    "check_interval_sec": 300,
+    "conflict_hold_max_days": 7
+  },
+
+  "urgency": {
+    "check_interval_sec": 300,
+    "expired_score_penalty": 0.50,
+    "principle_score_boost": 1.30,
+    "default_hours_ahead": 72,
+    "bare_entity_compress_delay_sec": 0
+  },
+
+  "storage": {
+    "sqlite_synchronous": "NORMAL",
+    "sqlite_auto_vacuum": "INCREMENTAL",
+    "sqlite_compress_threshold_mb": 500,
+    "sqlite_archive_cutoff_years": 3,
+    "async_flush_interval_sec": 5,
+    "batch_flush_size": 50
+  },
+
+  "experience": {
+    "layer_enabled": false,
+    "process_vec_enabled": true,
+    "process_vec_step_flush_every_n": 20,
+    "negative_exp_lambda": 0.10,
+    "negative_exp_resolution_floor": 0.05,
+    "cluster_min_samples": 5,
+    "intuition_fire_threshold": 0.82
+  },
+
+  "models": {
+    "embedding_session": "embeddinggemma-300m-int8",
+    "embedding_content": "bge-m3-int8",
+    "ner": "gliner-small-v2.1-int8",
+    "reranker": "tinybert-l2-v2-int8",
+    "bge_m3_lazy_load": true
+  },
+
+  "calibration": {
+    "enabled": true,
+    "max_sessions": 50,
+    "source": null,
+    "save_history": false
+  },
+
+  "security": {
+    "verify_models_on_bootstrap": true,
+    "manifest_path": "models/manifest.json",
+    "principle_confirmation_required": true,
+    "max_principles_per_session": 3,
+    "sanitize_input": true
+  },
+
+  "cloud_sync": {
+    "enabled": false,
+    "endpoint": null,
+    "layers": ["SQLite_Archive", "SQLite_Eternal"],
+    "interval_sec": 300,
+    "encrypted": true,
+    "device_id": null
+  },
+  "feedback": {
+    "weights": {
+      "USE": 1.0,
+      "DEEP_USE": 1.5,
+      "IGNORE": -0.5,
+      "REVISIT": 2.0
+    },
+    "ema_alpha": 0.1,
+    "ignore_window_sec": 5.0,
+    "revisit_threshold": 3
+  }
+}

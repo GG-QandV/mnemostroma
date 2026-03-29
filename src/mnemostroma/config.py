@@ -129,6 +129,28 @@ class ExperienceConfig:
     intuition_fire_threshold: float
 
 @dataclass(frozen=True)
+class ModelDefinition:
+    path: str
+    tokenizer_path: Optional[str] = None
+    dim: Optional[int] = None
+    max_length: Optional[int] = None
+    pooling: Optional[str] = None
+
+@dataclass(frozen=True)
+class ModelManifest:
+    active_models: Dict[str, ModelDefinition]
+
+    @classmethod
+    def load(cls, path: str | Path) -> 'ModelManifest':
+        with open(path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        models = {}
+        for name, m_data in data['active_models'].items():
+            models[name] = ModelDefinition(**m_data)
+        return cls(active_models=models)
+
+@dataclass(frozen=True)
 class ModelsConfig:
     embedding_session: str
     embedding_content: str
@@ -185,6 +207,7 @@ class Config:
     security: SecurityConfig
     cloud_sync: CloudSyncConfig
     feedback: FeedbackConfig
+    manifest: Optional[ModelManifest] = None
 
     @classmethod
     def load(cls, path: str | Path) -> 'Config':
@@ -215,5 +238,6 @@ class Config:
             calibration=CalibrationConfig(**data['calibration']),
             security=SecurityConfig(**data['security']),
             cloud_sync=CloudSyncConfig(**data['cloud_sync']),
-            feedback=FeedbackConfig(**data['feedback'])
+            feedback=FeedbackConfig(**data['feedback']),
+            manifest=ModelManifest.load(Path(path).parent / "models_manifest.json") if (Path(path).parent / "models_manifest.json").exists() else None
         )

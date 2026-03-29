@@ -8,13 +8,11 @@ from .config import Config
 from .core import SystemContext, ModelRegistry
 from .storage.sqlite import init_db, DatabaseManager
 from .storage.content_manager import ContentManager
+from .storage.log_writer import LogWriter
 from .memory.hnsw import init_session_index, init_content_index
 from .memory.dissolver import Dissolver
 from .memory.consolidation import ConsolidationWorker
-from .observer.embedder import load_embedder
-from .observer.ner import load_ner
-from .memory.content_embedder import load_content_embedder
-from .memory.reranker import load_reranker
+# Model loaders now managed by ModelRegistry
 from .feedback.implicit import ImplicitFeedbackTracker
 from .integration.proxy import ConductorProxy, MemoryBlock
 
@@ -58,8 +56,6 @@ class Conductor:
         db_manager = DatabaseManager(db, config)
         await db_manager.start()
         
-        
-        
         # 3. Memory Indices
         hnsw_session = init_session_index(config)
         # Content HNSW init logic
@@ -78,10 +74,12 @@ class Conductor:
         )
         # Wire references
         self.ctx.db_manager = db_manager
+        self.ctx.log_writer = log_writer
         self.ctx.content = ContentManager(self.ctx)
         self.ctx.dissolver = Dissolver(self.ctx)
         
-        
+        # Wire references
+        db_manager.ctx = self.ctx
         
         # B01: Wire ImplicitFeedbackTracker (feedback_loop_v1.5.md § 4)
         self.ctx.feedback_tracker = ImplicitFeedbackTracker(self.ctx)
@@ -94,9 +92,7 @@ class Conductor:
         self.ctx.consolidation = ConsolidationWorker(self.ctx)
         await self.ctx.consolidation.start()
         
-        # Initial Bootstrap Log
-
-        # B02: Health Check Log (v1.0 spec — Point #17)
+        # System started
 
         logger.info("Mnemostroma system bootstrap complete.")
         return self.ctx
@@ -132,4 +128,4 @@ class Conductor:
             
         from .observer.pipeline import observer_pipeline
         # Creates a background task to not block the main agent workflow
-        asyncio.create_task(observer_pipeline(session_id, text, self.ctx))
+        asyncio.create_task(observer_pipeline(text, session_id, self.ctx))
