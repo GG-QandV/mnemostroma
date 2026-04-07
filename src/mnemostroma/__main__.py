@@ -343,7 +343,7 @@ def _install_models(manifest_path: Path, force: bool = False):
 def _cmd_setup() -> None:
     import shutil
 
-    print("\nMnemostroma setup\n")
+    print("\nMnemostroma v1.7.1 setup\n")
 
     # 1. Create ~/.mnemostroma/
     _MNEMO_DIR.mkdir(parents=True, exist_ok=True)
