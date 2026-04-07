@@ -21,6 +21,7 @@ Requires-Dist: mcp>=1.0
 Provides-Extra: dev
 Requires-Dist: pytest>=8.0; extra == "dev"
 Requires-Dist: pytest-asyncio>=0.23; extra == "dev"
+Requires-Dist: pytest-mock>=3.0; extra == "dev"
 Provides-Extra: tray
 Requires-Dist: pystray>=0.19; extra == "tray"
 Requires-Dist: pillow>=10.0; extra == "tray"

@@ -71,42 +71,42 @@ async def list_tools() -> list[Tool]:
     return [
         Tool(
             name="ctx_semantic",
-            description="Семантический поиск по памяти. Возвращает релевантные сессии.",
+            description="Semantic memory search. Returns relevant sessions.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "Тема для поиска в памяти"},
-                    "top_k": {"type": "integer", "default": 20, "description": "Кандидаты для ранжирования"},
-                    "top_n": {"type": "integer", "default": 5, "description": "Финальных результатов после rerank"}
+                    "query": {"type": "string", "description": "Topic for memory search"},
+                    "top_k": {"type": "integer", "default": 20, "description": "Candidates for reranking"},
+                    "top_n": {"type": "integer", "default": 5, "description": "Final results after reranking"}
                 },
                 "required": ["query"]
             }
         ),
         Tool(
             name="ctx_get",
-            description="Получить сессию по ID. Загружает из RAM или SQLite.",
+            description="Retrieve session by ID. Loads from RAM or SQLite.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "session_id": {"type": "string", "description": "ID сессии"}
+                    "session_id": {"type": "string", "description": "Session ID"}
                 },
                 "required": ["session_id"]
             }
         ),
         Tool(
             name="ctx_active",
-            description="Текущий активный контекст: intent, переменные, дедлайны.",
+            description="Current active context: intent, variables, deadlines.",
             inputSchema={"type": "object", "properties": {}}
         ),
         Tool(
             name="ctx_search",
-            description="Поиск сессий по тегам. Быстрее семантического, требует точного совпадения тегов.",
+            description="Search sessions by tags. Faster than semantic search, requires exact tag matches.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "tags": {"type": "array", "items": {"type": "string"}, "description": "Теги для фильтрации"},
-                    "importance": {"type": "string", "description": "critical | important | background | principle"},
-                    "age": {"type": "string", "description": "Фильтр по age_signal"},
+                    "tags": {"type": "array", "items": {"type": "string"}, "description": "Tags for filtering"},
+                    "importance": {"type": "string", "description": "Importance filter: critical | important | background | principle"},
+                    "age": {"type": "string", "description": "Filter by age_signal"},
                     "limit": {"type": "integer", "default": 10}
                 },
                 "required": ["tags"]
@@ -114,53 +114,53 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="ctx_full",
-            description="Полный текст сессии из SQLite включая content_full. Использовать только когда нужна точная цитата.",
+            description="Full session text from SQLite including content_full. Use only when exact quote is needed.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "session_id": {"type": "string", "description": "ID сессии"}
+                    "session_id": {"type": "string", "description": "Session ID"}
                 },
                 "required": ["session_id"]
             }
         ),
         Tool(
             name="ctx_anchors",
-            description="Якоря субсознательного слоя: решения, факты, персоны, события. Быстрый RAM-доступ.",
+            description="Subconscious layer anchors: decisions, facts, persons, events. Fast RAM access.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "anchor_type": {"type": "string", "description": "decision | constraint | milestone | event | observation"},
-                    "session_id": {"type": "string", "description": "Фильтр по сессии"},
+                    "anchor_type": {"type": "string", "description": "Anchor type: decision | constraint | milestone | event | observation"},
+                    "session_id": {"type": "string", "description": "Filter by session ID"},
                     "limit": {"type": "integer", "default": 20}
                 }
             }
         ),
         Tool(
             name="ctx_precision",
-            description="Прецизионные артефакты: ссылки, формулы, цитаты, данные. Хранятся дословно.",
+            description="Precision artifacts: links, formulas, quotes, data. Stored verbatim.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "precision_type": {"type": "string", "description": "link | concept | quote | formula | data"},
-                    "importance": {"type": "string", "description": "Фильтр по важности"},
+                    "precision_type": {"type": "string", "description": "Artifact type: link | concept | quote | formula | data"},
+                    "importance": {"type": "string", "description": "Filter by importance"},
                     "limit": {"type": "integer", "default": 20}
                 }
             }
         ),
         Tool(
             name="ctx_expire",
-            description="Пометить срочную задачу как выполненную/истёкшую.",
+            description="Mark urgent task as completed or expired.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "session_id": {"type": "string", "description": "ID сессии с дедлайном"}
+                    "session_id": {"type": "string", "description": "Session ID with deadline"}
                 },
                 "required": ["session_id"]
             }
         ),
         Tool(
             name="ctx_urgent",
-            description="Активные дедлайны и срочные задачи.",
+            description="Active deadlines and urgent tasks.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -170,29 +170,29 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="save_content",
-            description="Сохранить блок контента (код, конфиг, текст) с версионированием.",
+            description="Save content block (code, config, text) with versioning.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "content_id":   {"type": "string", "description": "Уникальный ID контента"},
-                    "text":         {"type": "string", "description": "Текст контента"},
-                    "content_type": {"type": "string", "description": "function | class | chapter | scene | config"},
-                    "session_id":   {"type": "string", "description": "ID текущей сессии"},
+                    "content_id":   {"type": "string", "description": "Unique content ID"},
+                    "text":         {"type": "string", "description": "Content text"},
+                    "content_type": {"type": "string", "description": "Content type: function | class | chapter | scene | config"},
+                    "session_id":   {"type": "string", "description": "Current session ID"},
                     "tags":         {"type": "array", "items": {"type": "string"}},
-                    "why_changed":  {"type": "string", "description": "Причина изменения"}
+                    "why_changed":  {"type": "string", "description": "Change reason"}
                 },
                 "required": ["content_id", "text"]
             }
         ),
         Tool(
             name="content_search",
-            description="Семантический поиск по контентной ветке (код, конфиги, тексты). Возвращает метаданные блоков.",
+            description="Semantic search in content branch (code, configs, texts). Returns block metadata.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "Описание искомого контента"},
-                    "project_id": {"type": "string", "description": "Фильтр по проекту"},
-                    "status": {"type": "string", "default": "active", "description": "active | archived | all"},
+                    "query": {"type": "string", "description": "Description of the content to search"},
+                    "project_id": {"type": "string", "description": "Filter by project ID"},
+                    "status": {"type": "string", "default": "active", "description": "Status filter: active | archived | all"},
                     "top_k": {"type": "integer", "default": 5}
                 },
                 "required": ["query"]
@@ -200,19 +200,19 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="content_get",
-            description="Метаданные блока контента по ID. version=null → последняя активная версия.",
+            description="Content block metadata by ID. version=null -> last active version.",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "content_id": {"type": "string"},
-                    "version": {"type": "integer", "description": "Конкретная версия (опционально)"}
+                    "version": {"type": "integer", "description": "Specific version (optional)"}
                 },
                 "required": ["content_id"]
             }
         ),
         Tool(
             name="content_raw",
-            description="Полный текст версии контента. Дорогой вызов — только когда нужен точный текст.",
+            description="Full text of a content version. Expensive call — use only when exact text is needed.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -224,7 +224,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="content_history",
-            description="История всех версий контентного блока включая отклонённые. Только метаданные.",
+            description="History of all content block versions including rejected. Metadata only.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -235,7 +235,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="ctx_load",
-            description="Загрузить архивную сессию из SQLite в RAM. Использовать когда ctx_get вернул null.",
+            description="Load archived session from SQLite to RAM. Use when ctx_get returns null.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -246,7 +246,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="ctx_bridge",
-            description="Структурированный пакет передачи контекста следующему агенту: intent, решения, конфликты, дедлайны.",
+            description="Structured context hand-off packet for the next agent: intent, decisions, conflicts, deadlines.",
             inputSchema={"type": "object", "properties": {}}
         ),
     ]

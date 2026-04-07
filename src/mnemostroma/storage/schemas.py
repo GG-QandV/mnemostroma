@@ -98,7 +98,7 @@ CREATE TABLE IF NOT EXISTS embedding_model_registry (
     dim              INTEGER,            -- 768
     quantization     TEXT,               -- 'int8'
     registered_at    INTEGER,            -- unix timestamp
-    is_current       INTEGER DEFAULT 0   -- 1 = текущая активная модель
+    is_current       INTEGER DEFAULT 0   -- 1 = current active model
 );
 """
 

@@ -30,13 +30,13 @@ def compress_text(text: str, entities: List[Dict[str, Any]] = None) -> Tuple[str
     if entities:
         # Type prefix mapping (HybridNER types → short prefix)
         PREFIX_MAP = {
-            "человек": "per",
-            "организация": "org",
-            "адрес": "loc",
-            "дата": "date",
-            "технология": "tech",
-            "решение": "decision",
-            "запрет": "ban",
+            "person": "per",
+            "organization": "org",
+            "address": "loc",
+            "date": "date",
+            "technology": "tech",
+            "decision": "decision",
+            "prohibition": "ban",
         }
 
         seen: Set[str] = set()

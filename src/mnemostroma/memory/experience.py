@@ -216,7 +216,7 @@ class ExperienceIndex:
                 signals.append({
                     "type": "TENSION",
                     "tag": tag,
-                    "message": f"В теме «{tag}» есть неразрешённые противоречия ({cluster.conflict_count} конфликтов).",
+                    "message": f"Topic '{tag}' has unresolved contradictions ({cluster.conflict_count} conflicts).",
                 })
                 continue
 
@@ -225,7 +225,7 @@ class ExperienceIndex:
                 signals.append({
                     "type": "DO_THIS",
                     "tag": tag,
-                    "message": f"«{tag}» — проверенный паттерн ({cluster.session_count} сессий, score {avg:.2f}).",
+                    "message": f"'{tag}' is a verified pattern ({cluster.session_count} sessions, score {avg:.2f}).",
                 })
 
             # AVOID_THIS: practitioner+ with negative trend
@@ -233,7 +233,7 @@ class ExperienceIndex:
                 signals.append({
                     "type": "AVOID_THIS",
                     "tag": tag,
-                    "message": f"«{tag}» обычно приводит к проблемам в этом проекте (score {avg:.2f}).",
+                    "message": f"'{tag}' usually leads to problems in this project (score {avg:.2f}).",
                 })
 
         # Emotional pattern signals (spec §5.4)
@@ -246,19 +246,19 @@ class ExperienceIndex:
                 signals.append({
                     "type": "ATTRACT",
                     "tag": tag,
-                    "message": f"«{tag}» — положительный эмоциональный опыт (valence {cluster.emotion_valence:.2f}).",
+                    "message": f"'{tag}' reflects a positive emotional experience (valence {cluster.emotion_valence:.2f}).",
                 })
             elif esig == "REPEL":
                 signals.append({
                     "type": "REPEL",
                     "tag": tag,
-                    "message": f"«{tag}» — негативный эмоциональный опыт (valence {cluster.emotion_valence:.2f}).",
+                    "message": f"'{tag}' reflects a negative emotional experience (valence {cluster.emotion_valence:.2f}).",
                 })
             elif esig == "AMBIVALENT":
                 signals.append({
                     "type": "AMBIVALENT",
                     "tag": tag,
-                    "message": f"«{tag}» вызывает смешанные эмоции.",
+                    "message": f"'{tag}' evokes mixed emotions.",
                 })
 
         return signals[:5]  # cap to avoid flooding context

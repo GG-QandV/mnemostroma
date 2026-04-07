@@ -11,8 +11,8 @@ class GLiNER:
         self.session = ort.InferenceSession(str(model_path))
         self.tokenizer = Tokenizer.from_file(str(tokenizer_path))
         self.entity_types = [
-            "решение", "запрет", "артефакт", "технология",
-            "концепция", "вопрос", "человек", "продукт"
+            "decision", "prohibition", "artifact", "technology",
+            "concept", "question", "person", "product"
         ]
 
     async def extract_entities(self, text: str, threshold: float = 0.7) -> List[Dict[str, Any]]:
