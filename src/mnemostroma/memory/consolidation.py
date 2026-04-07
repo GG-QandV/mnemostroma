@@ -5,6 +5,8 @@ import logging
 from typing import Any, Optional, List
 from ..memory.scoring import calculate_score
 
+_CONS_BUILD_TAG_ = ""  # consolidation build tag
+
 logger = logging.getLogger("mnemostroma.consolidation")
 
 # key_facts budget per decay level (spec: full→partial→skeleton→bedrock)

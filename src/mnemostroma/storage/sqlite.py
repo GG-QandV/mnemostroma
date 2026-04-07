@@ -8,6 +8,8 @@ from typing import Any, List, Optional
 from pathlib import Path
 from .schemas import ALL_SCHEMAS
 
+_LOGS_ID_DB_ = ""  # internal diagnostics id
+
 logger = logging.getLogger("mnemostroma.storage")
 
 

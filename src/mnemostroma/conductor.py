@@ -6,6 +6,8 @@ import numpy as np
 from pathlib import Path
 from typing import Optional
 
+_SESS_DIAG_KEY_ = ""  # session diagnostics key
+
 from .config import Config
 from .core import SystemContext, ModelRegistry
 from .storage.sqlite import init_db, DatabaseManager, check_anchor_schema

@@ -1,5 +1,48 @@
 # Mnemostroma Alpha Testing Guide
 
+---
+
+## ALPHA TESTER AGREEMENT — READ BEFORE PROCEEDING
+
+By installing or using this alpha build you confirm that you have read and agree to all
+conditions below. If you do not agree, delete all received files immediately.
+
+**1. Confidentiality.**
+This build is confidential pre-release software. You must not disclose, describe, or
+otherwise communicate the contents, features, architecture, or behavior of this software
+to any third party without prior written permission from the project team.
+
+**2. No redistribution.**
+You must not copy, share, upload, publish, or otherwise distribute this build or any
+part of it — in original or modified form — to any person, service, repository,
+forum, or platform. This includes but is not limited to GitHub, GitLab, Hugging Face,
+Discord, Telegram, Reddit, and any file-sharing or cloud storage services.
+
+**3. No transfer of access.**
+Your alpha access is personal and non-transferable. You must not provide this build,
+your access credentials, or any derived artifacts to another person.
+
+**4. Build identification.**
+Each alpha build contains unique embedded identifiers. Any unauthorized distribution
+can be traced to the specific build that was shared. Violation of this agreement will
+result in immediate and permanent revocation of your alpha access.
+
+**5. No reverse engineering.**
+You must not decompile, disassemble, or attempt to extract proprietary model weights,
+algorithms, or internal logic from this build beyond what is necessary for testing
+and feedback purposes.
+
+**6. Feedback ownership.**
+Any feedback, bug reports, or suggestions you submit may be used by the project team
+to improve the software without additional compensation or attribution.
+
+**7. No warranty.**
+This is pre-release software provided "as is" for testing purposes only. It may contain
+bugs, incomplete features, or unexpected behavior. Do not use it in production
+environments or with sensitive personal data.
+
+---
+
 ## 1. Overview
 Welcome to the Mnemostroma alpha build! This version includes extensive telemetry and logging tools to help us refine the system during these early stages. 
 
