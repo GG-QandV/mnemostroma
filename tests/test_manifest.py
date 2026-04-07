@@ -34,6 +34,7 @@ class TestMnemostromaManifest(unittest.IsolatedAsyncioTestCase):
         # Test 3: Check tokenizer path correction
         self.assertTrue(embedder_def.tokenizer_path.endswith("tokenizer.json"))
 
+    @unittest.skip("requires downloaded ONNX models — run manually after mnemostroma setup")
     async def test_conductor_start_no_crash(self):
         """Verify that Conductor starts without 'Is a directory' error."""
         # We use a temporary DB for testing bootstrap

@@ -28,6 +28,7 @@ mnemostroma = "mnemostroma.__main__:cli"
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
+    "pytest-mock>=3.0",
 ]
 tray = [
     "pystray>=0.19",
