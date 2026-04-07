@@ -1,20 +1,91 @@
 # Changelog
 
-All notable changes to the **Mnemostroma** project will be documented in this file.
+## [1.7.1] — 2026-04-07
+
+### Added
+
+- `PersistenceLayer` — формальный интерфейс между WorkingMemory и SQLite (Phase 9.2)
+- CLI user mode: `mnemostroma setup / on / off / status`
+- `config_default.json` — копируется при `setup` в `~/.mnemostroma/`
+- `pyproject.toml`: package-data для config_default.json + models_manifest.json
+
+### Fixed
+
+- `pipeline.py`, `consolidation.py`, `dreamer.py`: `create_task(save_anchor/upsert_experience)` → `await ctx.persistence.*` — устранён fire-and-forget на священных записях
+- `bridge.py`: ctx_sync делегирует в `PersistenceLayer.sync()` — WAL логика централизована
+- `content_manager.py`, `daemon_metrics.py`, `dissolver.py`, `admin.py`, `__main__.py`: все db_manager → persistence
+
+### Architecture
+
+- `SystemContext.db_manager` → `SystemContext.persistence: Optional[PersistenceLayer]`
+- `conductor.py`: `PersistenceLayer(db_manager)` + `persistence.wire_ctx(ctx)`
+- Два явных пути записи зафиксированы: enqueue_session (5-sec batch) vs save_anchor/save_experience (immediate, never lost)
+
+### Tests
+
+- 303 passed (было 303 до 9.2, все сохранены + переписан test_bridge.py)
+- `test_bridge.py`: переписан с `_make_persistence_mock()`
+- `test_dissolver.py`, `test_anchor_decay.py`, `test_daemon_infra.py`: переведены на использование ctx.persistence
+
+## [1.7.0] — 2026-04-04
+
+### Added
+
+- **Numpy MatrixSearch**: Replaced `hnswlib` with pure numpy implementation for semantic search (ADR-002).
+- **Core Memory Features**: Implemented `marker()`, `Entity`, `Emotion`, `Atmosphere`, and `TemporalRelations`.
+- **Subconscious Layers**: Added `Anchor Decay` engine and `Dreamer` background re-evaluation.
+- **Persistence**: `t_rel` (temporal relations) persistence in SQLite with `check_anchor_schema` migration.
+- **Experience Layer**: Added Emotional Patterns (`ATTRACT`/`REPEL`/`AMBIVALENT`) to `ExperienceCluster`.
+- **Daemon Infra**: Added `PulseWriter`, `StatusWriter`, `flush()` mechanics, and signal handling (`SIGUSR1/2`).
+- **CLI Tools**: Added `mnemostroma install-models` and `dump`/`growth` commands.
+- **Reranker E2E**: Fully integrated `TinyBERT-L2-v2` with `multilingual-e5-small` (dim=384) embeddings.
+
+### Changed
+
+- **MCP API**: Streamlined tools from 22 to 16, removing daemon-only tools and clarifying urgency policy.
+- **Eviction Strategy**: Implemented Eviction Formula v2 for smarter RAM management.
+- **Logging**: Added Safe/Debug logging mode to protect sensitive data.
+
+### Planned
+
+- **B.2: Continuation Detection**: implementation of scoring logic (HNSW + tags + recency).
+- **B.3: Mention Type**: classifier for focus vs passing entities.
+- **Safe Logging**: mode to disable diagnostic logs in `config.json`.
+- **CLI**: `mnemostroma install-models` for automated environment setup.
+- **Decay Engine**: background memory resolution reduction (Stage C).
+
+## [1.6.2] - 2026-03-30
+
+### Fixed
+
+- **Regex Patterns**: Changed `DECISION` and `PROHIBITION` patterns from matching trailing character to positive lookahead `(?=[.,;!\n]|$)`. This enables catching entities at the end of the line and prevents delimiter consumption in the entity value.
+
+## [1.6.1] - 2026-03-30
+
+### Added
+
+- **Hybrid NER**: Introduced `HybridNER` which combines DistilBERT token classification with regex patterns to improve extraction of technology-specific entities, decisions (RU/EN/UA), and prohibitions.
+
+### Changed
+
+- **NER Pipeline**: Migrated `NERObserver` from `BertNER` to `HybridNER`. Full compliance with Rule 2 for CPU-bound offloading via `run_in_executor`.
 
 ## [1.6.0] - 2026-03-29
 
 ### Added
+
 - **Config-Driven Model Manifest**: Introduced `models_manifest.json` to decouple model paths and parameters from the code.
 - **Shared Model Architecture**: Transitioned to a single `gte-multilingual-base` (ONNX INT8) model shared between session and content embedding.
 - **ONNX Memory Optimization**: Implemented the `enable_cpu_mem_arena = False` hack in `ModelRegistry` to keep RAM usage within limits.
 
 ### Changed
+
 - **Embedding Dimension**: Unified embedding dimension to **768d** (removing MRL truncation).
 - **RAM Limits**: Increased resource limits to **650MB (soft)** and **750MB (hard)** to accommodate the new model requirements.
 - **Model Registry**: Refactored `ModelRegistry` to use the manifest and provide pre-initialized shared sessions.
 
 ### Fixed
+
 - **Content lazy-loading**: Unified the loading logic for all embedding operations.
 
 ## [1.5.1] - 2026-03-26

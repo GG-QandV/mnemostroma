@@ -18,6 +18,7 @@ logger = logging.getLogger("mnemostroma.feedback")
 # Threshold for rapid re-query detection (seconds)
 # Now managed via ctx.config.feedback
 
+
 async def record_signal(
     session_id: str,
     signal: str,
@@ -51,26 +52,32 @@ async def record_signal(
     if signal in ("USE", "DEEP_USE", "REVISIT"):
         sb.use_count = getattr(sb, "use_count", 0) + 1
 
+
     logger.debug(
         f"Feedback {signal} for {session_id}: "
         f"implicit_score {old_score:.3f} → {sb.implicit_score:.3f}"
     )
 
+
 async def signal_use(session_id: str, ctx: SystemContext) -> None:
     """Emit a USE signal — session was retrieved and likely acted upon."""
     await record_signal(session_id, "USE", ctx)
+
 
 async def signal_deep_use(session_id: str, ctx: SystemContext) -> None:
     """Emit a DEEP_USE signal — agent requested full session content."""
     await record_signal(session_id, "DEEP_USE", ctx)
 
+
 async def signal_ignore(session_id: str, ctx: SystemContext) -> None:
     """Emit an IGNORE signal — session appeared in results but agent re-queried quickly."""
     await record_signal(session_id, "IGNORE", ctx)
 
+
 async def signal_revisit(session_id: str, ctx: SystemContext) -> None:
     """Emit a REVISIT signal — same session retrieved 3+ times in current working session."""
     await record_signal(session_id, "REVISIT", ctx)
+
 
 class ImplicitFeedbackTracker:
     """Stateful tracker that detects rapid re-query (IGNORE) and REVISIT patterns.

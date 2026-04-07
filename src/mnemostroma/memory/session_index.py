@@ -42,8 +42,10 @@ class SessionBrief:
     deadline_ts: Optional[int] = None
     urgency_expired: bool = False
     bare_entity: bool = False
-    embedding_model_version: str = "embeddinggemma-300m-int8-v1"
+    embedding_model_version: str = "gte-multilingual-base-int8-v1"
     
     layer: str = "RAM_HOT"
     embedding: Optional[np.ndarray] = None
     implicit_score: float = 0.5
+    # Emotion intensity linked to this session (0.0 = no emotion; used in eviction v2)
+    intensity: float = 0.0

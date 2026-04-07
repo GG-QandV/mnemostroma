@@ -10,12 +10,11 @@ from ..memory.session_index import SessionBrief
 logger = logging.getLogger("mnemostroma.tuner")
 
 def extract_key_entities(text: str) -> Set[str]:
-    """Simplified NER: extracts potential nouns and named entities.
-    
-    Since Anchors are not implemented in Phase 1, we use the `brief` and `tags`
-    as the primary source of truth for semantic contradiction detection.
-    """
-    return set(token.lower() for token in text.split() if len(token) > 4)
+    """Simplified NER: extracts potential nouns and named entities."""
+    import re
+    return set(re.sub(r'[^\w]', '', t).lower()
+               for t in text.split()
+               if len(re.sub(r'[^\w]', '', t)) > 4)
 
 def cosine_similarity(vec_a: np.ndarray, vec_b: np.ndarray) -> float:
     """Calculate cosine similarity safely."""
@@ -66,9 +65,13 @@ def decisions_contradict(
     
     no_shared_entities = len(entities_A & entities_B) == 0
     
-    # 5. Decision
+    # 5. Decision — same topic (cosine ≥ 0.85 already guaranteed by caller) + different conclusion
+    # texts_differ: wording diverges enough
+    # no_shared_entities: no literal token overlap (e.g. "PostgreSQL" vs "MongoDB")
+    # Either condition is sufficient: truly contradictory sessions may differ in wording
+    # OR use completely different terminology (same semantic space, different tokens)
     different_conclusion = texts_differ or no_shared_entities
-    
+
     return different_conclusion
 
 def check_conflict(new_sb: SessionBrief, ctx: SystemContext) -> bool:
@@ -78,30 +81,30 @@ def check_conflict(new_sb: SessionBrief, ctx: SystemContext) -> bool:
     If a previous session is found that discusses the same topic but reaches
     a contradictory conclusion, flags both as conflicted.
     """
-    if not ctx.hnsw_session or new_sb.embedding is None:
+    if not ctx.session_index or new_sb.embedding is None:
         return False
         
     vec = new_sb.embedding
     
     # Query nearest 10 via HNSW
-    count = ctx.hnsw_session.get_current_count()
+    count = ctx.session_index.get_current_count()
     if count == 0:
         return False
     k_to_query = min(10, count)
     
     try:
-        labels, distances = ctx.hnsw_session.knn_query(vec.reshape(1, -1), k=k_to_query)
+        labels, distances = ctx.session_index.knn_query(vec.reshape(1, -1), k=k_to_query)
     except Exception as e:
         logger.warning(f"Failed HNSW knn_query for conflict check: {e}")
         return False
         
     # Ensure items exist
-    if len(labels) == 0 or len(labels[0]) == 0:
+    if not labels:
         return False
         
     conflict_found = False
     
-    for label, dist in zip(labels[0], distances[0]):
+    for label, dist in zip(labels, distances):
         cosine_sim = 1.0 - float(dist)
         if cosine_sim <= 0.85:
             continue
@@ -139,5 +142,6 @@ async def tuner_check(entity: SessionBrief, ctx: SystemContext) -> SessionBrief:
     if check_conflict(entity, ctx):
         flags.append("conflict")
         
+    latency = (time.time() * 1000) - start_ms
     
     return entity

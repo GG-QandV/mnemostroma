@@ -25,4 +25,3 @@ Observer Pipeline (pipeline.py)
 
 - Spec: `tuner_specification.md` + `tuner_specification_v1.4.md`
 - Priority: intercepts only `critical` and `important` sessions.
-- Modifies: `SessionBrief.conflict_flag`.

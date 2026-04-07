@@ -19,7 +19,6 @@ async def save_content(
     res = await ctx.content.save(content_id, text, **kwargs)
     
     # Log tool call
-
     return res
 
 async def ctx_urgent(
@@ -37,7 +36,6 @@ async def ctx_urgent(
     )
     
     # Log tool call
-
     return results
 
 async def ctx_expire(session_id: str, ctx: SystemContext):
@@ -58,4 +56,3 @@ async def ctx_expire(session_id: str, ctx: SystemContext):
         await ctx.db.commit()
     
     # Log expiration
-

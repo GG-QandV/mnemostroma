@@ -2,10 +2,13 @@
 import asyncio
 import time
 import numpy as np
+import logging
 from typing import List, Dict, Any, Optional
 from ..core import SystemContext
 from ..memory.session_index import SessionBrief
 from .scoring import calculate_score
+
+logger = logging.getLogger("mnemostroma.memory")
 
 async def semantic_search(
     query: str,
@@ -24,40 +27,52 @@ async def semantic_search(
     Returns:
         List[SessionBrief]: Top-N ranked results.
     """
-    if not ctx.hnsw_session or not ctx.models or not ctx.models.embedder:
+    if not ctx.session_index or not ctx.models or not ctx.models.embedder:
         return []
 
-    # 1. Vectorize query
-    loop = asyncio.get_event_loop()
-    query_vector = await loop.run_in_executor(None, ctx.models.embedder.encode, query)
+    # RuntimeError Fix: Avoid knn_query on empty index
+    if ctx.session_index.get_current_count() == 0:
+        logger.info("Semantic search: Index is empty, returning no results.")
+        return []
 
-    # 2. KNN Search in HNSW
-    labels, distances = ctx.hnsw_session.knn_query(query_vector, k=k)
+    # 1. Vectorize query with model-specific prefix (Config-Driven)
+    model_def = ctx.config.manifest.active_models.get("session_embedder")
+    prefix = model_def.query_prefix if model_def else ""
+    full_query = f"{prefix}{query}" if prefix else query
+    
+    query_vector = await ctx.models.embedder.aencode(full_query)
+
+    # 2. KNN Search in HNSW — lock prevents race with concurrent add_items
+    async with ctx.index_lock:
+        labels, distances = ctx.session_index.knn_query(query_vector, k=k)
     
     # Map labels back to session_ids
     candidates = []
-    for label in labels[0]: # labels is 2D array [1, k]
+    for label in labels: 
         sid = ctx.id_to_sid.get(int(label))
         if sid and sid in ctx.ram_index:
             candidates.append(ctx.ram_index[sid])
     
     if not candidates:
         return []
-
+        
     # 3. Reranking with TinyBERT
     # If no reranker, use distances/relevance directly
     relevances = []
     if ctx.models.reranker:
         briefs = [f"{c.brief} {' '.join(c.tags)}" for c in candidates]
-        relevances = await loop.run_in_executor(
-            None, ctx.models.reranker.rank, query, briefs
+        raw = await loop.run_in_executor(
+            None, ctx.models.reranker.rerank, query, briefs
         )
+        # rerank() returns List[Tuple[str, float]] with raw logits
+        # Apply sigmoid to normalize logits → [0, 1] for scoring formula
+        relevances = [float(1.0 / (1.0 + np.exp(-score))) for _, score in raw]
     else:
         # Fallback to HNSW distances transformed to relevance (conceptually 1 - dist)
-        relevances = [float(1.0 - d) for d in distances[0]]
+        relevances = [float(1.0 - d) for d in distances]
 
-    # KNN/HNSW Log (immediate, before scoring)
-
+    # KNN/HNSW Log (Privacy-conscious: no full query text)
+    
     final_results = []
     for i, cand in enumerate(candidates):
         rel = relevances[i]
@@ -76,5 +91,5 @@ async def semantic_search(
     final_results.sort(key=lambda x: x.score, reverse=True)
     
     # Rerank Log
-
+    
     return final_results[:top_n]

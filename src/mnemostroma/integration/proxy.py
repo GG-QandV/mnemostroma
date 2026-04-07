@@ -109,6 +109,21 @@ class ConductorProxy:
             lines = [f"- {sb.session_id}: {sb.brief}" for sb in relevant_sessions]
             relevant_xml = "<relevant>\n" + "\n".join(lines) + "\n</relevant>"
             
+        # 2b. Intuition Signals from Experience Layer
+        intuition_xml = ""
+        if getattr(self.ctx, 'experience_index', None) and self.ctx.config.experience.layer_enabled:
+            active_tags = []
+            for sb in list(self.ctx.ram_index.values())[-10:]:
+                active_tags.extend(sb.tags)
+            active_tags = list(dict.fromkeys(active_tags))[:15]  # dedup, cap
+            signals = self.ctx.experience_index.intuition_signals(active_tags)
+            if signals:
+                lines = [f'  <signal type="{s["type"]}">{s["message"]}</signal>' for s in signals]
+                intuition_xml = "<intuition>\n" + "\n".join(lines) + "\n</intuition>"
+                # Log each fired signal for watch/dashboard observability
+                for s in signals:
+                    cluster = self.ctx.experience_index.get(s["tag"])
+
         # 3. Assemble Full XML
         from datetime import timezone
         now_str = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -119,6 +134,8 @@ class ConductorProxy:
             context_string += self._static_cache + "\n\n"
             if relevant_xml:
                 context_string += relevant_xml + "\n"
+            if intuition_xml:
+                context_string += intuition_xml + "\n"
             context_string += '</memory_context>'
             
         # 4. Tools payload
@@ -129,6 +146,7 @@ class ConductorProxy:
         # Log Injection (v1.0 spec — Point #14)
         sections = ["decisions", "principles", "conflicts", "deadlines"]
         if relevant_xml: sections.append("relevant")
+        
 
         return MemoryBlock(
             context=context_string,

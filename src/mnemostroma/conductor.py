@@ -1,18 +1,20 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
 import asyncio
 import logging
+import time
+import numpy as np
 from pathlib import Path
 from typing import Optional
 
 from .config import Config
 from .core import SystemContext, ModelRegistry
-from .storage.sqlite import init_db, DatabaseManager
+from .storage.sqlite import init_db, DatabaseManager, check_anchor_schema
+from .storage.persistence import PersistenceLayer
 from .storage.content_manager import ContentManager
-from .storage.log_writer import LogWriter
-from .storage.log_writer import LogWriter
 from .memory.hnsw import init_session_index, init_content_index
 from .memory.dissolver import Dissolver
 from .memory.consolidation import ConsolidationWorker
+from .memory.daemon_metrics import PulseWriter, StatusWriter
 # Model loaders now managed by ModelRegistry
 from .feedback.implicit import ImplicitFeedbackTracker
 from .integration.proxy import ConductorProxy, MemoryBlock
@@ -27,6 +29,10 @@ class Conductor:
     def __init__(self):
         self.ctx: Optional[SystemContext] = None
         self.proxy: Optional[ConductorProxy] = None
+        self._last_observe_at: float = 0.0
+        self._dreamer_task: Optional[asyncio.Task] = None
+        self._pulse_writer: Optional[PulseWriter] = None
+        self._status_writer: Optional[StatusWriter] = None
 
     async def start(
         self, 
@@ -57,38 +63,74 @@ class Conductor:
         db_manager = DatabaseManager(db, config)
         await db_manager.start()
         
-        # 2.5 Logging (v1.0 spec)
-        logs_path = getattr(config, 'logging', {}).get('db_path', "logs.db")
-        log_writer = LogWriter(logs_path)
-        await log_writer.start()
+        # B0.5: Dimension Migration (Wipe stale embeddings if 768 -> 384 mismatch)
+        await db_manager.check_embedding_dim(config.search.embedding_dim)
+        # B0.6: Experience schema migration (adds emotion columns if missing — v1.4)
+        await db_manager.check_experience_schema()
+        # B0.7: Anchor t_rel migration (adds t_rel column if missing — v1.6 §5.1)
+        await check_anchor_schema(db)
         
-        # 3. Memory Indices
-        hnsw_session = init_session_index(config)
-        # Content HNSW init logic
-        hnsw_content = init_content_index(config)
-        
+
+        # 3. Memory Indices (matrix cosine search — ADR-002)
+        session_index = init_session_index(config)
+        content_index = init_content_index(config)
+
         # 4. Models — fully delegated to ModelRegistry's lazy loading (Phase 7 fix)
-        model_registry = ModelRegistry(config=config)
-        
+        model_registry = ModelRegistry(config=config, model_dir=Path(model_dir))
+
         # 5. Global Context
         self.ctx = SystemContext(
             config=config,
             db=db,
-            hnsw_session=hnsw_session,
-            hnsw_content=hnsw_content,
+            session_index=session_index,
+            content_index=content_index,
             models=model_registry
         )
         # Wire references
-        self.ctx.db_manager = db_manager
-        self.ctx.log_writer = log_writer
+        persistence = PersistenceLayer(db_manager)
+        self.ctx.persistence = persistence
         self.ctx.content = ContentManager(self.ctx)
         self.ctx.dissolver = Dissolver(self.ctx)
+
         
-        # Provide ctx to db_manager for log_event access
-        db_manager.ctx = self.ctx
-        
-        # B01: Wire ImplicitFeedbackTracker (feedback_loop_v1.5.md § 4)
+        # ADR-002: validate pipeline_width does not exceed available ONNX threads
+        pw = config.search.pipeline_width
+        oit = config.resources.onnx_inter_threads
+        if pw > oit:
+            logger.warning(
+                f"config: pipeline_width={pw} > onnx_inter_threads={oit} — "
+                "parallel ONNX calls will contend for threads; reduce pipeline_width or increase onnx_inter_threads"
+            )
+
+        # B01: Cold Bootstrap Hydration (SQLite -> RAM Index & HNSW)
+        # Must happen BEFORE starting workers to avoid race conditions
+        await self._hydrate_indices(self.ctx)
+
+        # B01.5: Pre-warm anchor vectors (marker § 2.3) — eliminates first-request latency spike
+        await self._warmup_anchor_vectors(self.ctx)
+
+        # B02: Wire ImplicitFeedbackTracker (feedback_loop_v1.5.md § 4)
         self.ctx.feedback_tracker = ImplicitFeedbackTracker(self.ctx)
+
+        # Onboarding: passive calibration collector (no-op if already calibrated)
+        if config.calibration.enabled and not config.calibration.calibration_complete:
+            from .observer.calibration import CalibrationCollector
+            self.ctx.calibration = CalibrationCollector(self.ctx, config_path=str(config_path))
+
+        # Experience Layer
+        if config.experience.layer_enabled:
+            from .memory.experience import ExperienceIndex
+            exp_index = ExperienceIndex(
+                signal_threshold=config.experience.intuition_fire_threshold,
+                maturity_apprentice=config.experience.maturity_apprentice,
+                maturity_practitioner=config.experience.maturity_practitioner,
+                maturity_expert=config.experience.maturity_expert,
+                maturity_master=config.experience.maturity_master,
+            )
+            rows = await persistence.load_experience()
+            exp_index.load(rows)
+            self.ctx.experience_index = exp_index
+            logger.info(f"Experience Layer loaded: {len(rows)} clusters")
         
         # Integration Proxy
         self.proxy = ConductorProxy(self.ctx)
@@ -97,29 +139,134 @@ class Conductor:
         await self.ctx.dissolver.start()
         self.ctx.consolidation = ConsolidationWorker(self.ctx)
         await self.ctx.consolidation.start()
+
+        # 6.6 Daemon metrics writers (pulse.json + status.json for external monitoring)
+        self._pulse_writer = PulseWriter(self.ctx)
+        self._status_writer = StatusWriter(self.ctx)
+        await self._pulse_writer.start()
+        await self._status_writer.start()
+
+        # 6.5 Dreamer (Stage D — idle-triggered anchor reassessment)
+        dreamer_cfg = getattr(config, 'dreamer', None)
+        if dreamer_cfg and dreamer_cfg.enabled:
+            from .subconscious.dreamer import Dreamer
+            dreamer = Dreamer(conductor=self, ctx=self.ctx)
+            await dreamer.start()
+            self._dreamer_task = dreamer
         
-        # Initial Bootstrap Log
-        from .storage.log_writer import log_event
-        await log_event(self.ctx, "conductor.bootstrap", "start", {
-            "db_path": str(db_path),
-            "logs_path": str(logs_path)
-        })
 
-        # B02: Health Check Log (v1.0 spec — Point #17)
-
+        
         logger.info("Mnemostroma system bootstrap complete.")
         return self.ctx
+
+    async def _hydrate_indices(self, ctx: SystemContext):
+        """Reconstruct matrix search index and RAM maps from SQLite (Cold Bootstrap)."""
+        logger.info("Starting index hydration from SQLite...")
+
+        # 1. Hydrate Metadata (ram_index)
+        briefs = await ctx.persistence.get_all_session_briefs()
+        for sb in briefs:
+            ctx.ram_index[sb.session_id] = sb
+
+        # 2. Hydrate session matrix
+        model_def = ctx.config.manifest.active_models.get("session_embedder") if ctx.config.manifest else None
+        expected_dim = model_def.dim if model_def and model_def.dim else ctx.config.search.embedding_dim
+
+        embeddings = await ctx.persistence.get_all_embeddings(expected_dim)
+
+        if not embeddings:
+            logger.info("Hydration: No embeddings found in DB.")
+            return
+
+        vectors = []
+        labels = []
+        for sid, vec in embeddings:
+            label = ctx.get_session_label(sid)
+            ctx.id_to_sid[label] = sid
+            ctx.sid_to_id[sid] = label
+            vectors.append(vec.astype('float32'))
+            labels.append(label)
+
+        ctx.session_index.add_items(vectors, labels)
+        ctx._next_session_label = len(embeddings)
+
+        logger.info(f"Hydration complete: {len(embeddings)} sessions restored. "
+                    f"next_label={ctx._next_session_label}")
+
+        # 3. Hydrate content matrix
+        content_model_def = ctx.config.manifest.active_models.get("content_embedder") if ctx.config.manifest else None
+        content_dim = content_model_def.dim if content_model_def and content_model_def.dim else ctx.config.search.embedding_dim
+
+        content_embeddings = await ctx.persistence.get_all_content_embeddings(content_dim)
+
+        if content_embeddings:
+            c_vectors = []
+            c_labels = []
+            for content_id, version, vec in content_embeddings:
+                key = f"{content_id}_{version}"
+                label = ctx.get_content_label(key)
+                ctx.id_to_cid[label] = key
+                ctx.cid_to_id[key] = label
+                c_vectors.append(vec.astype('float32'))
+                c_labels.append(label)
+
+            ctx.content_index.add_items(c_vectors, c_labels)
+            logger.info(f"Content hydration: {len(content_embeddings)} vectors restored.")
+        else:
+            logger.info("Content hydration: no content embeddings found.")
+
+        # 4. Hydrate Anchors (Subconscious Layer Stage A)
+        if ctx.persistence:
+            anchors = await ctx.persistence.load_anchors(limit=1000)
+            for a in anchors:
+                ctx.anchor_index.put(a)
+            logger.info(f"Anchor hydration: {len(anchors)} anchors restored to subconscious RAM index.")
+
+
+    async def _warmup_anchor_vectors(self, ctx) -> None:
+        """Pre-encode anchor texts into ctx.anchor_vectors at bootstrap.
+
+        Eliminates first-request latency spike and race condition under
+        pipeline_width=4. No-op if embedder is unavailable (tests / offline).
+        """
+        from .observer.marker import ANCHORS
+        embedder = ctx.models.embedder if ctx.models else None
+        if embedder is None:
+            logger.info("Anchor warmup skipped: no embedder available.")
+            return
+
+        import numpy as np
+        vectors: dict = {}
+        for label, anchor_text in ANCHORS.items():
+            try:
+                vec = await embedder.aencode(anchor_text)
+                v = np.array(vec, dtype=np.float32).flatten()
+                norm = np.linalg.norm(v)
+                if norm > 1e-9:
+                    v = v / norm
+                vectors[label] = v
+            except Exception as e:
+                logger.warning(f"Anchor warmup: failed to encode '{label}': {e}")
+
+        ctx.anchor_vectors = vectors
+        logger.info(f"Anchor warmup complete: {len(vectors)}/{len(ANCHORS)} vectors ready.")
 
     async def stop(self):
         """Shutdown the system and save state."""
         if self.ctx:
             logger.info("Stopping Mnemostroma...")
-            if self.ctx.db_manager:
-                await self.ctx.db_manager.stop()
+            if self._pulse_writer:
+                await self._pulse_writer.stop()
+            if self._status_writer:
+                await self._status_writer.stop()
+            if self.ctx.persistence:
+                await self.ctx.persistence.stop()
             if self.ctx.dissolver:
                 await self.ctx.dissolver.stop()
             if self.ctx.consolidation:
                 await self.ctx.consolidation.stop()
+            if self._dreamer_task:
+                await self._dreamer_task.stop()
             if self.ctx.db:
                 await self.ctx.db.close()
             logger.info("Mnemostroma shutdown complete.")
@@ -134,11 +281,35 @@ class Conductor:
             raise RuntimeError("Conductor not started. Call start() first.")
         return await self.proxy.inject(user_message, max_tokens, include_tools)
         
-    async def observe(self, session_id: str, text: str):
+    async def observe(self, session_id: str, text: str) -> asyncio.Task:
         """Pass an interaction transcript to the active Observer pipeline."""
         if not self.ctx:
             raise RuntimeError("Conductor not started. Call start() first.")
-            
+
+        import time as _time
+        self._last_observe_at = _time.time()
+
         from .observer.pipeline import observer_pipeline
-        # Creates a background task to not block the main agent workflow
-        asyncio.create_task(observer_pipeline(text, session_id, self.ctx))
+        task = asyncio.create_task(observer_pipeline(text, session_id, self.ctx))
+        task.add_done_callback(self._handle_task_exception)
+        return task
+
+    def is_idle(self) -> bool:
+        """True if no observe() call for longer than dreamer.idle_threshold_min."""
+        if not self.ctx or self._last_observe_at == 0.0:
+            return False
+        import time as _time
+        cfg = getattr(self.ctx.config, 'dreamer', None)
+        threshold_sec = (cfg.idle_threshold_min if cfg else 5) * 60
+        return (_time.time() - self._last_observe_at) >= threshold_sec
+
+    def _handle_task_exception(self, task: asyncio.Task):
+        """Unified callback to catch background observer failures."""
+        if task.cancelled():
+            return
+        try:
+            exc = task.exception()
+            if exc:
+                logger.error(f"Observer task failed: {exc}", exc_info=exc)
+        except asyncio.InvalidStateError:
+            pass

@@ -39,10 +39,24 @@ def test_detect_urgency():
     assert isinstance(ts, int)
 
 def test_compress_text():
-    text = "Это первое предложение. Это второе предложение."
-    brief, tags = compress_text(text, [{"value": "тест", "score": 0.9}])
-    assert brief == "Это первое предложение"
-    assert "тест" in tags
+    text = "Иван Коваленко выбрал PostgreSQL. Это второе предложение."
+    entities = [
+        {"type": "человек", "value": "Иван Коваленко", "score": 0.99},
+        {"type": "технология", "value": "PostgreSQL", "score": 0.95},
+        {"type": "технология", "value": "postgresql", "score": 0.80}, # Duplicate
+        {"type": "организация", "value": "Яндекс", "score": 0.45}, # Under threshold
+    ]
+    brief, tags = compress_text(text, entities)
+    
+    # 1. Brief logic
+    assert brief == "Иван Коваленко выбрал PostgreSQL"
+    
+    # 2. Tags: prefix, deduplication, threshold
+    assert "per:Иван Коваленко" in tags
+    assert "tech:PostgreSQL" in tags
+    assert "tech:postgresql" not in tags # Deduplicated
+    assert "org:Яндекс" not in tags # Low score
+    assert len(tags) == 2
 
 @pytest.mark.asyncio
 async def test_calculate_score(mocker):

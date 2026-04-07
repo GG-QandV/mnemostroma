@@ -39,9 +39,9 @@ class Reranker:
             }
             
             outputs = self.session.run(None, inputs)
-            # Typically TinyBERT returns raw logits, we apply sigmoid/softmax
-            logit = outputs[0][0]
-            score = 1 / (1 + np.exp(-logit)) # Quick sigmoid
+            # outputs[0] shape: (1, 1) → flatten to scalar before sigmoid
+            logit = float(np.squeeze(outputs[0]))
+            score = 1.0 / (1.0 + np.exp(-logit))
             scores.append(float(score))
             
         return scores

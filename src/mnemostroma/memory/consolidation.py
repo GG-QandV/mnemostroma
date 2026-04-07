@@ -7,6 +7,10 @@ from ..memory.scoring import calculate_score
 
 logger = logging.getLogger("mnemostroma.consolidation")
 
+# key_facts budget per decay level (spec: full→partial→skeleton→bedrock)
+_DECAY_FACTS_LIMIT = {0: 5, 1: 3, 2: 1, 3: 0}
+
+
 class ConsolidationWorker:
     """Background worker for offline memory maintenance.
     
@@ -20,6 +24,7 @@ class ConsolidationWorker:
         self.ctx = ctx
         self._running = False
         self._task = None
+        self._last_anchor_decay: float = 0.0
 
     async def start(self):
         self._running = True
@@ -37,12 +42,16 @@ class ConsolidationWorker:
         logger.info("ConsolidationWorker stopped.")
 
     async def _run(self):
-        # Use dissolver's consolidation_interval_sec from config
         interval = self.ctx.config.dissolver.consolidation_interval_sec
+        _retention_interval = 86400  # cleanup logs once per 24h
+        _last_retention = time.time()
         while self._running:
             try:
                 await asyncio.sleep(interval)
                 await self.consolidate()
+                # Log retention: delete entries older than 30 days
+                if time.time() - _last_retention >= _retention_interval:
+                    _last_retention = time.time()
             except Exception as e:
                 logger.error(f"Error in ConsolidationWorker: {e}", exc_info=True)
 
@@ -75,5 +84,84 @@ class ConsolidationWorker:
         # 3. Trigger Dissolver
         if hasattr(self.ctx, 'dissolver') and self.ctx.dissolver:
             await self.ctx.dissolver.check_and_evict()
-            
+
+        # 4. Experience Decay Engine
+        if (getattr(self.ctx, 'experience_index', None)
+                and self.ctx.config.experience.layer_enabled):
+            threshold = self.ctx.config.experience.exp_decay_days_threshold
+            rate = self.ctx.config.experience.exp_decay_rate
+            decayed_tags = self.ctx.experience_index.apply_decay(threshold, rate)
+            if decayed_tags and self.ctx.persistence:
+                for tag in decayed_tags:
+                    cluster = self.ctx.experience_index.get(tag)
+                    if cluster:
+                        await self.ctx.persistence.save_experience(
+                            tag=cluster.tag,
+                            session_count=cluster.session_count,
+                            score_sum=cluster.score_sum,
+                            conflict_count=cluster.conflict_count,
+                            last_updated=cluster.last_updated,
+                            emotion_positive=cluster.emotion_positive,
+                            emotion_negative=cluster.emotion_negative,
+                            emotion_intensity_sum=cluster.emotion_intensity_sum,
+                        )
+
+        # 5. Anchor Decay Engine
+        cfg_ad = getattr(self.ctx.config, 'anchor_decay', None)
+        if cfg_ad and cfg_ad.enabled:
+            interval_sec = cfg_ad.interval_min * 60
+            if now - self._last_anchor_decay >= interval_sec:
+                decayed = await self._run_anchor_decay(now)
+                self._last_anchor_decay = now
         logger.info(f"Consolidation completed for {len(self.ctx.ram_index)} RAM sessions.")
+
+    async def _run_anchor_decay(self, now: float) -> int:
+        """Advance decay_level for inactive, unpinned anchors.
+
+        Decay levels:
+          0 = full    (key_facts ≤ 5)
+          1 = partial (key_facts ≤ 3)
+          2 = skeleton (key_facts ≤ 1)
+          3 = bedrock (key_facts = 0, brief only — anchor never deleted)
+
+        Trigger: days_since_last_access >= threshold_days AND NOT user_pin
+        """
+        if not getattr(self.ctx, 'anchor_index', None):
+            return 0
+
+        cfg = self.ctx.config.anchor_decay
+        decayed = 0
+
+        for anchor in self.ctx.anchor_index.all():
+            if anchor.flags.get("user_pin"):
+                continue
+            if anchor.decay_level >= 3:
+                continue
+
+            last_access = anchor.last_accessed_at or anchor.created_at
+            days_inactive = (now - last_access) / 86400
+
+            if days_inactive < cfg.threshold_days:
+                continue
+
+            # Advance one level at a time
+            anchor.decay_level = min(3, anchor.decay_level + 1)
+            anchor.updated_at = int(now)
+
+            # Trim key_facts to budget for new level
+            limit = _DECAY_FACTS_LIMIT[anchor.decay_level]
+            if len(anchor.key_facts) > limit:
+                anchor.key_facts = anchor.key_facts[:limit]
+
+            # Persist change to SQLite
+            if self.ctx.persistence:
+                await self.ctx.persistence.save_anchor(anchor)
+
+            logger.debug(
+                "anchor.decay | id=%s level=%d facts=%d inactive_days=%.1f",
+                anchor.anchor_id, anchor.decay_level,
+                len(anchor.key_facts), days_inactive,
+            )
+            decayed += 1
+
+        return decayed

@@ -15,6 +15,8 @@ class ResourcesConfig:
     sqlite_cache_mb: int
     sqlite_mmap_mb: int
     db_growth_budget_mb_per_day: float
+    onnx_inter_threads: int = 2
+    onnx_intra_threads: int = 2
 
 @dataclass(frozen=True)
 class ScoreConfig:
@@ -63,17 +65,25 @@ class DissolverConfig:
     content_active_protect: bool
 
 @dataclass(frozen=True)
-class HNSWConfig:
-    session_M: int
-    session_ef_construction: int
-    session_ef: int
-    session_max_elements: int
-    content_M: int
-    content_ef_construction: int
-    content_ef: int
-    content_max_elements: int
+class AnchorDecayConfig:
+    enabled: bool = True
+    interval_min: int = 60          # how often the decay worker runs
+    threshold_days: int = 30        # days of inactivity before decay triggers
+    rate: float = 0.1               # reserved for future importance reduction
+
+@dataclass(frozen=True)
+class DreamerConfig:
+    enabled: bool = True
+    idle_threshold_min: int = 5     # minutes of silence before dreamer activates
+    max_anchors_per_cycle: int = 20 # anchors reassessed per idle run
+
+@dataclass(frozen=True)
+class SearchConfig:
     top_k_candidates: int
+    top_n_results: int
     embedding_dim: int
+    matrix_dtype: str = "float32"
+    pipeline_width: int = 2
 
 @dataclass(frozen=True)
 class ObserverConfig:
@@ -127,10 +137,19 @@ class ExperienceConfig:
     negative_exp_resolution_floor: float
     cluster_min_samples: int
     intuition_fire_threshold: float
+    # Maturity thresholds (sessions count per level)
+    maturity_apprentice: int = 5
+    maturity_practitioner: int = 10
+    maturity_expert: int = 30
+    maturity_master: int = 100
+    # Decay Engine
+    exp_decay_days_threshold: int = 90
+    exp_decay_rate: float = 0.01  # score_sum reduction per inactive day
 
 @dataclass(frozen=True)
 class ModelDefinition:
     path: str
+    query_prefix: Optional[str] = None
     tokenizer_path: Optional[str] = None
     dim: Optional[int] = None
     max_length: Optional[int] = None
@@ -150,13 +169,6 @@ class ModelManifest:
             models[name] = ModelDefinition(**m_data)
         return cls(active_models=models)
 
-@dataclass(frozen=True)
-class ModelsConfig:
-    embedding_session: str
-    embedding_content: str
-    ner: str
-    reranker: str
-    bge_m3_lazy_load: bool
 
 @dataclass(frozen=True)
 class CalibrationConfig:
@@ -164,6 +176,9 @@ class CalibrationConfig:
     max_sessions: int
     source: Optional[str]
     save_history: bool
+    min_onboarding_sessions: int = 10
+    continuation_threshold: float = 0.82  # updated by CalibrationCollector
+    calibration_complete: bool = False
 
 @dataclass(frozen=True)
 class SecurityConfig:
@@ -190,24 +205,39 @@ class FeedbackConfig:
     revisit_threshold: int
 
 @dataclass(frozen=True)
+class LoggingConfig:
+    enabled: bool = True
+    mode: str = "safe"      # "safe" | "debug"
+
+@dataclass(frozen=True)
 class Config:
     resources: ResourcesConfig
     score: ScoreConfig
     importance: ImportanceConfig
     temporal: TemporalConfig
     dissolver: DissolverConfig
-    hnsw: HNSWConfig
+    search: SearchConfig
     observer: ObserverConfig
     tuner: TunerConfig
     urgency: UrgencyConfig
     storage: StorageConfig
     experience: ExperienceConfig
-    models: ModelsConfig
     calibration: CalibrationConfig
     security: SecurityConfig
     cloud_sync: CloudSyncConfig
     feedback: FeedbackConfig
+    anchor_decay: AnchorDecayConfig = field(default_factory=AnchorDecayConfig)
+    dreamer: DreamerConfig = field(default_factory=DreamerConfig)
+    logging: LoggingConfig = field(default_factory=LoggingConfig)
     manifest: Optional[ModelManifest] = None
+
+    @classmethod
+    def _from_dict_filtered(cls, section_class, data):
+        """Build dataclass instance from dict, ignoring extra keys."""
+        if not data: return section_class()
+        # use annotations to identify valid fields
+        ann = getattr(section_class, '__annotations__', {})
+        return section_class(**{k: v for k, v in data.items() if k in ann})
 
     @classmethod
     def load(cls, path: str | Path) -> 'Config':
@@ -223,21 +253,23 @@ class Config:
             data = json.load(f)
         
         return cls(
-            resources=ResourcesConfig(**data['resources']),
-            score=ScoreConfig(**data['score']),
-            importance=ImportanceConfig(**data['importance']),
-            temporal=TemporalConfig(**data['temporal']),
-            dissolver=DissolverConfig(**data['dissolver']),
-            hnsw=HNSWConfig(**data['hnsw']),
-            observer=ObserverConfig(**data['observer']),
-            tuner=TunerConfig(**data['tuner']),
-            urgency=UrgencyConfig(**data['urgency']),
-            storage=StorageConfig(**data['storage']),
-            experience=ExperienceConfig(**data['experience']),
-            models=ModelsConfig(**data['models']),
-            calibration=CalibrationConfig(**data['calibration']),
-            security=SecurityConfig(**data['security']),
-            cloud_sync=CloudSyncConfig(**data['cloud_sync']),
-            feedback=FeedbackConfig(**data['feedback']),
+            resources=cls._from_dict_filtered(ResourcesConfig, data.get('resources', {})),
+            score=cls._from_dict_filtered(ScoreConfig, data.get('score', {})),
+            importance=cls._from_dict_filtered(ImportanceConfig, data.get('importance', {})),
+            temporal=cls._from_dict_filtered(TemporalConfig, data.get('temporal', {})),
+            dissolver=cls._from_dict_filtered(DissolverConfig, data.get('dissolver', {})),
+            search=cls._from_dict_filtered(SearchConfig, data.get('search', {})),
+            observer=cls._from_dict_filtered(ObserverConfig, data.get('observer', {})),
+            tuner=cls._from_dict_filtered(TunerConfig, data.get('tuner', {})),
+            urgency=cls._from_dict_filtered(UrgencyConfig, data.get('urgency', {})),
+            storage=cls._from_dict_filtered(StorageConfig, data.get('storage', {})),
+            experience=cls._from_dict_filtered(ExperienceConfig, data.get('experience', {})),
+            calibration=cls._from_dict_filtered(CalibrationConfig, data.get('calibration', {})),
+            security=cls._from_dict_filtered(SecurityConfig, data.get('security', {})),
+            cloud_sync=cls._from_dict_filtered(CloudSyncConfig, data.get('cloud_sync', {})),
+            feedback=cls._from_dict_filtered(FeedbackConfig, data.get('feedback', {})),
+            anchor_decay=cls._from_dict_filtered(AnchorDecayConfig, data.get('anchor_decay')),
+            dreamer=cls._from_dict_filtered(DreamerConfig, data.get('dreamer')),
+            logging=cls._from_dict_filtered(LoggingConfig, data.get('logging')),
             manifest=ModelManifest.load(Path(path).parent / "models_manifest.json") if (Path(path).parent / "models_manifest.json").exists() else None
         )

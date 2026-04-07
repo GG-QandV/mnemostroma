@@ -36,8 +36,8 @@ Every time you work with an AI agent, Mnemostroma:
 
 ## Architecture in one sentence
 
-A dual-stream async pipeline (Observer + Content) backed by three memory layers,
-HNSWlib ANN search, ONNX INT8 inference, and SQLite WAL cold storage —
+A dual-stream async pipeline (Observer + Content) backed by 4 memory layers,
+numpy MatrixSearch ANN, ONNX INT8 inference, and a formal PersistenceLayer (SQLite WAL) —
 all in ~600MB RAM, ~20ms retrieval, fully offline.
 
 ---
@@ -62,6 +62,7 @@ Your Agent
 ```
 
 **The agent never writes memory.** It only reads and acts. Observer handles everything else.
+**Core product is RAM-only by default** for speed. Reliability is guaranteed by a formal `PersistenceLayer` (Phase 9.2), which manages asynchronous SQLite WAL writes and provides a strict isolation boundary between memory logic and storage.
 
 ---
 
@@ -84,66 +85,136 @@ This is not a database with TTL. This is how human memory works.
 
 ---
 
-## Stack
+## Status
 
-| Component                     | RAM        | Role                              |
-| ----------------------------- | ---------- | --------------------------------- |
-| EmbeddingGemma-300M INT8      | 52MB       | Session vectorization (512d)      |
-| BGE-M3 INT8                   | 145MB      | Content vectorization (lazy load) |
-| GLiNER-small-v2.1 INT8        | 42MB       | Zero-shot NER                     |
-| TinyBERT-L-2-v2 INT8          | 8MB        | Cross-encoder reranking           |
-| ONNX Runtime + tokenizers     | 95MB       | Runtime                           |
-| **Total models**              | **342MB**  |                                   |
-| + Session data (200 sessions) | ~260MB     |                                   |
-| **Total working set**         | **~600MB** |                                   |
+**Current:** v1.7.1 alpha | 2026-04-07
 
-No torch. No transformers. No LangChain. No Docker. No Redis. No cloud.
-
-Dependencies: `onnxruntime, tokenizers, numpy, hnswlib, lz4`
-
----
-
-## Components
-
-| Component          | Role                                          | Analogy                              |
-| ------------------ | --------------------------------------------- | ------------------------------------ |
-| **Observer**       | Builds semantic context from agent I/O        | Auditory system                      |
-| **Dissolver**      | Gradually reduces memory resolution over time | Forgetting curve                     |
-| **Tuner**          | Detects conflicts, drift, stale anchors       | Piano tuner — listens for dissonance |
-| **Conductor**      | Bootstrap, event loop, health, RAM budget     | Orchestra conductor                  |
-| **Session Bridge** | Context handoff between sessions              | Waking up and remembering yesterday  |
+| Component                                | Status                                        |
+| ---------------------------------------- | --------------------------------------------- |
+| Core backend (Observer, Memory, Storage) | ✅ Implemented, 303/303 tests                 |
+| Anchor Layer / Emotional Patterns        | ✅ Implemented                                 |
+| Implicit Feedback (v1.5)                 | ✅ Implemented                                 |
+| PersistenceLayer Split (Phase 9.2)       | ✅ Implemented (v1.7.1)                        |
+| CLI User Mode (setup/on/off/status)      | ✅ Implemented (v1.7.1)                        |
+| MCP Server (stdio)                       | ✅ Implemented                                 |
+| Continuation Detection & Mention Type    | ✅ Implemented                                 |
+| Decay Engine & Dreamer                   | ✅ Implemented (Stage C/D)                     |
+| Model install CLI                        | ✅ Implemented                                 |
 
 ---
 
-## API surface (18 tools via MCP)
-
-**Read:**
-`ctx.active()` · `ctx.get()` · `ctx.search()` · `ctx.semantic()` · `ctx.anchors()` · `ctx.precision()` · `ctx.full()` · `ctx.bridge()` · `ctx.urgent()` · `ctx.expire()`
-
-**Write:**
-`ctx.save()` · `ctx.update()` · `ctx.flag()` · `content.save()` · `content.tag()`
-
-**Admin:**
-`ctx.sync()` · `ctx.load()` · `ctx.status()` · `ctx.growth()` · `ctx.pulse()` · `ctx.configure()`
-
----
-
-## Deployment
+## Quick Start (User Mode)
 
 ```bash
-# Embedded (Python agent)
-from mnemostroma import ctx, content
-bridge = ctx.active()  # system starts automatically
-
-# Daemon (IDE, terminal agents)
-ctx daemon start       # one daemon per machine
-ctx status             # dashboard
-
-# CLI
-ctx search "#JWT"
-ctx semantic "authorization flow"
-ctx bridge
+pip install mnemostroma
+mnemostroma setup        # Initialize ~/.mnemostroma/ and download models
+mnemostroma on           # Start persistent memory daemon (background)
+mnemostroma service install   # Register as systemd/launchd service (autostart)
+mnemostroma status       # Check health, metrics, and RAM usage
+mnemostroma off          # Stop daemon
 ```
+
+### OS Support & Services
+- **Linux**: Supported via `systemd` (user mode).
+- **macOS**: Supported via `launchd` (LaunchAgents).
+- **Windows 10/11**: Supported via **Task Scheduler** (`schtasks`).
+  - *Note:* Windows has limited support for signals (no `SIGUSR1/2` for flush/dump).
+  - **Alpha Recommendation:** For the best experience during alpha, we recommend using **WSL2** (Ubuntu) instead of native Windows.
+
+### Management Commands
+- `mnemostroma config list`  — View all 70+ tunable parameters
+- `mnemostroma logs --days 7` — Analyze memory growth and calibration
+- `mnemostroma watch`        — Live terminal activity dashboard
+- `mnemostroma tray`         — System tray indicator (optional)
+
+---
+
+## Model Setup
+
+Models are downloaded automatically during `mnemostroma setup`.  
+Required models (~300MB total):
+
+- `multilingual-e5-small` (E5 int8, 384d) — session & content embedder
+- `distilbert-ner` (DistilBERT int8) — HybridNER
+- `tinybert-l2-v2` (TinyBERT, lazy) — reranker
+
+---
+
+## Logging
+
+Mnemostroma writes local diagnostic logs to `logs.db` during alpha.  
+**Logs never leave your machine.** No network calls.
+
+To configure in `~/.mnemostroma/config.json`:
+```json
+"logging": { 
+  "enabled": true,
+  "mode": "safe" 
+}
+```
+*Note: `safe` mode redacts sensitive content from logs, keeping only event types and metadata.*
+
+---
+
+## Stack
+
+| Component                   | RAM        | Role                              |
+| --------------------------- | ---------- | --------------------------------- |
+| multilingual-e5-small INT8  | ~420MB     | Session & Content embedder (384d) |
+| distilbert-ner INT8         | ~170MB     | HybridNER                         |
+| TinyBERT-L-2-v2 INT8        | 8MB        | Cross-encoder reranking (lazy)    |
+| ONNX Runtime + tokenizers   | 95MB       | Runtime                           |
+| **Total working set (RSS)** | **~631MB** |                                   |
+
+No torch. No transformers. No LangChain. No Docker. No Redis. No cloud.
+Dependencies: `onnxruntime, tokenizers, numpy, lz4, aiosqlite`
+
+---
+
+## API surface (16 tools via MCP)
+
+**Read (6):**
+- `ctx_active()`: Current context snapshot (intent, variables, deadlines)
+- `ctx_get(id)`: Retrieve specific session by ID
+- `ctx_search(tags)`: Tag-based search (precise, multi-language)
+- `ctx_semantic(query)`: Meaning-based search (MatrixSearch ANN, ~20ms)
+- `ctx_anchors(type)`: Subconscious anchors (decisions, constraints, facts)
+- `ctx_precision(type)`: Exact data (links, formulas, quotes)
+
+**Extended (4):**
+- `ctx_full(id)`: Full-text version from SQLite (for exact quoting)
+- `ctx_bridge()`: Structured context handoff packet for next agent
+- `ctx_urgent()`: Active deadlines and time-sensitive tasks
+- `ctx_expire(id)`: Mark urgent task as completed/expired
+
+**Content Branch (5):**
+- `save_content(id, text)`: Versioned artifact save with `why_changed`
+- `content_search(query)`: Semantic search over artifacts (code, docs)
+- `content_get(id, version)`: Metadata retrieval for artifact
+- `content_raw(id, version)`: Full source retrieval (expensive)
+- `content_history(id)`: Version lineage and change log
+
+**Admin (1):**
+- `ctx_load(id)`: Force-load archived session from SQLite to RAM
+
+---
+
+## Connecting to LLM (MCP)
+
+Mnemostroma is an MCP server. Add it to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "mnemostroma": {
+      "command": "mnemostroma",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+**Observer Principle:** You do not need to manually call "save_memory". The Mnemostroma Observer watches your conversation and handles everything in the background. You only call tools when you need to *remember* something from the past.
 
 ---
 
@@ -163,18 +234,6 @@ ctx bridge
 
 ---
 
-## Roadmap
-
-| Phase | What                                                                  | Status         |
-| ----- | --------------------------------------------------------------------- | -------------- |
-| v1.x  | MVP: Observer + Session Index + Dissolver + Tuner + Content + MCP API | 🔄 In progress |
-| v1.3  | Urgency policy + principle protection                                 | 📋 Specified   |
-| v1.5  | Implicit feedback + Experience Layer + clustering                     | 📋 Specified   |
-| v2.0  | Explicit feedback + adaptive score weights                            | 📋 Planned     |
-| v3.0  | Hypómnema Strōma — subconscious layer (~11MB personalized models)     | 📋 Planned     |
-
----
-
 ## Philosophy
 
 Memory isn't storage.
@@ -187,15 +246,13 @@ It gives your agent an actual memory.
 
 ## License & Enterprise
 
-**Mnemostroma Core is licensed under the FSL-1.1-MIT (Functional Source License)**.
-This means you are completely free to use, modify, and integrate Mnemostroma into your internal projects, products, and agents.
-
-The ONLY restriction is that you **cannot provide Mnemostroma itself as a competing Commercial SaaS product**. After 2 years, the license automatically transitions to a standard MIT License.
+**Mnemostroma Core is licensed under the FSL-1.1-MIT**.
+Commercial restricted for 2 years (no SaaS competitors), then MIT.
 
 **Mnemostroma Pro (Commercial)**
-Features such as **Cloud Sync**, **Subconscious Layer (Hypómnema Strōma)**, **Shared Experience**, and **Team Context Import** are developed and maintained in a separate private repository and are available under a commercial enterprise license.
+Cloud Sync, Subconscious Layer (personalized models), Shared Experience, and Team Context Import.
 
-For more details, see the `LICENSE` file.
+---
 
 *Mnemostroma — the memory layer for AI agents*
-*μνήμη + στρῶμα · offline · ~600MB · ~20ms · no GPU*
+*μνήμη + στρῶμα · offline · ~600MB · ~20ms · 303 tests*

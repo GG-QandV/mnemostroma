@@ -27,20 +27,25 @@ CREATE TABLE IF NOT EXISTS sessions (
     urgency_active          INTEGER DEFAULT 0,
     urgency_expired         INTEGER DEFAULT 0,
     bare_entity             INTEGER DEFAULT 0,
-    embedding_model_version TEXT    DEFAULT 'embeddinggemma-300m-int8-v1',
+    embedding_model_version TEXT    DEFAULT 'gte-multilingual-base-int8-v1',
     embedding               BLOB    -- float16 768d binary
 );
 """
 
 SCHEMA_ANCHORS = """
 CREATE TABLE IF NOT EXISTS anchors (
-    anchor_id   TEXT PRIMARY KEY,
-    session_id  TEXT REFERENCES sessions(session_id),
-    type        TEXT,   -- decision/phone/address/person/number/date
-    value       TEXT,
-    context_tag TEXT,
-    importance  TEXT,
-    created_at  INTEGER
+    anchor_id        TEXT PRIMARY KEY,
+    session_id       TEXT NOT NULL,
+    anchor_type      TEXT NOT NULL,
+    brief            TEXT NOT NULL,
+    key_facts        TEXT NOT NULL DEFAULT '[]',
+    flags            TEXT NOT NULL DEFAULT '{}',
+    decay_level      INTEGER NOT NULL DEFAULT 0,
+    access_count     INTEGER NOT NULL DEFAULT 0,
+    last_accessed_at INTEGER NOT NULL DEFAULT 0,
+    t_rel            TEXT    NOT NULL DEFAULT '{"after":[],"before":[],"caused_by":[],"during":[]}',
+    created_at       INTEGER NOT NULL,
+    updated_at       INTEGER NOT NULL
 );
 """
 
@@ -80,7 +85,7 @@ CREATE TABLE IF NOT EXISTS content_versions (
     status          TEXT,     -- draft/active/rejected/archived
     rejected_reason TEXT,
     embedding       BLOB,     -- float16 768d binary
-    embedding_model_version TEXT DEFAULT 'bge-m3-int8-v1',
+    embedding_model_version TEXT DEFAULT 'gte-multilingual-base-int8-v1',
     created_at      INTEGER,
     PRIMARY KEY (content_id, version)
 );
@@ -88,7 +93,7 @@ CREATE TABLE IF NOT EXISTS content_versions (
 
 SCHEMA_MODEL_REGISTRY = """
 CREATE TABLE IF NOT EXISTS embedding_model_registry (
-    model_key        TEXT PRIMARY KEY,   -- 'embeddinggemma-300m-int8-v1'
+    model_key        TEXT PRIMARY KEY,   -- 'gte-multilingual-base-int8-v1'
     model_name       TEXT,               -- human-readable
     dim              INTEGER,            -- 768
     quantization     TEXT,               -- 'int8'
@@ -104,11 +109,31 @@ INDICES = [
     "CREATE INDEX IF NOT EXISTS idx_sessions_type ON sessions(session_type);",
     "CREATE INDEX IF NOT EXISTS idx_sessions_urgency ON sessions(urgency_active, deadline_ts) WHERE urgency_active = 1;",
     "CREATE INDEX IF NOT EXISTS idx_sessions_principle ON sessions(importance) WHERE importance = 'principle';",
-    "CREATE INDEX IF NOT EXISTS idx_anchors_type ON anchors(type);",
+    "CREATE INDEX IF NOT EXISTS idx_anchors_type ON anchors(anchor_type);",
+    "CREATE INDEX IF NOT EXISTS idx_anchors_decay ON anchors(decay_level);",
+    "CREATE INDEX IF NOT EXISTS idx_anchors_accessed ON anchors(last_accessed_at);",
     "CREATE INDEX IF NOT EXISTS idx_anchors_session ON anchors(session_id);",
     "CREATE INDEX IF NOT EXISTS idx_precision_session ON precision_log(session_id);",
     "CREATE INDEX IF NOT EXISTS idx_cv_status ON content_versions(status);",
     "CREATE INDEX IF NOT EXISTS idx_cv_session ON content_versions(content_id);"
+]
+
+SCHEMA_EXPERIENCE = """
+CREATE TABLE IF NOT EXISTS experience_metrics (
+    tag                   TEXT PRIMARY KEY,
+    session_count         INTEGER NOT NULL DEFAULT 0,
+    score_sum             REAL    NOT NULL DEFAULT 0.0,
+    conflict_count        INTEGER NOT NULL DEFAULT 0,
+    last_updated          INTEGER NOT NULL,
+    emotion_positive      INTEGER NOT NULL DEFAULT 0,
+    emotion_negative      INTEGER NOT NULL DEFAULT 0,
+    emotion_intensity_sum REAL    NOT NULL DEFAULT 0.0
+);
+"""
+
+INDICES_EXPERIENCE = [
+    "CREATE INDEX IF NOT EXISTS idx_exp_score ON experience_metrics(score_sum);",
+    "CREATE INDEX IF NOT EXISTS idx_exp_count ON experience_metrics(session_count);",
 ]
 
 ALL_SCHEMAS = [
@@ -117,5 +142,6 @@ ALL_SCHEMAS = [
     SCHEMA_PRECISION,
     SCHEMA_CONTENT_BLOCKS,
     SCHEMA_CONTENT_VERSIONS,
-    SCHEMA_MODEL_REGISTRY
-] + INDICES
+    SCHEMA_MODEL_REGISTRY,
+    SCHEMA_EXPERIENCE,
+] + INDICES + INDICES_EXPERIENCE

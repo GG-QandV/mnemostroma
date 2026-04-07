@@ -12,9 +12,9 @@ class MockEmbedder:
     def encode(self, text: str) -> np.ndarray:
         # returns deterministic vectors based on string hash for simple testing
         np.random.seed(hash(text) & 0xFFFFFFFF)
-        return np.random.rand(768).astype(np.float16)
+        return np.random.rand(384).astype(np.float16)
 
-class MockHNSW:
+class MockMatrixSearch:
     def __init__(self):
         self.vectors = []
         self.labels = []
@@ -28,11 +28,13 @@ class MockHNSW:
         
     def knn_query(self, query, k=10):
         if not self.vectors:
-            return [[]], [[]]
+            return [], []
             
         distances = []
         for v in self.vectors:
-            dist = 1.0 - float(np.dot(query[0], v) / (np.linalg.norm(query[0]) * np.linalg.norm(v)))
+            # Handle both 1D and 2D queries (reshape handling as mock)
+            vec = query[0] if query.ndim > 1 else query
+            dist = 1.0 - float(np.dot(vec, v) / (np.linalg.norm(vec) * np.linalg.norm(v)))
             distances.append(dist)
             
         # Simulating returning all sorted
@@ -40,12 +42,12 @@ class MockHNSW:
         sorted_labels = [self.labels[i] for i in sorted_indices]
         sorted_dists = [distances[i] for i in sorted_indices]
         
-        return [sorted_labels], [sorted_dists]
+        return sorted_labels, sorted_dists
 
 class MockContext:
     def __init__(self):
         self.ram_index = {}
-        self.hnsw_session = MockHNSW()
+        self.session_index = MockMatrixSearch()
         self.id_to_sid = {}
         self.sid_to_id = {}
         self.models = type('obj', (object,), {'embedder': MockEmbedder()})
@@ -66,11 +68,11 @@ def test_decisions_contradict():
     sb1 = SessionBrief(
         session_id="s1", brief="Решили использовать PostgreSQL вместо MongoDB", 
         tags=["database"], importance="critical", score=0.9, resolution=1.0, created_at=0,
-        embedding=np.ones(768).astype(np.float16)
+        embedding=np.ones(384).astype(np.float16)
     )
     
     # Vector simulation for "highly similar topic"
-    sim_vec = np.ones(768).astype(np.float16)
+    sim_vec = np.ones(384).astype(np.float16)
     sim_vec[0] = 0.999 # slight perturbation
     
     sb2 = SessionBrief(
@@ -87,7 +89,7 @@ def test_decisions_contradict():
     sb3 = SessionBrief(
         session_id="s3", brief="Используем JWT для авторизации", 
         tags=["auth"], importance="critical", score=0.9, resolution=1.0, created_at=0,
-        embedding=np.zeros(768).astype(np.float16)
+        embedding=np.zeros(384).astype(np.float16)
     )
     
     contradict2 = decisions_contradict(sb1, sb3, embedder)
@@ -106,7 +108,7 @@ def test_check_conflict(mock_ctx, base_embedding):
     mock_ctx.ram_index["old_1"] = sb_old
     mock_ctx.sid_to_id["old_1"] = 1
     mock_ctx.id_to_sid[1] = "old_1"
-    mock_ctx.hnsw_session.add_items([base_embedding], [1])
+    mock_ctx.session_index.add_items([base_embedding], [1])
     
     # New session matching the topic but contradicting the decision
     sim_vec = base_embedding.copy()
@@ -135,7 +137,7 @@ def test_conflict_ignores_background(mock_ctx, base_embedding):
     mock_ctx.ram_index["old_2"] = sb_old
     mock_ctx.sid_to_id["old_2"] = 2
     mock_ctx.id_to_sid[2] = "old_2"
-    mock_ctx.hnsw_session.add_items([base_embedding], [2])
+    mock_ctx.session_index.add_items([base_embedding], [2])
     
     sim_vec = base_embedding.copy()
     sb_new = SessionBrief(

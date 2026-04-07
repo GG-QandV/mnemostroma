@@ -60,16 +60,14 @@ class ContentManager:
             return last_version
 
         # 2. Vectorization (BGE-M3)
-        from ..memory.content_embedder import chunk_content
+        from ..models.embedding_utils import chunk_content, aencode_chunks
         chunks = chunk_content(text, content_type)
         
-        loop = asyncio.get_event_loop()
         if self.ctx.models and self.ctx.models.content_embedder:
-            embedding = await loop.run_in_executor(
-                None, self.ctx.models.content_embedder.encode_chunks, chunks
-            )
+            embedding = await aencode_chunks(self.ctx.models.content_embedder, chunks)
         else:
-            embedding = np.random.rand(512).astype(np.float16)
+            dim = 768
+            embedding = np.zeros(dim, dtype=np.float16)
 
         # 3. Diffing
         diff = ""
@@ -94,16 +92,16 @@ class ContentManager:
         
         block.versions.append(new_v)
         
-        # 6. Persistence (Async Flush via DatabaseManager)
-        if self.ctx.db_manager:
-            await self.ctx.db_manager.queue_write({
+        # 6. Persistence (Async Flush via PersistenceLayer)
+        if self.ctx.persistence:
+            self.ctx.persistence.enqueue_session({
                 "type": "content_block",
                 "content_id": content_id,
                 "session_id": session_id,
                 "content_type": content_type,
                 "status": block.status
             })
-            await self.ctx.db_manager.queue_write({
+            self.ctx.persistence.enqueue_session({
                 "type": "content_version",
                 "content_id": content_id,
                 "version": v_num,
@@ -117,13 +115,18 @@ class ContentManager:
             })
         else:
             # Fallback for minimal bootstrap/tests
-            logger.warning("No db_manager in context, content persistence skipped.")
+            logger.warning("No persistence layer in context, content persistence skipped.")
 
 
-        # 7. Update HNSW Index
-        if self.ctx.hnsw_content:
-            label = hash(f"{content_id}_{v_num}") & 0x7FFFFFFF
-            self.ctx.hnsw_content.add_items([embedding], [label])
+        # 7. Update content index
+        if self.ctx.content_index:
+            key = f"{content_id}_{v_num}"
+            label = self.ctx.get_content_label(key)
+            self.ctx.id_to_cid[label] = key
+            self.ctx.cid_to_id[key] = label
+            self.ctx.content_index.add_items(
+                [embedding.astype('float32')], [label]
+            )
 
         latency = (time.time() - start_time) * 1000
         logger.info(f"Content {content_id} v{v_num} saved in {latency:.2f}ms")
