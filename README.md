@@ -250,6 +250,15 @@ It gives your agent an actual memory.
 
 ---
 
+## Contributing & Support
+
+Found a bug? Have an idea?
+→ **[Open an issue](https://github.com/GG-QandV/mnemostroma/issues/new/choose)**
+
+Please include your OS, Python version, `mnemostroma status` output, and steps to reproduce.
+
+---
+
 ## License & Enterprise
 
 **Mnemostroma Core is licensed under the FSL-1.1-MIT**.
