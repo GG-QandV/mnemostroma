@@ -69,12 +69,14 @@ Your Agent
 **The agent never writes memory.** It only reads and acts. Observer handles everything else.
 
 **Example — memory retrieval in action:**
+
 ```
 You:   "What did we decide about the auth flow last week?"
 Agent: (silently calls ctx_semantic("auth flow decision"))
        "We decided to use short-lived JWT tokens with refresh via
         Redis — no sessions on the server side."
 ```
+
 No prompting tricks. No copy-pasting logs. The agent just knows.
 **Core product is RAM-only by default** for speed. Reliability is guaranteed by a formal `PersistenceLayer` (Phase 9.2), which manages asynchronous SQLite WAL writes and provides a strict isolation boundary between memory logic and storage.
 
@@ -103,17 +105,17 @@ This is not a database with TTL. This is how human memory works.
 
 **Current:** v1.7.5 alpha | 2026-04-08
 
-| Component                                | Status                                        |
-| ---------------------------------------- | --------------------------------------------- |
-| Core backend (Observer, Memory, Storage) | ✅ Implemented, 321/321 tests                 |
-| Anchor Layer / Emotional Patterns        | ✅ Implemented                                 |
-| Implicit Feedback (v1.5)                 | ✅ Implemented                                 |
-| PersistenceLayer Split (Phase 9.2)       | ✅ Implemented (v1.7.1)                        |
-| CLI User Mode (setup/on/off/status)      | ✅ Implemented (v1.7.1)                        |
-| MCP Server (stdio)                       | ✅ Implemented                                 |
-| Continuation Detection & Mention Type    | ✅ Implemented                                 |
-| Decay Engine & Dreamer                   | ✅ Implemented (Stage C/D)                     |
-| Model install CLI                        | ✅ Implemented                                 |
+| Component                                | Status                       |
+| ---------------------------------------- | ---------------------------- |
+| Core backend (Observer, Memory, Storage) | ✅ Implemented, 321/321 tests |
+| Anchor Layer / Emotional Patterns        | ✅ Implemented                |
+| Implicit Feedback (v1.5)                 | ✅ Implemented                |
+| PersistenceLayer Split (Phase 9.2)       | ✅ Implemented (v1.7.1)       |
+| CLI User Mode (setup/on/off/status)      | ✅ Implemented (v1.7.1)       |
+| MCP Server (stdio)                       | ✅ Implemented                |
+| Continuation Detection & Mention Type    | ✅ Implemented                |
+| Decay Engine & Dreamer                   | ✅ Implemented (Stage C/D)    |
+| Model install CLI                        | ✅ Implemented                |
 
 ---
 
@@ -133,6 +135,7 @@ mnemostroma off          # Stop daemon
 ```
 
 ### OS Support & Services
+
 - **Linux**: Supported via `systemd` (user mode).
 - **macOS**: Supported via `launchd` (LaunchAgents).
 - **Windows 10/11**: Supported via **Task Scheduler** (`schtasks`).
@@ -140,6 +143,7 @@ mnemostroma off          # Stop daemon
   - **Alpha Recommendation:** For the best experience during alpha, we recommend using **WSL2** (Ubuntu) instead of native Windows.
 
 ### Management Commands
+
 - `mnemostroma config list`  — View all 70+ tunable parameters
 - `mnemostroma logs --days 7` — Analyze memory growth and calibration
 - `mnemostroma watch`        — Live terminal activity dashboard
@@ -164,25 +168,27 @@ Mnemostroma writes local diagnostic logs to `logs.db` during alpha.
 **Logs never leave your machine.** No network calls.
 
 To configure in `~/.mnemostroma/config.json`:
+
 ```json
 "logging": { 
   "enabled": true,
   "mode": "safe" 
 }
 ```
+
 *Note: `safe` mode redacts sensitive content from logs, keeping only event types and metadata.*
 
 ---
 
 ## Stack
 
-| Component                   | Disk       | RSS (estimated)                   |
-| --------------------------- | ---------- | --------------------------------- |
-| multilingual-e5-small INT8  | ~117MB     | Session & Content embedder (384d) |
-| distilbert-ner INT8         | ~60MB      | HybridNER                         |
-| TinyBERT-L-2-v2 INT8        | ~7MB       | Cross-encoder reranking (lazy)    |
-| ONNX Runtime + tokenizers   | —          | Runtime overhead                  |
-| **Total working set (RSS)** | **~300MB disk · ~630MB RAM** |                    |
+| Component                   | Disk                         | RSS (estimated)                   |
+| --------------------------- | ---------------------------- | --------------------------------- |
+| multilingual-e5-small INT8  | ~117MB                       | Session & Content embedder (384d) |
+| distilbert-ner INT8         | ~60MB                        | HybridNER                         |
+| TinyBERT-L-2-v2 INT8        | ~7MB                         | Cross-encoder reranking (lazy)    |
+| ONNX Runtime + tokenizers   | —                            | Runtime overhead                  |
+| **Total working set (RSS)** | **~300MB disk · ~630MB RAM** |                                   |
 
 No torch. No transformers. No LangChain. No Docker. No Redis. No cloud.
 Dependencies: `onnxruntime, tokenizers, numpy, lz4, aiosqlite`
@@ -192,6 +198,7 @@ Dependencies: `onnxruntime, tokenizers, numpy, lz4, aiosqlite`
 ## API surface (16 tools via MCP)
 
 **Read (6):**
+
 - `ctx_active()`: Current context snapshot (intent, variables, deadlines)
 - `ctx_get(id)`: Retrieve specific session by ID
 - `ctx_search(tags)`: Tag-based search (precise, multi-language)
@@ -200,12 +207,14 @@ Dependencies: `onnxruntime, tokenizers, numpy, lz4, aiosqlite`
 - `ctx_precision(type)`: Exact data (links, formulas, quotes)
 
 **Extended (4):**
+
 - `ctx_full(id)`: Full-text version from SQLite (for exact quoting)
 - `ctx_bridge()`: Structured context handoff packet for next agent
 - `ctx_urgent()`: Active deadlines and time-sensitive tasks
 - `ctx_expire(id)`: Mark urgent task as completed/expired
 
 **Content Branch (5):**
+
 - `save_content(id, text)`: Versioned artifact save with `why_changed`
 - `content_search(query)`: Semantic search over artifacts (code, docs)
 - `content_get(id, version)`: Metadata retrieval for artifact
@@ -213,6 +222,7 @@ Dependencies: `onnxruntime, tokenizers, numpy, lz4, aiosqlite`
 - `content_history(id)`: Version lineage and change log
 
 **Admin (1):**
+
 - `ctx_load(id)`: Force-load archived session from SQLite to RAM
 
 ---
