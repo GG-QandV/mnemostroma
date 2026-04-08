@@ -89,17 +89,17 @@ This is not a database with TTL. This is how human memory works.
 
 **Current:** v1.7.5 alpha | 2026-04-08
 
-| Component                                | Status                                        |
-| ---------------------------------------- | --------------------------------------------- |
-| Core backend (Observer, Memory, Storage) | ✅ Implemented, 303/303 tests                 |
-| Anchor Layer / Emotional Patterns        | ✅ Implemented                                 |
-| Implicit Feedback (v1.5)                 | ✅ Implemented                                 |
-| PersistenceLayer Split (Phase 9.2)       | ✅ Implemented (v1.7.1)                        |
-| CLI User Mode (setup/on/off/status)      | ✅ Implemented (v1.7.1)                        |
-| MCP Server (stdio)                       | ✅ Implemented                                 |
-| Continuation Detection & Mention Type    | ✅ Implemented                                 |
-| Decay Engine & Dreamer                   | ✅ Implemented (Stage C/D)                     |
-| Model install CLI                        | ✅ Implemented                                 |
+| Component                                | Status                       |
+| ---------------------------------------- | ---------------------------- |
+| Core backend (Observer, Memory, Storage) | ✅ Implemented, 303/303 tests |
+| Anchor Layer / Emotional Patterns        | ✅ Implemented                |
+| Implicit Feedback (v1.5)                 | ✅ Implemented                |
+| PersistenceLayer Split (Phase 9.2)       | ✅ Implemented (v1.7.1)       |
+| CLI User Mode (setup/on/off/status)      | ✅ Implemented (v1.7.1)       |
+| MCP Server (stdio)                       | ✅ Implemented                |
+| Continuation Detection & Mention Type    | ✅ Implemented                |
+| Decay Engine & Dreamer                   | ✅ Implemented (Stage C/D)    |
+| Model install CLI                        | ✅ Implemented                |
 
 ---
 
@@ -115,6 +115,7 @@ mnemostroma off          # Stop daemon
 ```
 
 ### OS Support & Services
+
 - **Linux**: Supported via `systemd` (user mode).
 - **macOS**: Supported via `launchd` (LaunchAgents).
 - **Windows 10/11**: Supported via **Task Scheduler** (`schtasks`).
@@ -122,6 +123,7 @@ mnemostroma off          # Stop daemon
   - **Alpha Recommendation:** For the best experience during alpha, we recommend using **WSL2** (Ubuntu) instead of native Windows.
 
 ### Management Commands
+
 - `mnemostroma config list`  — View all 70+ tunable parameters
 - `mnemostroma logs --days 7` — Analyze memory growth and calibration
 - `mnemostroma watch`        — Live terminal activity dashboard
@@ -146,12 +148,14 @@ Mnemostroma writes local diagnostic logs to `logs.db` during alpha.
 **Logs never leave your machine.** No network calls.
 
 To configure in `~/.mnemostroma/config.json`:
+
 ```json
 "logging": { 
   "enabled": true,
   "mode": "safe" 
 }
 ```
+
 *Note: `safe` mode redacts sensitive content from logs, keeping only event types and metadata.*
 
 ---
@@ -174,6 +178,7 @@ Dependencies: `onnxruntime, tokenizers, numpy, lz4, aiosqlite`
 ## API surface (16 tools via MCP)
 
 **Read (6):**
+
 - `ctx_active()`: Current context snapshot (intent, variables, deadlines)
 - `ctx_get(id)`: Retrieve specific session by ID
 - `ctx_search(tags)`: Tag-based search (precise, multi-language)
@@ -182,12 +187,14 @@ Dependencies: `onnxruntime, tokenizers, numpy, lz4, aiosqlite`
 - `ctx_precision(type)`: Exact data (links, formulas, quotes)
 
 **Extended (4):**
+
 - `ctx_full(id)`: Full-text version from SQLite (for exact quoting)
 - `ctx_bridge()`: Structured context handoff packet for next agent
 - `ctx_urgent()`: Active deadlines and time-sensitive tasks
 - `ctx_expire(id)`: Mark urgent task as completed/expired
 
 **Content Branch (5):**
+
 - `save_content(id, text)`: Versioned artifact save with `why_changed`
 - `content_search(query)`: Semantic search over artifacts (code, docs)
 - `content_get(id, version)`: Metadata retrieval for artifact
@@ -195,6 +202,7 @@ Dependencies: `onnxruntime, tokenizers, numpy, lz4, aiosqlite`
 - `content_history(id)`: Version lineage and change log
 
 **Admin (1):**
+
 - `ctx_load(id)`: Force-load archived session from SQLite to RAM
 
 ---
