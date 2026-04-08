@@ -2,6 +2,11 @@
 
 ### The memory layer for AI agents
 
+![Version](https://img.shields.io/badge/version-v1.7.5--alpha-orange)
+![Python](https://img.shields.io/badge/python-3.12%2B-blue)
+![Tests](https://img.shields.io/badge/tests-321%20passing-brightgreen)
+![License](https://img.shields.io/badge/license-FSL--1.1--MIT-lightgrey)
+
 > *μνήμη (mnḗmē, memory) + στρῶμα (strôma, layer) — the substrate everything rests on.*
 
 ---
@@ -62,6 +67,15 @@ Your Agent
 ```
 
 **The agent never writes memory.** It only reads and acts. Observer handles everything else.
+
+**Example — memory retrieval in action:**
+```
+You:   "What did we decide about the auth flow last week?"
+Agent: (silently calls ctx_semantic("auth flow decision"))
+       "We decided to use short-lived JWT tokens with refresh via
+        Redis — no sessions on the server side."
+```
+No prompting tricks. No copy-pasting logs. The agent just knows.
 **Core product is RAM-only by default** for speed. Reliability is guaranteed by a formal `PersistenceLayer` (Phase 9.2), which manages asynchronous SQLite WAL writes and provides a strict isolation boundary between memory logic and storage.
 
 ---
@@ -105,8 +119,12 @@ This is not a database with TTL. This is how human memory works.
 
 ## Quick Start (User Mode)
 
+**Requires Python 3.12+**
+
+> ⚠️ Not yet on PyPI. Install directly from GitHub:
+
 ```bash
-pip install mnemostroma
+pip install git+https://github.com/GG-QandV/mnemostroma.git
 mnemostroma setup        # Initialize ~/.mnemostroma/ and download models
 mnemostroma on           # Start persistent memory daemon (background)
 mnemostroma service install   # Register as systemd/launchd service (autostart)
@@ -247,6 +265,19 @@ Memory is knowing what to remember, when, and how much detail.
 
 Mnemostroma doesn't give your agent a bigger context window.
 It gives your agent an actual memory.
+
+---
+
+## Development & Testing
+
+```bash
+git clone https://github.com/GG-QandV/mnemostroma.git
+cd mnemostroma
+pip install -e ".[dev]"
+pytest tests/                          # run all 321 tests
+pytest tests/ --ignore=tests/test_memory_layers.py \
+              --ignore=tests/test_data_contracts.py  # fast mode (~14s)
+```
 
 ---
 
