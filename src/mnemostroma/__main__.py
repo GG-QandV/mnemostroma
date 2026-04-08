@@ -99,8 +99,13 @@ async def _run_daemon(
                     logger.info("SIGUSR2: dump triggered")
             loop.add_signal_handler(signal.SIGUSR2, _on_dump)
 
+        from mnemostroma.ipc_server import IPCServer
+        ipc = IPCServer(conductor)
+        ipc_task = asyncio.create_task(ipc.serve())
+
         logger.info("Daemon is running. Press Ctrl+C to stop.")
         await stop_event.wait()
+        ipc_task.cancel()
     except Exception as e:
         logger.error(f"Daemon failed: {e}", exc_info=True)
     finally:
@@ -343,7 +348,7 @@ def _install_models(manifest_path: Path, force: bool = False):
 def _cmd_setup() -> None:
     import shutil
 
-    print("\nMnemostroma v1.7.1 setup\n")
+    print("\nMnemostroma setup\n")
 
     # 1. Create ~/.mnemostroma/
     _MNEMO_DIR.mkdir(parents=True, exist_ok=True)
@@ -741,6 +746,7 @@ _PARAM_DOCS: dict = {
     "calibration.min_onboarding_sessions": "Min sessions before finalizing threshold",
     "calibration.continuation_threshold":  "Cosine similarity threshold for continuation detection",
     "calibration.calibration_complete":    "Flag: calibration already done (set by system)",
+    "logging.enabled":                     "Enable/disable event logging to logs.db",
     "logging.mode":                        "Logging verbosity: 'safe' | 'debug'",
     "logging.db_path":                     "Path to logs SQLite database",
 }
@@ -1192,9 +1198,15 @@ def _print_help():
         "  dump                  Trigger RAM dump in running daemon (writes to ~/.mnemostroma/dumps/)\n"
         "  growth                Show session growth stats and DB size forecast\n"
         "                          --db <path>      path to mnemostroma.db\n"
+        "  logs                  Analyze logs.db — anomalies and calibration recommendations\n"
+        "                          --db <path>      path to logs.db (default: logs.db)\n"
         "                          --days <N>       analysis window in days (default: 7)\n"
         "                          --json           output as JSON\n"
+        "  tray                  System tray status indicator (requires pip install mnemostroma[tray])\n"
+        "                          --db <path>      path to logs.db (default: logs.db)\n"
         "                          --interval <N>   poll every N seconds (default: 3)\n"
+        "  watch                 Live terminal dashboard (reads logs.db)\n"
+        "                          --db <path>      path to logs.db (default: logs.db)\n"
         "                          --interval <N>   refresh every N seconds (default: 2)\n"
         "                          --window <N>     show last N seconds of activity (default: 30)\n"
         "  config <sub> [args]   View and edit config parameters\n"
@@ -1222,7 +1234,40 @@ def cli():
     command = args[0]
 
     if command == "setup":
-        _cmd_setup()
+        setup_args = args[1:]
+        if "--inject" in setup_args:
+            idx = setup_args.index("--inject")
+            if idx + 1 >= len(setup_args):
+                print("ERROR: --inject requires a file path argument")
+                print("       Example: mnemostroma setup --inject ~/.claude/CLAUDE.md")
+                sys.exit(1)
+            from mnemostroma.setup.inject import inject as _inject
+            result = _inject(Path(setup_args[idx + 1]))
+            print(result)
+        elif "--undo" in setup_args:
+            idx = setup_args.index("--undo")
+            if idx + 1 >= len(setup_args):
+                print("ERROR: --undo requires a file path argument")
+                sys.exit(1)
+            from mnemostroma.setup.inject import undo as _undo
+            result = _undo(Path(setup_args[idx + 1]))
+            print(result)
+        elif "--status" in setup_args:
+            idx = setup_args.index("--status")
+            if idx + 1 >= len(setup_args):
+                print("ERROR: --status requires a file path argument")
+                sys.exit(1)
+            from mnemostroma.setup.inject import status as _status
+            path = Path(setup_args[idx + 1]).expanduser().resolve()
+            present = _status(path)
+            icon = "✓" if present else "✗"
+            state = "present" if present else "not found"
+            print(f"  {icon} Memory protocol {state} — {path}")
+        elif "--print-protocol" in setup_args:
+            from mnemostroma.setup.protocol import get_block
+            print(get_block())
+        else:
+            _cmd_setup()
 
     elif command == "on":
         _cmd_on()
@@ -1291,11 +1336,45 @@ def cli():
         except KeyboardInterrupt:
             pass
 
+    elif command == "logs":
+        from mnemostroma.tools.logs import run_logs
+        import argparse as _ap
+        p = _ap.ArgumentParser(prog="mnemostroma logs", add_help=False)
+        p.add_argument("--db",   default="logs.db", help="Path to logs.db")
+        p.add_argument("--days", type=int, default=7)
+        p.add_argument("--json", action="store_true")
+        la, _ = p.parse_known_args(args[1:])
+        run_logs(la.db, la.days, la.json)
 
+    elif command == "tray":
+        from mnemostroma.tools.tray import run_tray
+        import argparse as _ap
+        p = _ap.ArgumentParser(prog="mnemostroma tray", add_help=False)
+        p.add_argument("--db",       default="logs.db", help="Path to logs.db")
+        p.add_argument("--interval", type=int, default=3, help="Poll interval (seconds)")
+        ta, _ = p.parse_known_args(args[1:])
+        run_tray(Path(ta.db), interval=ta.interval)
 
+    elif command == "watch":
+        from mnemostroma.tools.watch import run_watch
+        import argparse as _ap
+        p = _ap.ArgumentParser(prog="mnemostroma watch", add_help=False)
+        p.add_argument("--db",       default="logs.db",  help="Path to logs.db")
+        p.add_argument("--interval", type=int, default=2,  help="Refresh interval (seconds)")
+        p.add_argument("--window",   type=int, default=30, help="Activity window (seconds)")
+        wa, _ = p.parse_known_args(args[1:])
+        run_watch(Path(wa.db), interval=wa.interval, window_sec=wa.window)
 
-
-
+    elif command == "sse":
+        try:
+            from mnemostroma.integration.mcp_sse_adapter import run as _run_sse
+            asyncio.run(_run_sse())
+        except ImportError:
+            print("ERROR: SSE adapter requires starlette and uvicorn.")
+            print("       Install with: pip install mnemostroma[sse]")
+            sys.exit(1)
+        except KeyboardInterrupt:
+            pass
 
     elif command == "service":
         _cmd_service(args[1:])
