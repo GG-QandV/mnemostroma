@@ -6,6 +6,8 @@ labels: bug
 assignees: ''
 ---
 
+> **Note on response times:** Mnemostroma is maintained by a solo developer. To avoid context-switching, repository activity is batch-processed once a week. Thank you for your patience!
+
 **What happened?**
 <!-- Clear description of the problem -->
 
