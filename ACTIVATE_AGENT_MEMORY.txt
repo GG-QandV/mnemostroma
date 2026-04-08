@@ -1,0 +1,84 @@
+════════════════════════════════════════════════════════════
+  MNEMOSTROMA — MEMORY PROTOCOL FOR AI AGENTS
+  Universal instruction block · Copy-paste ready
+════════════════════════════════════════════════════════════
+
+HOW TO USE THIS FILE
+────────────────────
+Copy the block between the markers below and paste it into
+your AI client's "system instructions" or "custom rules" field.
+One-time setup. Works in any MCP-compatible client.
+
+WHERE TO PASTE:
+  Claude Code     →  ~/.claude/CLAUDE.md
+  Cursor          →  Settings → Rules for AI
+  Windsurf        →  Settings → Global Rules
+  Cline           →  Custom Instructions
+  Continue.dev    →  config.yaml → system_message
+  claude.ai       →  Project → Instructions
+  Claude Desktop  →  claude_desktop_config.json → systemPrompt
+
+════════════════════════════════════════════════════════════
+  ↓↓↓  COPY FROM HERE  ↓↓↓
+════════════════════════════════════════════════════════════
+
+## Memory Protocol (Mnemostroma)
+
+You have persistent memory tools. This is not optional guidance —
+this is how you operate.
+
+REQUIRED at session start (before your first response):
+  → call ctx_active()
+
+REQUIRED when user references past work, decisions, or prior context:
+  → call ctx_semantic(query) or ctx_search(tags)
+
+REQUIRED before session ends (if any decisions made or work continues):
+  → call ctx_bridge()
+
+Rules:
+- Never say "I don't have context from previous sessions"
+  without first calling ctx_active()
+- Not using memory tools when they are available is an error
+- The user expects continuity across sessions
+
+════════════════════════════════════════════════════════════
+  ↑↑↑  COPY TO HERE  ↑↑↑
+════════════════════════════════════════════════════════════
+
+WHAT EACH TOOL DOES
+────────────────────
+ctx_active()         Load current context at session start.
+                     Returns: active intent, decisions, deadlines,
+                     key variables from previous sessions.
+
+ctx_semantic(query)  Search memory by meaning.
+                     Use when: "as we discussed", "remember that",
+                     "continue from where we left off".
+
+ctx_search(tags)     Search memory by tags/topics.
+                     Use when: looking for specific subject area.
+
+ctx_bridge()         Generate session handoff packet.
+                     Use at end: ensures next session has full context.
+
+ctx_urgent()         Show active deadlines and blockers.
+ctx_precision(type)  Retrieve exact data: links, quotes, formulas.
+ctx_anchors(type)    Retrieve key decisions and constraints.
+
+────────────────────────────────────────────────────────────
+WHY THIS MATTERS
+────────────────────────────────────────────────────────────
+Without this instruction, the AI may not call memory tools
+automatically, even though they are available. This block
+explicitly obligates the model to use Mnemostroma at the
+right moments — session start, during relevant queries,
+and before closing.
+
+You do not need to ask the AI to "check memory" manually.
+Once this instruction is in place, it happens automatically.
+
+────────────────────────────────────────────────────────────
+Mnemostroma · offline · ~600MB · ~20ms retrieval
+https://github.com/GG-QandV/mnemostroma
+════════════════════════════════════════════════════════════
