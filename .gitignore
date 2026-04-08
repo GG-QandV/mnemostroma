@@ -38,3 +38,4 @@ __pycache__/
 .venv/
 env/
 .pytest_cache/
+*.egg-info/
