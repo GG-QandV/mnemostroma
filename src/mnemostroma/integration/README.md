@@ -1,18 +1,26 @@
 # Mnemostroma: Integration Layer
 
-Provides the bridge between Mnemostroma and external LLM agents.
+Adapters connecting Mnemostroma to external LLM agents and clients.
 
 ## Components
-- `ConductorProxy`: Middleware for prompt injection and XML memory context formatting.
-- `MemoryBlock`: Standardized data structure for LLM-ready context.
-- `mcp_server`: MCP stdio transport server exposing Mnemostroma tools to AI agents.
+- `mcp_stdio_adapter.py`: MCP stdio transport — entry point for Claude Code and CLI agents.
+- `mcp_sse_adapter.py`: MCP SSE transport — HTTP server for claude.ai and browser clients (port 8765). Auth via Bearer token.
+- `mcp_server.py`: Legacy MCP server (kept for compatibility).
+- `proxy.py`: API proxy middleware for transparent memory injection into LLM API calls.
+- `sdk.py`: SDK helpers for agent integration.
 
-## Data Flow (MCP)
+## Architecture
+All adapters connect to the daemon via IPC socket (`~/.mnemostroma/daemon.sock`).
+The daemon (Conductor) is the single authority — adapters never import conductor directly.
+
+## Data Flow
 ```
-Agent (Antigravity) → stdio JSON-RPC → mcp_server.py → tools/*.py → SystemContext → RAM/SQLite
+Agent      → mcp_stdio_adapter → IPC socket → Conductor → tools/*.py → RAM/SQLite
+claude.ai  → mcp_sse_adapter   → IPC socket → Conductor → tools/*.py → RAM/SQLite
 ```
 
 ## Running
 ```bash
-PYTHONPATH=src .venv/bin/python3 -m mnemostroma.integration.mcp_server
+mnemostroma mcp   # stdio adapter (Claude Code)
+mnemostroma sse   # SSE adapter (claude.ai)
 ```

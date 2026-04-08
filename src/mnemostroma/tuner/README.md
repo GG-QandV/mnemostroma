@@ -1,13 +1,13 @@
-# Tuner
+# Mnemostroma: Tuner Layer
 
-Async sidecar component embedded in the Observer pipeline.
-Listens for dissonance and intercepts contradictory sessions before they commit to memory.
+Async sidecar embedded in the Observer pipeline. Detects dissonance and intercepts contradictory sessions before they commit to memory.
 
-## Files
+## Components
 
 | File | What |
 |------|------|
-| conflict.py | Conflict Detector (Phase 3): detects contradicting decisions. |
+| `conflict.py` | Conflict Detector: detects contradicting decisions via semantic similarity + textual divergence. |
+| `drift.py` | Drift Detector: tracks gradual concept drift across sessions over time. |
 
 ## Data Flow
 
@@ -15,13 +15,12 @@ Listens for dissonance and intercepts contradictory sessions before they commit 
 Observer Pipeline (pipeline.py)
   └── step 5: Score calculation
        └── tuner.check(SessionBrief)
-            ├── semantic similarity > 0.85 (HNSW search)
+            ├── semantic similarity > 0.85 (MatrixSearch ANN)
             └── textual divergence > 0.40
                 └── Sets conflict_flag=True for both sessions
-  └── step 7: Ram/HNSW save
+  └── step 7: RAM / MatrixSearch save
 ```
 
 ## Key Specs
-
-- Spec: `tuner_specification.md` + `tuner_specification_v1.4.md`
-- Priority: intercepts only `critical` and `important` sessions.
+- Intercepts only `critical` and `important` sessions.
+- Modifies: `SessionBrief.conflict_flag`.

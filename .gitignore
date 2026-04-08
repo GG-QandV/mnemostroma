@@ -4,8 +4,8 @@
 *.sqlite-wal
 *.sqlite-shm
 
-# Models & Weights
-models/
+# Models & Weights (downloaded binaries, not source code)
+/models/
 weights/
 *.onnx
 *.safetensors
