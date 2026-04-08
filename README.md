@@ -87,7 +87,7 @@ This is not a database with TTL. This is how human memory works.
 
 ## Status
 
-**Current:** v1.7.1 alpha | 2026-04-07
+**Current:** v1.7.5 alpha | 2026-04-08
 
 | Component                                | Status                                        |
 | ---------------------------------------- | --------------------------------------------- |
@@ -215,6 +215,12 @@ Mnemostroma is an MCP server. Add it to your `claude_desktop_config.json`:
 ```
 
 **Observer Principle:** You do not need to manually call "save_memory". The Mnemostroma Observer watches your conversation and handles everything in the background. You only call tools when you need to *remember* something from the past.
+
+### claude.ai (SSE + real-time context capture)
+
+Connect Mnemostroma to claude.ai web chat — tools available to Claude, conversations stored in memory automatically.
+
+→ **[Setup guide: docs/CLAUDE_AI_SETUP.md](docs/CLAUDE_AI_SETUP.md)**
 
 ---
 
