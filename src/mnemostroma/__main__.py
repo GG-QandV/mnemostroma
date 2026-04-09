@@ -348,6 +348,9 @@ def _install_models(manifest_path: Path, force: bool = False):
 def _cmd_setup() -> None:
     import shutil
 
+    config_dest = _MNEMO_DIR / "config.json"
+    pkg_default = Path(__file__).parent / "config_default.json"
+
     print("\nMnemostroma setup\n")
 
     # 1. Create ~/.mnemostroma/
