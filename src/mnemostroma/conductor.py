@@ -72,11 +72,6 @@ class Conductor:
         # B0.7: Anchor t_rel migration (adds t_rel column if missing — v1.6 §5.1)
         await check_anchor_schema(db)
         
-        # 2.5 Logging (v1.0 spec) — skipped when logging.enabled: false
-        logs_path = config.logging.db_path
-        log_writer = None
-        if config.logging.enabled:
-        
         # 3. Memory Indices (matrix cosine search — ADR-002)
         session_index = init_session_index(config)
         content_index = init_content_index(config)
