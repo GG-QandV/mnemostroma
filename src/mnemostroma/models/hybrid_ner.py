@@ -23,25 +23,26 @@ TECH_PATTERN = re.compile(
 DECISION_PATTERNS = [
     # RU
     re.compile(r'(?:решили|решил|решено|выбрали|выбрал|будем использовать|переходим на|'
-               r'принято решение|договорились|утвердили|одобрили)\s+(.{3,60}?)(?=[.,;!\n]|$)', re.IGNORECASE),
+               r'принято решение|договорились|утвердили|одобрили)[:\s]+(.{3,60}?)(?=[.,;!\n]|$)', re.IGNORECASE),
     # EN
     re.compile(r'(?:decided to|chose|will use|switching to|agreed on|approved|'
-               r'going with|selected|picked)\s+(.{3,60}?)(?=[.,;!\n]|$)', re.IGNORECASE),
+               r'going with|selected|picked)[:\s]+(.{3,60}?)(?=[.,;!\n]|$)', re.IGNORECASE),
     # UA
     re.compile(r'(?:вирішили|вирішив|обрали|будемо використовувати|переходимо на|'
-               r'затвердили|домовились)\s+(.{3,60}?)(?=[.,;!\n]|$)', re.IGNORECASE),
+               r'затвердили|домовились)[:\s]+(.{3,60}?)(?=[.,;!\n]|$)', re.IGNORECASE),
 ]
 
 PROHIBITION_PATTERNS = [
     # RU
     re.compile(r'(?:запрещено|нельзя|не использовать|отказались от|убрали|'
-               r'не применять|исключить|заблокировать)\s+(.{3,60}?)(?=[.,;!\n]|$)', re.IGNORECASE),
+               r'не применять|исключить|заблокировать|никакого|никакой|'
+               r'исключён|исключена|без внешних)[:\s]+(.{3,60}?)(?=[.,;!\n]|$)', re.IGNORECASE),
     # EN
     re.compile(r'(?:forbidden|must not|do not use|banned|prohibited|'
-               r'deprecated|removed|blocked)\s+(.{3,60}?)(?=[.,;!\n]|$)', re.IGNORECASE),
+               r'deprecated|removed|blocked|no external)[:\s]+(.{3,60}?)(?=[.,;!\n]|$)', re.IGNORECASE),
     # UA
     re.compile(r'(?:заборонено|не можна|не використовувати|відмовились від|'
-               r'виключити|заблокувати)\s+(.{3,60}?)(?=[.,;!\n]|$)', re.IGNORECASE),
+               r'виключити|заблокувати)[:\s]+(.{3,60}?)(?=[.,;!\n]|$)', re.IGNORECASE),
 ]
 
 

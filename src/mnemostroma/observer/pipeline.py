@@ -233,9 +233,9 @@ async def observer_pipeline(
     from ..subconscious.anchor_index import AnchorIndex
     from .flag_detector import detect_all_flags
 
-    anchor_type = AnchorIndex.infer_anchor_type(importance_str, entities)
-    key_facts = AnchorIndex.build_key_facts(entities, max_facts=5)
-    detected_flags = detect_all_flags(text, entities)
+    anchor_type = AnchorIndex.infer_anchor_type(importance_str, pre_entities)
+    key_facts = AnchorIndex.build_key_facts(pre_entities, max_facts=5)
+    detected_flags = detect_all_flags(text, pre_entities)
 
     # 6.5 + 7. Continuation + conflict + write
     vec_f32 = embedding.astype(np.float32).flatten()
@@ -349,10 +349,10 @@ async def observer_pipeline(
         embedding=_anchor_embedding,
     )
 
-    if ctx.anchor_index:
+    if ctx.anchor_index is not None:
         ctx.anchor_index.put(anchor)
 
-    if ctx.persistence:
+    if ctx.persistence is not None:
         await ctx.persistence.save_anchor(anchor)
 
     # 7b. RAM indices (no HNSW, no lock needed)

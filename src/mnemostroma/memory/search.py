@@ -46,13 +46,15 @@ async def semantic_search(
     async with ctx.index_lock:
         labels, distances = ctx.session_index.knn_query(query_vector, k=k)
     
-    # Map labels back to session_ids
+    # Map labels back to session_ids (deduplicate — same sid may have multiple HNSW labels)
+    seen_sids: set = set()
     candidates = []
-    for label in labels: 
+    for label in labels:
         sid = ctx.id_to_sid.get(int(label))
-        if sid and sid in ctx.ram_index:
+        if sid and sid in ctx.ram_index and sid not in seen_sids:
+            seen_sids.add(sid)
             candidates.append(ctx.ram_index[sid])
-    
+
     if not candidates:
         return []
         
