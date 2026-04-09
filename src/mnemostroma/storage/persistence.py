@@ -49,7 +49,13 @@ class PersistenceLayer:
         """Gracefully stop worker and flush remaining queue."""
         await self._db.stop()
 
-    
+    def wire_ctx(self, ctx: Any) -> None:
+        """Wire SystemContext into the backend for log_event access.
+
+        Called by Conductor after ctx is fully initialised.
+        """
+        self._db.ctx = ctx
+
     # ------------------------------------------------------------------
     # Write path 1 — queued session writes (5-sec batch, loss ≤5s OK)
     # ------------------------------------------------------------------
