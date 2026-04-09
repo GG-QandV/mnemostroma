@@ -12,7 +12,6 @@ _LOGS_ID_DB_ = ""  # internal diagnostics id
 
 logger = logging.getLogger("mnemostroma.storage")
 
-
 async def init_db(db_path: str | Path, config: Optional[Any] = None) -> aiosqlite.Connection:
     """Initialize SQLite database with WAL mode and schemas.
 
@@ -39,27 +38,47 @@ async def init_db(db_path: str | Path, config: Optional[Any] = None) -> aiosqlit
     for schema in ALL_SCHEMAS:
         await db.execute(schema)
 
+    # Migrations
+    await check_anchor_schema(db)
+    await check_session_schema(db)
+
     await db.commit()
     logger.info(f"Database initialized at {db_path}")
     return db
 
-
 async def check_anchor_schema(db: aiosqlite.Connection) -> None:
-    """Add t_rel column to anchors if missing (migration for existing databases).
-
-    Safe to run on every startup — ALTER TABLE is a no-op when the column exists
-    (SQLite raises OperationalError with 'duplicate column name', which we swallow).
-    """
+    """Add missing columns to anchors table (migrations)."""
+    # t_rel — added in v1.6
     try:
         await db.execute(
             "ALTER TABLE anchors ADD COLUMN "
             "t_rel TEXT NOT NULL DEFAULT '{\"after\":[],\"before\":[],\"caused_by\":[],\"during\":[]}'"
         )
         await db.commit()
-        logger.info("check_anchor_schema: t_rel column added to anchors")
     except Exception:
-        pass  # column already exists or table not yet created — both are fine
+        pass
+    # embedding — added in Phase 11 (Guardian/Surfacing semantic match)
+    try:
+        await db.execute("ALTER TABLE anchors ADD COLUMN embedding BLOB")
+        await db.commit()
+    except Exception:
+        pass
 
+async def check_session_schema(db: aiosqlite.Connection) -> None:
+    """Migrate sessions table for v1.7.1 (resolution, intensity)."""
+    # 1. resolution
+    try:
+        await db.execute("ALTER TABLE sessions ADD COLUMN resolution REAL DEFAULT 1.0")
+        await db.commit()
+    except Exception:
+        pass
+    
+    # 2. intensity
+    try:
+        await db.execute("ALTER TABLE sessions ADD COLUMN intensity REAL DEFAULT 0.0")
+        await db.commit()
+    except Exception:
+        pass
 
 class DatabaseManager:
     """Manager for async persistence to SQLite.
@@ -71,7 +90,7 @@ class DatabaseManager:
     Args:
         db: Active aiosqlite connection.
         config: Full system Config (not config.storage, full Config).
-        ctx: SystemContext passed.
+        ctx: SystemContext passed for log_event instrumentation.
     """
 
     def __init__(self, db: aiosqlite.Connection, config: Any, ctx: Optional[Any] = None):
@@ -215,12 +234,12 @@ class DatabaseManager:
             async with self.db.execute(
                 """SELECT session_id, created_at, importance, tags, brief, 
                           conflict, urgency, deadline_ts, urgency_expired, bare_entity, 
-                          implicit_score, resolution, embedding FROM sessions"""
+                          implicit_score, resolution, intensity, embedding FROM sessions"""
             ) as cursor:
                 async for row in cursor:
                     session_id, created_at, importance, tags_json, brief, conflict, \
                     urgency, deadline_ts, urgency_expired, bare_entity, \
-                    implicit_score, resolution, embed_bytes = row
+                    implicit_score, resolution, intensity, embed_bytes = row
                     
                     embedding = None
                     if embed_bytes:
@@ -241,6 +260,7 @@ class DatabaseManager:
                         bare_entity=bool(bare_entity),
                         embedding=embedding,
                         implicit_score=implicit_score,
+                        intensity=intensity,
                         embedding_model_version="gte-multilingual-base-int8-v1"
                     )
                     results.append(sb)
@@ -260,7 +280,7 @@ class DatabaseManager:
             async with self.db.execute(
                 """SELECT session_id, created_at, importance, tags, brief,
                           conflict, urgency, deadline_ts, urgency_expired, bare_entity,
-                          implicit_score, resolution, embedding
+                          implicit_score, resolution, intensity, embedding
                    FROM sessions WHERE session_id = ?""",
                 (session_id,)
             ) as cursor:
@@ -269,7 +289,7 @@ class DatabaseManager:
                     return None
                 session_id_, created_at, importance, tags_json, brief, conflict, \
                 urgency, deadline_ts, urgency_expired, bare_entity, \
-                implicit_score, resolution, embed_bytes = row
+                implicit_score, resolution, intensity, embed_bytes = row
 
                 embedding = None
                 if embed_bytes:
@@ -290,6 +310,7 @@ class DatabaseManager:
                     bare_entity=bool(bare_entity),
                     embedding=embedding,
                     implicit_score=implicit_score,
+                    intensity=intensity,
                     embedding_model_version="multilingual-e5-small",
                 )
         except Exception as e:
@@ -326,12 +347,17 @@ class DatabaseManager:
     async def save_anchor(self, anchor: Any) -> None:
         """Persist anchor to SQLite."""
         data = anchor.to_dict()
+        import numpy as np
+        emb_bytes = None
+        if anchor.embedding is not None:
+            emb_bytes = anchor.embedding.astype(np.float16).tobytes()
         try:
             await self.db.execute(
                 """INSERT OR REPLACE INTO anchors
                    (anchor_id, session_id, anchor_type, brief, key_facts, flags,
-                    decay_level, access_count, last_accessed_at, t_rel, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    decay_level, access_count, last_accessed_at, t_rel, created_at, updated_at,
+                    embedding)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     data["anchor_id"],
                     data["session_id"],
@@ -345,6 +371,7 @@ class DatabaseManager:
                     json.dumps(data.get("t_rel", {"after": [], "before": [], "caused_by": [], "during": []}), ensure_ascii=False),
                     data["created_at"],
                     data["updated_at"],
+                    emb_bytes,
                 )
             )
             await self.db.commit()
@@ -353,11 +380,13 @@ class DatabaseManager:
 
     async def load_anchors(self, limit: int = 1000) -> list:
         """Load most recently accessed anchors for RAM index hydration."""
+        import numpy as np
         anchors = []
         try:
             async with self.db.execute(
                 """SELECT anchor_id, session_id, anchor_type, brief, key_facts, flags,
-                          decay_level, access_count, last_accessed_at, t_rel, created_at, updated_at
+                          decay_level, access_count, last_accessed_at, t_rel, created_at, updated_at,
+                          embedding
                    FROM anchors
                    ORDER BY last_accessed_at DESC
                    LIMIT ?""",
@@ -365,6 +394,12 @@ class DatabaseManager:
             ) as cursor:
                 async for row in cursor:
                     from ..subconscious.anchor import Anchor
+                    emb = None
+                    if row[12] is not None:
+                        try:
+                            emb = np.frombuffer(row[12], dtype=np.float16).astype(np.float32)
+                        except Exception:
+                            pass
                     anchors.append(Anchor(
                         anchor_id=row[0],
                         session_id=row[1],
@@ -378,6 +413,7 @@ class DatabaseManager:
                         t_rel=json.loads(row[9]),
                         created_at=row[10],
                         updated_at=row[11],
+                        embedding=emb,
                     ))
         except Exception as e:
             logger.error(f"Error loading anchors: {e}")
@@ -385,16 +421,25 @@ class DatabaseManager:
 
     async def get_anchor(self, anchor_id: str) -> Optional[Any]:
         """Load single anchor from SQLite (for resurface from silt)."""
+        import numpy as np
         try:
             async with self.db.execute(
                 """SELECT anchor_id, session_id, anchor_type, brief, key_facts, flags,
-                          decay_level, access_count, last_accessed_at, t_rel, created_at, updated_at
+                          decay_level, access_count, last_accessed_at, t_rel, created_at, updated_at,
+                          embedding
                    FROM anchors WHERE anchor_id = ?""",
                 (anchor_id,)
             ) as cursor:
                 row = await cursor.fetchone()
                 if row is None:
                     return None
+
+                emb = None
+                if row[12] is not None:
+                    try:
+                        emb = np.frombuffer(row[12], dtype=np.float16).astype(np.float32)
+                    except Exception:
+                        pass
 
                 from ..subconscious.anchor import Anchor
                 return Anchor(
@@ -410,11 +455,11 @@ class DatabaseManager:
                     t_rel=json.loads(row[9]),
                     created_at=row[10],
                     updated_at=row[11],
+                    embedding=emb,
                 )
         except Exception as e:
             logger.error(f"Error getting anchor {anchor_id}: {e}")
             return None
-
 
     async def check_experience_schema(self) -> None:
         """Add emotion columns to experience_metrics if they don't exist (v1.4 migration)."""
@@ -530,9 +575,10 @@ class DatabaseManager:
 
     async def _flush_batch(self, batch: List[Any]) -> None:
         """Persist a batch of objects to SQLite.
-        
+
         Handles SessionBrief (session index) and dict (content branch) payloads.
         """
+        import numpy as np
         now_ts = int(time.time())
 
         for item in batch:
@@ -552,8 +598,9 @@ class DatabaseManager:
                         (session_id, created_at, updated_at, importance, tags, brief,
                          conflict, urgency, deadline_ts, urgency_active, urgency_expired,
                          bare_entity, embedding_model_version, embedding, 
-                         use_count, deep_use_count, last_use_ts, implicit_score)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         use_count, deep_use_count, last_use_ts, implicit_score,
+                         resolution, intensity)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             session.session_id,
@@ -569,11 +616,13 @@ class DatabaseManager:
                             1 if session.urgency_expired else 0,
                             1 if session.bare_entity else 0,
                             session.embedding_model_version,
-                            session.embedding.tobytes() if session.embedding is not None else None,
+                            session.embedding.astype(np.float16).tobytes() if session.embedding is not None else None,
                             getattr(session, 'use_count', 0),
                             getattr(session, 'deep_use_count', 0),
                             getattr(session, 'last_use_ts', None),
                             getattr(session, 'implicit_score', 0.5),
+                            getattr(session, 'resolution', 1.0),
+                            getattr(session, 'intensity', 0.0),
                         )
                     )
 
@@ -631,5 +680,7 @@ class DatabaseManager:
 
         await self.db.commit()
 
+        # Log storage flush (v1.0 spec — Point #15)
+        if self.ctx is not None:
 
         logger.debug(f"Flushed {len(batch)} sessions to SQLite")

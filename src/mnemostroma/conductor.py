@@ -6,7 +6,7 @@ import numpy as np
 from pathlib import Path
 from typing import Optional
 
-_SESS_DIAG_KEY_ = ""  # session diagnostics key
+_SESS_DIAG_KEY_ = ""  # watermark anchor — injected per-tester by issue_build.py
 
 from .config import Config
 from .core import SystemContext, ModelRegistry
@@ -72,7 +72,11 @@ class Conductor:
         # B0.7: Anchor t_rel migration (adds t_rel column if missing — v1.6 §5.1)
         await check_anchor_schema(db)
         
-
+        # 2.5 Logging (v1.0 spec) — skipped when logging.enabled: false
+        logs_path = config.logging.db_path
+        log_writer = None
+        if config.logging.enabled:
+        
         # 3. Memory Indices (matrix cosine search — ADR-002)
         session_index = init_session_index(config)
         content_index = init_content_index(config)
@@ -94,6 +98,8 @@ class Conductor:
         self.ctx.content = ContentManager(self.ctx)
         self.ctx.dissolver = Dissolver(self.ctx)
 
+        # Provide ctx to db_manager for log_event access
+        persistence.wire_ctx(self.ctx)
         
         # ADR-002: validate pipeline_width does not exceed available ONNX threads
         pw = config.search.pipeline_width
@@ -110,6 +116,27 @@ class Conductor:
 
         # B01.5: Pre-warm anchor vectors (marker § 2.3) — eliminates first-request latency spike
         await self._warmup_anchor_vectors(self.ctx)
+
+        # B01.6: Preload precision_ram from precision_log (Phase 11.D)
+        if config.precision_guard.enabled:
+            try:
+                async with db.execute(
+                    """SELECT type, value, context_tag, created_at
+                       FROM precision_log
+                       ORDER BY created_at DESC LIMIT 500"""
+                ) as cur:
+                    rows = await cur.fetchall()
+                for ptype, value, ctx_tag, created_at in rows:
+                    if ptype in ("link", "version", "number"):
+                        key = (ptype, ctx_tag or "unknown")
+                        if key not in self.ctx.precision_ram:  # newest wins (DESC order)
+                            self.ctx.precision_ram[key] = {
+                                "value": value,
+                                "stored_at": created_at,
+                            }
+                logger.info(f"Precision RAM preloaded: {len(self.ctx.precision_ram)} entries")
+            except Exception as e:
+                logger.warning(f"Precision RAM preload failed: {e}")
 
         # B02: Wire ImplicitFeedbackTracker (feedback_loop_v1.5.md § 4)
         self.ctx.feedback_tracker = ImplicitFeedbackTracker(self.ctx)
@@ -156,7 +183,15 @@ class Conductor:
             await dreamer.start()
             self._dreamer_task = dreamer
         
+        # Initial Bootstrap Log
 
+        # B03: Health Check Log (v1.0 spec — Point #17)
+        try:
+            import psutil, os
+            _rss = psutil.Process(os.getpid()).memory_info().rss
+            _ram_mb = round(_rss / 1024 / 1024, 2)
+        except Exception:
+            _ram_mb = -1.0
         
         logger.info("Mnemostroma system bootstrap complete.")
         return self.ctx
@@ -224,7 +259,6 @@ class Conductor:
                 ctx.anchor_index.put(a)
             logger.info(f"Anchor hydration: {len(anchors)} anchors restored to subconscious RAM index.")
 
-
     async def _warmup_anchor_vectors(self, ctx) -> None:
         """Pre-encode anchor texts into ctx.anchor_vectors at bootstrap.
 
@@ -284,7 +318,7 @@ class Conductor:
         return await self.proxy.inject(user_message, max_tokens, include_tools)
         
     async def observe(self, session_id: str, text: str) -> asyncio.Task:
-        """Pass an interaction transcript to the active Observer pipeline."""
+        """Pass an agent output transcript to the active Observer pipeline."""
         if not self.ctx:
             raise RuntimeError("Conductor not started. Call start() first.")
 
@@ -295,6 +329,19 @@ class Conductor:
         task = asyncio.create_task(observer_pipeline(text, session_id, self.ctx))
         task.add_done_callback(self._handle_task_exception)
         return task
+
+    async def observe_user(self, text: str) -> None:
+        """Store the user's last message for same-turn signal detection.
+
+        Called by IPC/MCP adapter when a user message arrives, before the agent
+        generates a response. Enables Closure Trigger (11.G) and Layer 1 Surfacing (11.A).
+
+        Args:
+            text: Raw user message text.
+        """
+        if not self.ctx:
+            return
+        self.ctx.last_message_text = text
 
     def is_idle(self) -> bool:
         """True if no observe() call for longer than dreamer.idle_threshold_min."""

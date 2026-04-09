@@ -15,6 +15,10 @@ logger = logging.getLogger("mnemostroma.observer")
 
 from ..memory.scoring import calculate_score, get_importance_weight
 
+def _normalized_rand(dim: int) -> np.ndarray:
+    """Normalized random fallback vector — used when embedder fails."""
+    v = np.random.rand(dim).astype(np.float32)
+    return v / np.linalg.norm(v)
 
 def _float_to_importance(importance: float) -> str:
     """Map marker entity importance float → legacy string label."""
@@ -51,6 +55,11 @@ async def observer_pipeline(
     if len(stripped) < 5 or not structural_prefilter(stripped):
         return None
 
+    # 0.5. Precision Guard — sync, no ONNX, <1ms
+    if ctx.config.precision_guard.enabled:
+        from ..subconscious.precision_guard import precision_guard
+        precision_guard(stripped, ctx)
+
     # 1. Embed + NER in parallel — before marker() so classification is instant
     #    Both run in separate ThreadPoolExecutors (no GIL, genuine parallelism).
     #    Net latency: max(embed, NER) instead of embed + NER sequentially.
@@ -78,12 +87,70 @@ async def observer_pipeline(
 
     pre_embedding, pre_entities = await asyncio.gather(_pre_embed(), _pre_ner())
 
-
-    # Fallback embedding if pre-embed failed
+    # Fallback embedding if pre-embed failed — random noise, used only for session scoring
+    # Step 1.5 is skipped when pre_embedding is None: guardian/open_loop on noise is meaningless
     embedding: np.ndarray = (
         pre_embedding if pre_embedding is not None
-        else np.random.rand(dim).astype(np.float16)
+        else _normalized_rand(dim)
     )
+
+    # 1.5. Anchor Guardian + Associative Surfacing + Open Loop (shared embedding, Phase 11.A/C/E)
+    if pre_embedding is not None and (
+        ctx.config.anchor_guardian.enabled
+        or ctx.config.associative_surfacing.enabled
+        or ctx.config.open_loop.enabled
+    ):
+        _guardian_task = None
+        _surfacing_task = None
+        _open_loop_task = None
+
+        if ctx.config.anchor_guardian.enabled:
+            from ..subconscious.guardian import anchor_guardian
+            _guardian_task = asyncio.create_task(
+                anchor_guardian(
+                    embedding, ctx,
+                    threshold=ctx.config.anchor_guardian.threshold,
+                    cooldown_sec=ctx.config.anchor_guardian.cooldown_sec,
+                )
+            )
+
+        if ctx.config.associative_surfacing.enabled:
+            from ..subconscious.surfacing import associative_scan
+            _surfacing_task = asyncio.create_task(
+                associative_scan(
+                    embedding, ctx,
+                    anchor_threshold=ctx.config.associative_surfacing.anchor_threshold,
+                    session_threshold=ctx.config.associative_surfacing.session_threshold,
+                    max_results=ctx.config.associative_surfacing.max_results,
+                )
+            )
+
+        if ctx.config.open_loop.enabled:
+            from ..subconscious.guardian import scan_open_loops
+            _open_loop_task = asyncio.create_task(
+                scan_open_loops(
+                    embedding, ctx,
+                    threshold=ctx.config.open_loop.threshold,
+                    cooldown_sec=ctx.config.open_loop.cooldown_sec,
+                    max_results=ctx.config.open_loop.max_results,
+                )
+            )
+
+        _results = await asyncio.gather(
+            _guardian_task or asyncio.sleep(0),
+            _surfacing_task or asyncio.sleep(0),
+            _open_loop_task or asyncio.sleep(0),
+            return_exceptions=True,
+        )
+
+        if _guardian_task and not isinstance(_results[0], Exception):
+            ctx.conflict_warnings.extend(_results[0])
+
+        if _surfacing_task and not isinstance(_results[1], Exception):
+            ctx.surfaced_queue.extend(_results[1])
+
+        if _open_loop_task and not isinstance(_results[2], Exception):
+            ctx.open_loops_queue.extend(_results[2])
 
     # 2. Marker — receives pre-computed embedding, skips encode internally
     mark_result = await _marker(
@@ -254,6 +321,10 @@ async def observer_pipeline(
         t_rel["caused_by"] = list(er.caused_by)
         t_rel["during"] = list(er.during)
 
+    # Normalize embedding for cosine similarity (np.dot of normalized = cosine)
+    _emb_norm = np.linalg.norm(embedding)
+    _anchor_embedding = (embedding / _emb_norm) if _emb_norm > 1e-9 else embedding
+
     anchor = Anchor(
         anchor_id=session_id,
         session_id=session_id,
@@ -275,6 +346,7 @@ async def observer_pipeline(
         last_accessed_at=created_at,
         created_at=created_at,
         updated_at=created_at,
+        embedding=_anchor_embedding,
     )
 
     if ctx.anchor_index:
@@ -282,7 +354,6 @@ async def observer_pipeline(
 
     if ctx.persistence:
         await ctx.persistence.save_anchor(anchor)
-
 
     # 7b. RAM indices (no HNSW, no lock needed)
     ctx.ram_index[session_id] = sb
@@ -327,6 +398,34 @@ async def observer_pipeline(
                         emotion_negative=cluster.emotion_negative,
                         emotion_intensity_sum=cluster.emotion_intensity_sum,
                     )
+
+    # 8.5. Precision RAM update — write artifacts from this session
+    if ctx.config.precision_guard.enabled:
+        from ..subconscious.precision_guard import precision_extract, _derive_context_tag
+        _prec_now = int(time.time())
+        _prec_items = []
+        for _artifact in precision_extract(stripped):
+            _ctx_tag = _derive_context_tag(_artifact, stripped)
+            _key = (_artifact["type"], _ctx_tag)
+            ctx.precision_ram[_key] = {
+                "value": _artifact["value"],
+                "session_id": session_id,
+                "stored_at": _prec_now,
+            }
+            _prec_items.append({
+                "id": f"{session_id}_{_artifact['type']}_{_ctx_tag}",
+                "type": _artifact["type"],
+                "value": _artifact["value"],
+                "context_tag": _ctx_tag,
+            })
+        # Cap RAM size — evict oldest entries until within cap
+        cap = ctx.config.precision_guard.ram_cap
+        while len(ctx.precision_ram) > cap:
+            _oldest = min(ctx.precision_ram, key=lambda k: ctx.precision_ram[k].get("stored_at", 0))
+            del ctx.precision_ram[_oldest]
+        # Attach to sb so flush worker persists to precision_log
+        if _prec_items:
+            sb.precision_items = _prec_items
 
     # 8. Async Flush to SQLite
     if ctx.persistence:

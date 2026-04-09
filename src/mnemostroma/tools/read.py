@@ -1,12 +1,99 @@
-# SPDX-License-Identifier: FSL-1.1-MIT
 import time
 import logging
+import re
 from typing import List, Dict, Any, Optional
 from ..core import SystemContext
 from ..memory.search import semantic_search
 from ..feedback.implicit import signal_use, ImplicitFeedbackTracker
+from .admin import ctx_bridge as _ctx_bridge
 
 logger = logging.getLogger("mnemostroma.tools.read")
+
+# --- Urgency Pulse (Phase 11.F) ---
+LEVEL_ORDER = {"low": 0, "medium": 1, "high": 2, "critical": 3, "overdue": 4}
+
+def _compute_urgency_level(deadline_ts: float) -> str:
+    """Compute urgency level based on hours left until deadline."""
+    hours_left = (deadline_ts - time.time()) / 3600
+    if hours_left <= 0:
+        return "overdue"
+    if hours_left <= 6:
+        return "critical"
+    if hours_left <= 24:
+        return "high"
+    if hours_left <= 72:
+        return "medium"
+    return "low"
+
+def _urgency_pulse(ctx: SystemContext) -> List[Dict[str, Any]]:
+    """Compute urgency escalation events. Returns list of new/escalated items."""
+    now = time.time()
+    pulse = []
+    active_ids = set()
+
+    for session_id, item in ctx.urgency_index.items():
+        if item.get("expired"):
+            continue
+        deadline_ts = item.get("deadline_ts")
+        if not deadline_ts:
+            continue
+
+        active_ids.add(session_id)
+        level = _compute_urgency_level(deadline_ts)
+        old_level = ctx.urgency_level_cache.get(session_id)
+        hours_left = (deadline_ts - now) / 3600
+
+        is_new = old_level is None
+        is_escalated = (
+            not is_new
+            and LEVEL_ORDER.get(level, 0) > LEVEL_ORDER.get(old_level, 0)
+        )
+
+        if is_new or is_escalated:
+            pulse.append({
+                "session_id": session_id,
+                "brief": item.get("value", ""),
+                "level": level,
+                "prev_level": old_level,
+                "hours_left": round(hours_left, 1),
+                "deadline_ts": deadline_ts,
+                "is_new": is_new,
+            })
+
+        ctx.urgency_level_cache[session_id] = level
+
+    # Cleanup stale cache entries (session evicted from urgency_index)
+    stale = [sid for sid in ctx.urgency_level_cache if sid not in active_ids]
+    for sid in stale:
+        del ctx.urgency_level_cache[sid]
+
+    return pulse
+
+# --- Session Closure (Phase 11.G) ---
+FAREWELL_PATTERNS = [
+    # Russian
+    re.compile(
+        r"\b(пока|до\s+свидания|до\s+встречи|на\s+сегодня\s+всё|закончили|"
+        r"завершаем|на\s+этом\s+всё|спасибо\s+за\s+работу|достаточно\s+на\s+сегодня|"
+        r"завтра\s+продолжим|до\s+завтра|закрываем)\b",
+        re.IGNORECASE
+    ),
+    # English
+    re.compile(
+        r"\b(goodbye|bye|see\s+you|that'?s?\s+all\s+for\s+today|done\s+for\s+today|"
+        r"closing\s+(up|out|session)?|signing\s+off|wrapping\s+up|"
+        r"till\s+next\s+time|until\s+next\s+time|thanks,?\s+done|"
+        r"that'?s?\s+it\s+for\s+today|end\s+session|good\s+night)\b",
+        re.IGNORECASE
+    ),
+]
+
+def _is_farewell(text: str) -> bool:
+    """True if text contains a farewell pattern. Requires word len > 3 to avoid noise."""
+    text = text.strip()
+    if len(text) < 4:
+        return False
+    return any(p.search(text) for p in FAREWELL_PATTERNS)
 
 async def ctx_get(session_id: str, ctx: SystemContext) -> Optional[Any]:
     """Retrieve session from RAM or lazy load from SQLite.
@@ -96,7 +183,6 @@ async def ctx_search(
     results.sort(key=lambda x: x.score, reverse=True)
     return results[:limit]
 
-
 async def ctx_full(session_id: str, ctx: SystemContext) -> Optional[Dict[str, Any]]:
     """Load full session record from SQLite including content_full.
 
@@ -137,7 +223,6 @@ async def ctx_full(session_id: str, ctx: SystemContext) -> Optional[Dict[str, An
         "created_at": row[6],
         "conflict": bool(row[7]),
     }
-
 
 async def ctx_anchors(
     ctx: SystemContext,
@@ -180,7 +265,6 @@ async def ctx_anchors(
         })
 
     return result
-
 
 async def ctx_precision(
     ctx: SystemContext,
@@ -233,6 +317,62 @@ async def ctx_precision(
     ]
     return result
 
+async def ctx_recent(
+    ctx: SystemContext,
+    days: float = 7.0,
+    by: str = "created",
+    limit: int = 20,
+) -> List[Dict[str, Any]]:
+    """Return sessions observed or accessed within the last N days.
+
+    SQLite is the single source of truth — RAM is a vector-search cache,
+    not a temporal index. All timestamp queries go to SQLite directly.
+
+    Args:
+        ctx: System context.
+        days: Lookback window in days (float, e.g. 0.5 = last 12 hours).
+        by: "created" — sessions created in window; "accessed" — last accessed in window.
+        limit: Max results, sorted by field DESC.
+    """
+    now = time.time()
+    cutoff = now - days * 86400
+    sql_field = "created_at" if by == "created" else "last_use_ts"
+
+    results: List[Dict[str, Any]] = []
+
+    if ctx.db:
+        try:
+            async with ctx.db.execute(
+                f"""SELECT session_id, brief, importance, created_at,
+                           last_use_ts, tags, resolution
+                    FROM sessions
+                    WHERE {sql_field} >= ?
+                    ORDER BY {sql_field} DESC
+                    LIMIT ?""",
+                (cutoff, limit)
+            ) as cursor:
+                rows = await cursor.fetchall()
+            import json as _json
+            for row in rows:
+                try:
+                    tags = _json.loads(row[5]) if row[5] else []
+                except Exception:
+                    tags = []
+                age_days = (now - row[3]) / 86400
+                results.append({
+                    "session_id": row[0],
+                    "brief": row[1],
+                    "importance": row[2],
+                    "created_at": row[3],
+                    "last_accessed_at": row[4] or row[3],
+                    "age_days": round(age_days, 2),
+                    "resolution": row[6] if row[6] is not None else 1.0,
+                    "tags": tags,
+                })
+        except Exception as e:
+            logger.error(f"ctx_recent: SQLite error: {e}")
+
+    return results
 
 async def ctx_active(ctx: SystemContext) -> Dict[str, Any]:
     """Return the current active context summary (bridge) for the agent.
@@ -262,6 +402,92 @@ async def ctx_active(ctx: SystemContext) -> Dict[str, Any]:
         "urgency_active": urgency_active
     }
     
+    # 11.D: Precision Guard — value-level discrepancies detected at Step 0.5
+    if getattr(ctx.config, "precision_guard", None) and ctx.config.precision_guard.enabled:
+        prec_warns = getattr(ctx, "precision_warnings", [])
+        if prec_warns:
+            res["precision_warnings"] = list(prec_warns)
+            prec_warns.clear()
+
+    # 11.C: Anchor Guardian — Layer 1 keyword check (same-turn) + Layer 2 async results
+    if ctx.config.anchor_guardian.enabled:
+        from ..subconscious.guardian import _keyword_anchor_check, _merge_warnings
+        last_text = getattr(ctx, "last_message_text", "")
+        kw_warnings = _keyword_anchor_check(last_text, ctx) if last_text else []
+        conflict_q = getattr(ctx, "conflict_warnings", [])
+        async_warnings = list(conflict_q)
+        if hasattr(ctx, "conflict_warnings"):
+            ctx.conflict_warnings.clear()
+        all_warnings = _merge_warnings(kw_warnings, async_warnings)
+        if all_warnings:
+            res["conflict_warnings"] = all_warnings
+
+    # 11.A: Associative Surfacing — Layer 1 keyword (same-turn) + Layer 2 async queue
+    if ctx.config.associative_surfacing.enabled:
+        from ..subconscious.surfacing import _keyword_surface
+        last_text = getattr(ctx, "last_message_text", "")
+        kw_surfaced = _keyword_surface(last_text, ctx) if last_text else []
+        surfaced_q = getattr(ctx, "surfaced_queue", [])
+        async_surfaced = list(surfaced_q)
+        if hasattr(ctx, "surfaced_queue"):
+            ctx.surfaced_queue.clear()
+        # Merge: async_surfaced wins on id dedup (has similarity score)
+        merged_ids: set = set()
+        merged_surfaced = []
+        for item in async_surfaced:
+            merged_ids.add(item["id"])
+            merged_surfaced.append(item)
+        for item in kw_surfaced:
+            if item["id"] not in merged_ids:
+                merged_surfaced.append(item)
+        if merged_surfaced:
+            res["surfaced"] = merged_surfaced
+
+    # 11.E: Open Loop Detector — pending-outcome anchors (Layer 1 keyword + Layer 2 async)
+    if getattr(ctx.config, "open_loop", None) and ctx.config.open_loop.enabled:
+        from ..subconscious.guardian import _keyword_open_loop
+        last_text = getattr(ctx, "last_message_text", "")
+        kw_loops = _keyword_open_loop(last_text, ctx, cooldown_sec=ctx.config.open_loop.cooldown_sec) if last_text else []
+        loops_q = getattr(ctx, "open_loops_queue", [])
+        async_loops = list(loops_q)
+        if hasattr(ctx, "open_loops_queue"):
+            ctx.open_loops_queue.clear()
+        # Merge: async_loops (with similarity) win on dedup by anchor_id
+        merged_loop_ids: set = set()
+        merged_loops = []
+        for item in async_loops:
+            merged_loop_ids.add(item["anchor_id"])
+            merged_loops.append(item)
+        for item in kw_loops:
+            if item["anchor_id"] not in merged_loop_ids:
+                merged_loops.append(item)
+        if merged_loops:
+            res["open_loops"] = merged_loops[:ctx.config.open_loop.max_results]
+
+    # 11.F: Urgency Pulse — escalation events only
+    if ctx.config.urgency_pulse.enabled:
+        pulse = _urgency_pulse(ctx)
+        if pulse:
+            res["urgency_pulse"] = pulse
+
+    # 11.G: Session Closure Trigger — farewell check on user's last message
+    if ctx.config.session_closure.enabled and ctx.last_message_text:
+        now = time.time()
+        if (
+            _is_farewell(ctx.last_message_text)
+            and now > ctx.closure_cooldown_until
+        ):
+            bridge = await _ctx_bridge(ctx)
+            res["session_closure"] = {
+                "trigger": "farewell_detected",
+                "bridge": bridge,
+            }
+            ctx.closure_cooldown_until = now + ctx.config.session_closure.cooldown_sec
+
+    # Clear last_message_text after all Layer 1 checks consumed it
+    # Prevents stale text from re-firing same-turn keyword signals next call
+    ctx.last_message_text = ""
+
     # Log tool call (v1.0 spec)
-    
+
     return res

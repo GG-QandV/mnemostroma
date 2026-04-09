@@ -169,7 +169,6 @@ class ModelManifest:
             models[name] = ModelDefinition(**m_data)
         return cls(active_models=models)
 
-
 @dataclass(frozen=True)
 class CalibrationConfig:
     enabled: bool
@@ -208,6 +207,49 @@ class FeedbackConfig:
 class LoggingConfig:
     enabled: bool = True
     mode: str = "safe"      # "safe" | "debug"
+    db_path: str = "logs.db"
+
+@dataclass(frozen=True)
+class TemporalRetrievalConfig:
+    ctx_recent_enabled: bool = True
+    time_weighted_search: bool = False
+    half_life_days: float = 30.0
+    time_weight_exempt_importance: List[str] = field(default_factory=lambda: ["critical", "principle"])
+
+@dataclass(frozen=True)
+class AnchorGuardianConfig:
+    enabled: bool = True
+    threshold: float = 0.72
+    cooldown_sec: float = 3600.0
+    guardian_types: List[str] = field(default_factory=lambda: ["principle", "constraint", "critical", "decision"])
+
+@dataclass(frozen=True)
+class AssociativeSurfacingConfig:
+    enabled: bool = True
+    anchor_threshold: float = 0.75
+    session_threshold: float = 0.78
+    max_results: int = 3
+
+@dataclass(frozen=True)
+class PrecisionGuardConfig:
+    enabled: bool = True
+    ram_cap: int = 1000
+
+@dataclass(frozen=True)
+class OpenLoopConfig:
+    enabled: bool = True
+    cooldown_sec: float = 7200.0
+    threshold: float = 0.75
+    max_results: int = 5
+
+@dataclass(frozen=True)
+class UrgencyPulseConfig:
+    enabled: bool = True
+
+@dataclass(frozen=True)
+class SessionClosureConfig:
+    enabled: bool = True
+    cooldown_sec: float = 1800.0
 
 @dataclass(frozen=True)
 class Config:
@@ -229,15 +271,14 @@ class Config:
     anchor_decay: AnchorDecayConfig = field(default_factory=AnchorDecayConfig)
     dreamer: DreamerConfig = field(default_factory=DreamerConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
+    temporal_retrieval: TemporalRetrievalConfig = field(default_factory=TemporalRetrievalConfig)
+    anchor_guardian: AnchorGuardianConfig = field(default_factory=AnchorGuardianConfig)
+    associative_surfacing: AssociativeSurfacingConfig = field(default_factory=AssociativeSurfacingConfig)
+    precision_guard: PrecisionGuardConfig = field(default_factory=PrecisionGuardConfig)
+    open_loop: OpenLoopConfig = field(default_factory=OpenLoopConfig)
+    urgency_pulse: UrgencyPulseConfig = field(default_factory=UrgencyPulseConfig)
+    session_closure: SessionClosureConfig = field(default_factory=SessionClosureConfig)
     manifest: Optional[ModelManifest] = None
-
-    @classmethod
-    def _from_dict_filtered(cls, section_class, data):
-        """Build dataclass instance from dict, ignoring extra keys."""
-        if not data: return section_class()
-        # use annotations to identify valid fields
-        ann = getattr(section_class, '__annotations__', {})
-        return section_class(**{k: v for k, v in data.items() if k in ann})
 
     @classmethod
     def load(cls, path: str | Path) -> 'Config':
@@ -252,24 +293,38 @@ class Config:
         with open(path, 'r', encoding='utf-8') as f:
             data = json.load(f)
         
+        def filter_keys(cls, data):
+            import inspect
+            return {
+                k: v for k, v in data.items()
+                if k in inspect.signature(cls.__init__).parameters
+            }
+
         return cls(
-            resources=cls._from_dict_filtered(ResourcesConfig, data.get('resources', {})),
-            score=cls._from_dict_filtered(ScoreConfig, data.get('score', {})),
-            importance=cls._from_dict_filtered(ImportanceConfig, data.get('importance', {})),
-            temporal=cls._from_dict_filtered(TemporalConfig, data.get('temporal', {})),
-            dissolver=cls._from_dict_filtered(DissolverConfig, data.get('dissolver', {})),
-            search=cls._from_dict_filtered(SearchConfig, data.get('search', {})),
-            observer=cls._from_dict_filtered(ObserverConfig, data.get('observer', {})),
-            tuner=cls._from_dict_filtered(TunerConfig, data.get('tuner', {})),
-            urgency=cls._from_dict_filtered(UrgencyConfig, data.get('urgency', {})),
-            storage=cls._from_dict_filtered(StorageConfig, data.get('storage', {})),
-            experience=cls._from_dict_filtered(ExperienceConfig, data.get('experience', {})),
-            calibration=cls._from_dict_filtered(CalibrationConfig, data.get('calibration', {})),
-            security=cls._from_dict_filtered(SecurityConfig, data.get('security', {})),
-            cloud_sync=cls._from_dict_filtered(CloudSyncConfig, data.get('cloud_sync', {})),
-            feedback=cls._from_dict_filtered(FeedbackConfig, data.get('feedback', {})),
-            anchor_decay=cls._from_dict_filtered(AnchorDecayConfig, data.get('anchor_decay')),
-            dreamer=cls._from_dict_filtered(DreamerConfig, data.get('dreamer')),
-            logging=cls._from_dict_filtered(LoggingConfig, data.get('logging')),
+            resources=ResourcesConfig(**filter_keys(ResourcesConfig, data['resources'])),
+            score=ScoreConfig(**filter_keys(ScoreConfig, data['score'])),
+            importance=ImportanceConfig(**filter_keys(ImportanceConfig, data['importance'])),
+            temporal=TemporalConfig(**filter_keys(TemporalConfig, data['temporal'])),
+            dissolver=DissolverConfig(**filter_keys(DissolverConfig, data['dissolver'])),
+            search=SearchConfig(**filter_keys(SearchConfig, data['search'])),
+            observer=ObserverConfig(**filter_keys(ObserverConfig, data['observer'])),
+            tuner=TunerConfig(**filter_keys(TunerConfig, data['tuner'])),
+            urgency=UrgencyConfig(**filter_keys(UrgencyConfig, data['urgency'])),
+            storage=StorageConfig(**filter_keys(StorageConfig, data['storage'])),
+            experience=ExperienceConfig(**filter_keys(ExperienceConfig, data['experience'])),
+            calibration=CalibrationConfig(**filter_keys(CalibrationConfig, data['calibration'])),
+            security=SecurityConfig(**filter_keys(SecurityConfig, data['security'])),
+            cloud_sync=CloudSyncConfig(**filter_keys(CloudSyncConfig, data['cloud_sync'])),
+            feedback=FeedbackConfig(**filter_keys(FeedbackConfig, data['feedback'])),
+            anchor_decay=AnchorDecayConfig(**filter_keys(AnchorDecayConfig, data['anchor_decay'])) if 'anchor_decay' in data else AnchorDecayConfig(),
+            dreamer=DreamerConfig(**filter_keys(DreamerConfig, data['dreamer'])) if 'dreamer' in data else DreamerConfig(),
+            logging=LoggingConfig(**filter_keys(LoggingConfig, data['logging'])) if 'logging' in data else LoggingConfig(),
+            temporal_retrieval=TemporalRetrievalConfig(**filter_keys(TemporalRetrievalConfig, data['temporal_retrieval'])) if 'temporal_retrieval' in data else TemporalRetrievalConfig(),
+            anchor_guardian=AnchorGuardianConfig(**filter_keys(AnchorGuardianConfig, data['anchor_guardian'])) if 'anchor_guardian' in data else AnchorGuardianConfig(),
+            associative_surfacing=AssociativeSurfacingConfig(**filter_keys(AssociativeSurfacingConfig, data['associative_surfacing'])) if 'associative_surfacing' in data else AssociativeSurfacingConfig(),
+            precision_guard=PrecisionGuardConfig(**filter_keys(PrecisionGuardConfig, data['precision_guard'])) if 'precision_guard' in data else PrecisionGuardConfig(),
+            open_loop=OpenLoopConfig(**filter_keys(OpenLoopConfig, data['open_loop'])) if 'open_loop' in data else OpenLoopConfig(),
+            urgency_pulse=UrgencyPulseConfig(**filter_keys(UrgencyPulseConfig, data['urgency_pulse'])) if 'urgency_pulse' in data else UrgencyPulseConfig(),
+            session_closure=SessionClosureConfig(**filter_keys(SessionClosureConfig, data['session_closure'])) if 'session_closure' in data else SessionClosureConfig(),
             manifest=ModelManifest.load(Path(path).parent / "models_manifest.json") if (Path(path).parent / "models_manifest.json").exists() else None
         )

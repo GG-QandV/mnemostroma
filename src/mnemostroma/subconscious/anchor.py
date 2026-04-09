@@ -9,9 +9,9 @@ import logging
 import time
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
+import numpy as np
 
 logger = logging.getLogger("mnemostroma.subconscious.anchor")
-
 
 @dataclass
 class Anchor:
@@ -55,6 +55,11 @@ class Anchor:
     # Timestamps
     created_at: int = 0
     updated_at: int = 0
+
+    # Embedding for semantic search (Guardian, Surfacing) — not persisted in to_dict()
+    # Set at creation time from Observer Step 1 embedding. Rehydrated on load_anchors()
+    # from sessions table JOIN (anchor_id == session_id).
+    embedding: Optional[np.ndarray] = field(default=None, repr=False, compare=False)
     
     def touch(self) -> None:
         """Record an access (resurface from silt)."""

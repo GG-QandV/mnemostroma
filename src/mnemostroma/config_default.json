@@ -164,7 +164,8 @@
   },
   "logging": {
     "enabled": true,
-    "mode": "safe"
+    "mode": "safe",
+    "db_path": "logs.db"
   },
   "feedback": {
     "weights": {
@@ -176,5 +177,40 @@
     "ema_alpha": 0.1,
     "ignore_window_sec": 5.0,
     "revisit_threshold": 3
+  },
+  "temporal_retrieval": {
+    "ctx_recent_enabled": true,
+    "time_weighted_search": false,
+    "half_life_days": 30,
+    "time_weight_exempt_importance": ["critical", "principle"]
+  },
+  "anchor_guardian": {
+    "enabled": true,
+    "threshold": 0.72,
+    "cooldown_sec": 3600,
+    "guardian_types": ["principle", "constraint", "critical", "decision"]
+  },
+  "associative_surfacing": {
+    "enabled": false,
+    "anchor_threshold": 0.75,
+    "session_threshold": 0.78,
+    "max_results": 3
+  },
+  "precision_guard": {
+    "enabled": true,
+    "ram_cap": 1000
+  },
+  "open_loop": {
+    "enabled": true,
+    "cooldown_sec": 7200,
+    "threshold": 0.75,
+    "max_results": 5
+  },
+  "urgency_pulse": {
+    "enabled": true
+  },
+  "session_closure": {
+    "enabled": true,
+    "cooldown_sec": 1800
   }
 }

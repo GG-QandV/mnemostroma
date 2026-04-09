@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     last_use_ts             INTEGER,
     implicit_score          REAL    DEFAULT 0.5,
     resolution              REAL    DEFAULT 1.0,
+    intensity               REAL    DEFAULT 0.0,
 
     -- v1.3/v1.4 columns
     urgency                 TEXT    DEFAULT 'none',
@@ -45,7 +46,8 @@ CREATE TABLE IF NOT EXISTS anchors (
     last_accessed_at INTEGER NOT NULL DEFAULT 0,
     t_rel            TEXT    NOT NULL DEFAULT '{"after":[],"before":[],"caused_by":[],"during":[]}',
     created_at       INTEGER NOT NULL,
-    updated_at       INTEGER NOT NULL
+    updated_at       INTEGER NOT NULL,
+    embedding        BLOB    -- float16 normalized, for Guardian/Surfacing semantic match
 );
 """
 
@@ -98,7 +100,7 @@ CREATE TABLE IF NOT EXISTS embedding_model_registry (
     dim              INTEGER,            -- 768
     quantization     TEXT,               -- 'int8'
     registered_at    INTEGER,            -- unix timestamp
-    is_current       INTEGER DEFAULT 0   -- 1 = current active model
+    is_current       INTEGER DEFAULT 0   -- 1 = текущая активная модель
 );
 """
 

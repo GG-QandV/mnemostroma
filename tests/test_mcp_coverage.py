@@ -12,8 +12,8 @@ EXPECTED_TOOLS = {
     # 🧠 Воспоминание (8)
     "ctx_full", "ctx_anchors", "ctx_precision", "ctx_bridge",
     "content_search", "content_get", "content_raw", "content_history",
-    # 🔍 Навигация (4)
-    "ctx_semantic", "ctx_get", "ctx_search", "ctx_load",
+    # 🔍 Навигация (5)
+    "ctx_semantic", "ctx_get", "ctx_search", "ctx_load", "ctx_recent",
     # ⚙️ Сервисный агентский (4)
     "ctx_active", "ctx_expire", "ctx_urgent", "save_content",
 }

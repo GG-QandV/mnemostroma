@@ -4,10 +4,29 @@
 Language-agnostic: e5-small embeddings work across all languages.
 API is drop-in compatible with the former HNSWIndex wrapper.
 """
+import math
+import time
 import numpy as np
 from pathlib import Path
 from typing import List, Tuple, Any
 
+def time_decay(age_days: float, half_life: float) -> float:
+    """Exponential recency decay factor.
+
+    At age=0 returns 1.0 (no penalty).
+    At age=half_life returns 0.5.
+    At age=2*half_life returns 0.25.
+
+    Args:
+        age_days: Age of the item in days.
+        half_life: Days until score is halved.
+
+    Returns:
+        Multiplier in (0, 1].
+    """
+    if half_life <= 0:
+        return 1.0
+    return math.exp(-age_days * math.log(2) / half_life)
 
 class MatrixSearch:
     """Cosine nearest-neighbour search over a float32 embedding matrix.
@@ -40,11 +59,27 @@ class MatrixSearch:
     # Read
     # ------------------------------------------------------------------
 
-    def knn_query(self, vector: np.ndarray, k: int = 5) -> Tuple[List[int], List[float]]:
+    def knn_query(
+        self,
+        vector: np.ndarray,
+        k: int = 5,
+        time_weighted: bool = False,
+        half_life_days: float = 30.0,
+        exempt_importance: tuple = ("critical", "principle"),
+        label_meta: dict | None = None,
+    ) -> Tuple[List[int], List[float]]:
         """Return (labels, distances) for the k nearest neighbours.
 
         distances are cosine distances: 0 = identical, 2 = opposite.
         Callers using ``cosine = 1.0 - dist`` stay correct.
+
+        Args:
+            vector: Query embedding.
+            k: Number of results.
+            time_weighted: If True, apply recency decay to scores.
+            half_life_days: Half-life for time decay (only when time_weighted=True).
+            exempt_importance: Importance values exempt from time decay.
+            label_meta: Dict[label -> SessionBrief] for time_weighted scoring.
         """
         count = len(self._labels)
         if count == 0:
@@ -58,7 +93,23 @@ class MatrixSearch:
 
         # cosine similarity via dot product (both sides normalised)
         sims = self._vectors @ vec          # shape [N]
-        dists = 1.0 - sims                  # cosine distance
+
+        # Optional time-weighted scoring (Phase 11.B)
+        if time_weighted and label_meta:
+            now = time.time()
+            weighted = sims.copy()
+            for i, label in enumerate(self._labels):
+                sb = label_meta.get(label)
+                if sb is None:
+                    continue
+                importance = getattr(sb, "importance", "normal")
+                if importance in exempt_importance:
+                    continue  # exempt — no decay
+                age_days = (now - sb.created_at) / 86400
+                weighted[i] *= time_decay(age_days, half_life_days)
+            dists = 1.0 - weighted
+        else:
+            dists = 1.0 - sims
 
         idx = np.argsort(dists)[:k]
         labels = [self._labels[i] for i in idx]
@@ -103,10 +154,8 @@ class MatrixSearch:
             if max_elements:
                 self._max_elements = max_elements
 
-
 # Aliases kept so imports of the old name still work
 HNSWIndex = MatrixSearch
-
 
 def init_session_index(config: Any) -> MatrixSearch:
     """Initialize matrix search index for sessions from config."""
@@ -114,7 +163,6 @@ def init_session_index(config: Any) -> MatrixSearch:
         dim=config.search.embedding_dim,
         max_elements=10000,
     )
-
 
 def init_content_index(config: Any) -> MatrixSearch:
     """Initialize matrix search index for content blocks from config."""

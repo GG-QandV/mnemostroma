@@ -10,7 +10,6 @@ from .subconscious.anchor_index import AnchorIndex
 
 logger = logging.getLogger(__name__)
 
-
 @dataclass
 class ModelRegistry:
     """Registry for ONNX models with manifest-driven loading.
@@ -112,7 +111,6 @@ class ModelRegistry:
             self._pool.close_all()
         logging.getLogger(__name__).info("ModelRegistry.close | all engines released")
 
-
 @dataclass
 class SystemContext:
     """Global system context passed to all components.
@@ -152,6 +150,7 @@ class SystemContext:
 
     # Infrastructure
     persistence: Optional['PersistenceLayer'] = None
+    log_writer: Optional['LogWriter'] = None
 
     # v1.1 / v1.3 extensions
     urgency_index: Dict[str, Any] = field(default_factory=dict)
@@ -177,6 +176,29 @@ class SystemContext:
     # Feedback Loop
     feedback_tracker: Optional['ImplicitFeedbackTracker'] = None
     
+    # Urgency Pulse cache (session_id -> last known level)
+    urgency_level_cache: Dict[str, str] = field(default_factory=dict)
+
+    # Session Closure Trigger cooldown
+    closure_cooldown_until: float = 0.0
+
+    # Last user message text (Phase 11.A/G)
+    last_message_text: str = ""
+
+    # Phase 11.A/C: Associative Surfacing + Anchor Guardian queues
+    surfaced_queue: List[Any] = field(default_factory=list)
+    conflict_warnings: List[Any] = field(default_factory=list)
+    recently_warned: Dict[str, float] = field(default_factory=dict)  # anchor_id → timestamp
+
+    # Phase 11.E: Open Loop Detector
+    open_loops_queue: List[Any] = field(default_factory=list)
+    recently_looped: Dict[str, float] = field(default_factory=dict)  # anchor_id → timestamp
+
+    # Phase 11.D: Precision Guard
+    # key: (type, context_tag) → {value, session_id, stored_at}
+    precision_ram: Dict[tuple, Dict[str, Any]] = field(default_factory=dict)
+    precision_warnings: List[Any] = field(default_factory=list)
+
     # subconscious anchors
     anchor_index: Optional['AnchorIndex'] = field(default_factory=lambda: AnchorIndex(max_capacity=1000))
 

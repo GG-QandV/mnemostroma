@@ -13,22 +13,23 @@ logger = logging.getLogger("mnemostroma.subconscious.anchor_index")
 
 # Fact priority for key_facts selection
 FACT_PRIORITY: Dict[str, int] = {
+    "решение": 1,
+    "запрет": 1,
     "decision": 1,
-    "prohibition": 1,
     "ban": 1,
-    "person": 2,
-    "organization": 2,
+    "человек": 2,
+    "организация": 2,
     "per": 2,
     "org": 2,
-    "technology": 3,
+    "технология": 3,
     "tech": 3,
-    "address": 3,
+    "адрес": 3,
     "loc": 3,
+    "дата": 4,
     "date": 4,
 }
 
 DEFAULT_MAX_CAPACITY = 1000
-
 
 class AnchorIndex:
     """RAM-resident anchor index.
@@ -47,6 +48,11 @@ class AnchorIndex:
     def __contains__(self, anchor_id: str) -> bool:
         return anchor_id in self._anchors
     
+    @property
+    def anchors(self) -> Dict[str, Anchor]:
+        """Public read-only view of internal anchor map."""
+        return self._anchors
+
     def get(self, anchor_id: str) -> Optional[Anchor]:
         """Get anchor by id. Does NOT count as access (read ≠ resurface)."""
         return self._anchors.get(anchor_id)
@@ -146,12 +152,12 @@ class AnchorIndex:
         """Determine anchor type from importance + entities."""
         entity_types = {e.get("type", "") for e in entities}
         
-        if "decision" in entity_types:
+        if "решение" in entity_types or "decision" in entity_types:
             return "decision"
-        if "prohibition" in entity_types or "ban" in entity_types:
+        if "запрет" in entity_types or "ban" in entity_types:
             return "constraint"
         if importance == "critical":
             return "milestone"
-        if "date" in entity_types:
+        if "дата" in entity_types or "date" in entity_types:
             return "event"
         return "observation"

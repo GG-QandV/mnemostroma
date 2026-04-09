@@ -83,7 +83,8 @@ async def db():
             last_accessed_at INTEGER NOT NULL DEFAULT 0,
             t_rel            TEXT NOT NULL DEFAULT '{"after":[],"before":[],"caused_by":[],"during":[]}',
             created_at       INTEGER NOT NULL,
-            updated_at       INTEGER NOT NULL
+            updated_at       INTEGER NOT NULL,
+            embedding        BLOB
         )
     """)
     await conn.commit()
