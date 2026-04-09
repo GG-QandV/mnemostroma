@@ -659,7 +659,8 @@ def _print_status() -> None:
             base_dir = _MNEMO_DIR / "models"
             print(f"\n  Models:")
             for name, bundle in bundles.items():
-                local_dir = base_dir / bundle["local_dir"]
+                rel = bundle["local_dir"].replace("models/", "", 1)
+                local_dir = base_dir / rel
                 key_file = local_dir / bundle["files"][0]
                 mark = "✓" if key_file.exists() else "✗"
                 print(f"    {mark} {name}  ({bundle.get('size_mb', '?')} MB)")
