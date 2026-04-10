@@ -1,18 +1,26 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
 import asyncio
 import logging
+import os as _os
+import threading
 import time
+import time as _time
 import numpy as np
 from pathlib import Path
 from typing import Optional
 
 _SESS_DIAG_KEY_ = ""  # watermark anchor — injected per-tester by issue_build.py
 
+_HEARTBEAT_FILE     = Path.home() / ".mnemostroma" / "daemon.heartbeat"
+_HEARTBEAT_INTERVAL = 1.0   # seconds
+_LOOP_DRIFT_LIMIT   = 5.0   # seconds — loop_monitor threshold
+
 from .config import Config
 from .core import SystemContext, ModelRegistry
 from .storage.sqlite import init_db, DatabaseManager, check_anchor_schema
 from .storage.persistence import PersistenceLayer
 from .storage.content_manager import ContentManager
+from .storage.log_writer import LogWriter
 from .memory.hnsw import init_session_index, init_content_index
 from .memory.dissolver import Dissolver
 from .memory.consolidation import ConsolidationWorker
@@ -35,6 +43,7 @@ class Conductor:
         self._dreamer_task: Optional[asyncio.Task] = None
         self._pulse_writer: Optional[PulseWriter] = None
         self._status_writer: Optional[StatusWriter] = None
+        self._stopping: bool = False
 
     async def start(
         self, 
@@ -72,6 +81,13 @@ class Conductor:
         # B0.7: Anchor t_rel migration (adds t_rel column if missing — v1.6 §5.1)
         await check_anchor_schema(db)
         
+        # 2.5 Logging (v1.0 spec) — skipped when logging.enabled: false
+        logs_path = config.logging.db_path
+        log_writer = None
+        if config.logging.enabled:
+            log_writer = LogWriter(logs_path)
+            await log_writer.start()
+        
         # 3. Memory Indices (matrix cosine search — ADR-002)
         session_index = init_session_index(config)
         content_index = init_content_index(config)
@@ -90,6 +106,7 @@ class Conductor:
         # Wire references
         persistence = PersistenceLayer(db_manager)
         self.ctx.persistence = persistence
+        self.ctx.log_writer = log_writer
         self.ctx.content = ContentManager(self.ctx)
         self.ctx.dissolver = Dissolver(self.ctx)
 
@@ -178,16 +195,13 @@ class Conductor:
             await dreamer.start()
             self._dreamer_task = dreamer
         
-        # Initial Bootstrap Log
+        # Heartbeat + loop monitor + outbox worker
+        self._stopping = False
+        self._start_heartbeat_thread()
+        asyncio.create_task(self._loop_monitor(),  name="loop_monitor")
+        asyncio.create_task(self._outbox_worker(), name="outbox_worker")
+        asyncio.create_task(self._cleanup_loop(),  name="outbox_cleanup")
 
-        # B03: Health Check Log (v1.0 spec — Point #17)
-        try:
-            import psutil, os
-            _rss = psutil.Process(os.getpid()).memory_info().rss
-            _ram_mb = round(_rss / 1024 / 1024, 2)
-        except Exception:
-            _ram_mb = -1.0
-        
         logger.info("Mnemostroma system bootstrap complete.")
         return self.ctx
 
@@ -254,6 +268,7 @@ class Conductor:
                 ctx.anchor_index.put(a)
             logger.info(f"Anchor hydration: {len(anchors)} anchors restored to subconscious RAM index.")
 
+
     async def _warmup_anchor_vectors(self, ctx) -> None:
         """Pre-encode anchor texts into ctx.anchor_vectors at bootstrap.
 
@@ -284,6 +299,8 @@ class Conductor:
 
     async def stop(self):
         """Shutdown the system and save state."""
+        self._stopping = True
+        await asyncio.sleep(1)  # last pass for outbox_worker
         if self.ctx:
             logger.info("Stopping Mnemostroma...")
             if self._pulse_writer:
@@ -298,6 +315,8 @@ class Conductor:
                 await self.ctx.consolidation.stop()
             if self._dreamer_task:
                 await self._dreamer_task.stop()
+            if self.ctx.log_writer:
+                await self.ctx.log_writer.stop()
             if self.ctx.db:
                 await self.ctx.db.close()
             logger.info("Mnemostroma shutdown complete.")
@@ -357,3 +376,167 @@ class Conductor:
                 logger.error(f"Observer task failed: {exc}", exc_info=exc)
         except asyncio.InvalidStateError:
             pass
+
+    # ── Heartbeat thread ──────────────────────────────────────────────
+    def _start_heartbeat_thread(self) -> None:
+        def _beat():
+            while not self._stopping:
+                try:
+                    _HEARTBEAT_FILE.write_text(str(int(_time.time())))
+                except Exception:
+                    pass
+                _time.sleep(_HEARTBEAT_INTERVAL)
+        t = threading.Thread(target=_beat, daemon=True, name="mnemostroma-hb")
+        t.start()
+
+    # ── Loop monitor ──────────────────────────────────────────────────
+    async def _loop_monitor(self) -> None:
+        while True:
+            t0 = _time.monotonic()
+            await asyncio.sleep(3)
+            drift = _time.monotonic() - t0 - 3
+            if drift > _LOOP_DRIFT_LIMIT:
+                logger.critical(f"Event loop drift {drift:.1f}s -> SIGKILL")
+                _os._exit(1)
+
+    # ── Outbox worker ─────────────────────────────────────────────────
+    async def _outbox_worker(self) -> None:
+        MAX_RETRY = 3
+        while True:
+            try:
+                rows = await self.ctx.persistence.outbox_pending(limit=20)
+                for row in rows:
+                    if row["retry"] >= MAX_RETRY:
+                        await self.ctx.persistence.outbox_mark(row["id"], "failed")
+                        continue
+                    try:
+                        await self.observe(row["session_id"], row["text"])
+                        await self.ctx.persistence.outbox_mark(row["id"], "done")
+                    except Exception as e:
+                        logger.warning(f"Outbox retry {row['id']}: {e}")
+                        await self.ctx.persistence.outbox_mark(
+                            row["id"], "pending", retry=row["retry"] + 1
+                        )
+            except Exception as e:
+                logger.error(f"Outbox worker error: {e}")
+            await asyncio.sleep(0.5)
+
+    # ── Cleanup loop ──────────────────────────────────────────────────
+    async def _cleanup_loop(self) -> None:
+        while True:
+            await asyncio.sleep(86400)
+            n = await self.ctx.persistence.outbox_cleanup(older_than_days=7)
+            if n:
+                logger.info(f"Outbox cleanup: {n} records removed")
+
+    # ── dispatch() ────────────────────────────────────────────────────
+    async def dispatch(self, name: str, args: dict):
+        ctx = self.ctx
+        if ctx is None:
+            raise RuntimeError("Conductor not started")
+
+        # READ
+        if name == "ctx_semantic":
+            from mnemostroma.tools.read import ctx_semantic
+            return await ctx_semantic(query=args["query"], ctx=ctx,
+                                      topn=args.get("topn", 5))
+        if name == "ctx_get":
+            from mnemostroma.tools.read import ctx_get
+            return await ctx_get(args["session_id"], ctx)
+        if name == "ctx_active":
+            from mnemostroma.tools.read import ctx_active
+            return await ctx_active(ctx)
+        if name == "ctx_search":
+            from mnemostroma.tools.read import ctx_search
+            return await ctx_search(tags=args["tags"], ctx=ctx,
+                                    importance=args.get("importance"),
+                                    age=args.get("age"),
+                                    limit=args.get("limit", 10))
+        if name == "ctx_full":
+            from mnemostroma.tools.read import ctx_full
+            return await ctx_full(args["session_id"], ctx)
+        if name == "ctx_anchors":
+            from mnemostroma.tools.read import ctx_anchors
+            return await ctx_anchors(ctx=ctx,
+                                     anchor_type=args.get("anchor_type"),
+                                     session_id=args.get("session_id"),
+                                     limit=args.get("limit", 20))
+        if name == "ctx_precision":
+            from mnemostroma.tools.read import ctx_precision
+            return await ctx_precision(ctx=ctx,
+                                       precision_type=args.get("precision_type"),
+                                       importance=args.get("importance"),
+                                       limit=args.get("limit", 20))
+        if name == "ctx_recent":
+            from mnemostroma.tools.read import ctx_recent
+            return await ctx_recent(ctx=ctx, days=args.get("days", 7.0),
+                                    by=args.get("by", "created"),
+                                    limit=args.get("limit", 20))
+        if name == "ctx_urgent":
+            from mnemostroma.tools.write import ctx_urgent
+            return await ctx_urgent(ctx, hours_ahead=args.get("hours_ahead", 72.0))
+
+        # WRITE
+        if name == "ctx_expire":
+            from mnemostroma.tools.write import ctx_expire
+            await ctx_expire(args["session_id"], ctx)
+            return {"expired": True}
+        if name == "save_content":
+            from mnemostroma.tools.write import save_content
+            return await save_content(
+                content_id   = args["content_id"],
+                text         = args["text"],
+                ctx          = ctx,
+                content_type = args.get("content_type"),
+                session_id   = args.get("session_id"),
+                tags         = args.get("tags"),
+                why_changed  = args.get("why_changed"),
+            )
+        if name == "observe":
+            await self.observe(args["session_id"], args["text"])
+            return {"ok": True}
+        if name == "observe_user":
+            await self.observe_user(args["text"])
+            return {"ok": True}
+
+        # PROXY ROUTES
+        if name == "outbox_put":
+            row_id = await ctx.persistence.outbox_put(
+                args["session_id"], args["text"]
+            )
+            return {"queued": True, "id": row_id}
+        if name == "inject":
+            from mnemostroma.integration.proxy import ConductorProxy
+            block = await ConductorProxy(ctx).inject(
+                user_message=args.get("user_message", ""),
+            )
+            return block.context
+
+        # CONTENT
+        if name == "content_search":
+            from mnemostroma.tools.content import content_search
+            return await content_search(query=args["query"], ctx=ctx,
+                                        project_id=args.get("project_id"),
+                                        status=args.get("status", "active"),
+                                        topk=args.get("topk", 5))
+        if name == "content_get":
+            from mnemostroma.tools.content import content_get
+            return await content_get(args["content_id"], ctx,
+                                     version=args.get("version"))
+        if name == "content_raw":
+            from mnemostroma.tools.content import content_raw
+            return await content_raw(args["content_id"], ctx,
+                                     version=args.get("version"))
+        if name == "content_history":
+            from mnemostroma.tools.content import content_history
+            return await content_history(args["content_id"], ctx)
+
+        # ADMIN
+        if name == "ctx_load":
+            from mnemostroma.tools.admin import ctx_load
+            return await ctx_load(args["session_id"], ctx)
+        if name == "ctx_bridge":
+            from mnemostroma.tools.admin import ctx_bridge
+            return await ctx_bridge(ctx)
+
+        raise ValueError(f"Unknown tool: {name!r}")

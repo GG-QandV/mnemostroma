@@ -44,6 +44,7 @@ class PersistenceLayer:
     async def start(self) -> None:
         """Start the background flush worker."""
         await self._db.start()
+        await self._ensure_outbox()
 
     async def stop(self) -> None:
         """Gracefully stop worker and flush remaining queue."""
@@ -195,3 +196,74 @@ class PersistenceLayer:
     def pending_writes(self) -> int:
         """Return current queue depth (pending session writes)."""
         return self._db.queue.qsize()
+
+    # ------------------------------------------------------------------
+    # Observe Outbox — durable observe queue for proxy/watchdog
+    # ------------------------------------------------------------------
+
+    async def _ensure_outbox(self) -> None:
+        await self._db.db.execute('''
+            CREATE TABLE IF NOT EXISTS observe_outbox (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT    NOT NULL,
+                text       TEXT    NOT NULL,
+                created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+                status     TEXT    NOT NULL DEFAULT 'pending',
+                retry      INTEGER NOT NULL DEFAULT 0
+            )
+        ''')
+        await self._db.db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_outbox_status "
+            "ON observe_outbox(status, created_at)"
+        )
+        await self._db.db.commit()
+
+    async def outbox_put(self, session_id: str, text: str) -> int:
+        cur = await self._db.db.execute(
+            "INSERT INTO observe_outbox (session_id, text) VALUES (?,?)",
+            (session_id, text),
+        )
+        await self._db.db.commit()
+        return cur.lastrowid
+
+    async def outbox_pending(self, limit: int = 20) -> list[dict]:
+        async with self._db.db.execute(
+            '''SELECT id, session_id, text, retry
+               FROM observe_outbox
+               WHERE status = 'pending'
+               ORDER BY created_at
+               LIMIT ?''',
+            (limit,),
+        ) as cur:
+            rows = await cur.fetchall()
+        return [
+            {"id": r[0], "session_id": r[1], "text": r[2], "retry": r[3]}
+            for r in rows
+        ]
+
+    async def outbox_mark(
+        self,
+        row_id: int,
+        status: str,
+        retry: int | None = None,
+    ) -> None:
+        if retry is not None:
+            await self._db.db.execute(
+                "UPDATE observe_outbox SET status=?, retry=? WHERE id=?",
+                (status, retry, row_id),
+            )
+        else:
+            await self._db.db.execute(
+                "UPDATE observe_outbox SET status=? WHERE id=?",
+                (status, row_id),
+            )
+        await self._db.db.commit()
+
+    async def outbox_cleanup(self, older_than_days: int = 7) -> int:
+        cur = await self._db.db.execute(
+            '''DELETE FROM observe_outbox
+               WHERE status='done' AND created_at < unixepoch() - ?''',
+            (older_than_days * 86400,),
+        )
+        await self._db.db.commit()
+        return cur.rowcount

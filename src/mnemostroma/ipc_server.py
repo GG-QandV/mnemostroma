@@ -22,9 +22,32 @@ from typing import Any
 
 logger = logging.getLogger("mnemostroma.ipc")
 
+
+def _serialize(obj: Any) -> Any:
+    """Convert SessionBrief / numpy types to JSON-safe dicts."""
+    if isinstance(obj, list):
+        return [_serialize(x) for x in obj]
+    if hasattr(obj, "__dataclass_fields__"):
+        import dataclasses
+        d = dataclasses.asdict(obj)
+        return {k: _serialize(v) for k, v in d.items()
+                if k != "embedding"}  # skip raw vector
+    try:
+        import numpy as np
+        if isinstance(obj, (np.integer,)):
+            return int(obj)
+        if isinstance(obj, (np.floating,)):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return None  # drop embeddings
+    except ImportError:
+        pass
+    return obj
+
 _MNEMO_DIR = Path.home() / ".mnemostroma"
 SOCKET_PATH = _MNEMO_DIR / "daemon.sock"
 PIPE_NAME = r"\\.\pipe\mnemostroma"
+
 
 class IPCServer:
     """Accepts tool calls from adapter processes over a local socket.
@@ -62,7 +85,6 @@ class IPCServer:
         reader: asyncio.StreamReader,
         writer: asyncio.StreamWriter,
     ) -> None:
-        msg_id = None
         try:
             while True:
                 line = await reader.readline()
@@ -70,19 +92,37 @@ class IPCServer:
                     break
                 try:
                     msg = json.loads(line.decode())
-                    msg_id = msg.get("id")
-                    result = await self._dispatch(msg)
-                    payload = json.dumps(
-                        {"id": msg_id, "result": result},
-                        default=str,
-                        ensure_ascii=False,
+                except json.JSONDecodeError as e:
+                    response = json.dumps({"id": None, "error": f"invalid JSON: {e}"})
+                    writer.write((response + "\n").encode())
+                    await writer.drain()
+                    continue
+
+                try:
+                    result = await self._conductor.dispatch(
+                        msg["tool"], msg.get("args", {})
                     )
-                except Exception as exc:
-                    payload = json.dumps(
-                        {"id": msg_id, "error": str(exc)},
-                        ensure_ascii=False,
+                    response = json.dumps(
+                        {"id": msg.get("id"), "result": _serialize(result)},
+                        default=str, ensure_ascii=False,
                     )
-                writer.write((payload + "\n").encode())
+                except KeyError as e:
+                    response = json.dumps({
+                        "id":    msg.get("id"),
+                        "error": f"missing required argument: {e}",
+                        "code":  "missing_arg",
+                    })
+                except ValueError as e:
+                    response = json.dumps({
+                        "id":    msg.get("id"),
+                        "error": str(e),
+                        "code":  "unknown_tool",
+                    })
+                except Exception as e:
+                    logger.error(f"dispatch {msg.get('tool')!r}: {e}", exc_info=True)
+                    response = json.dumps({"id": msg.get("id"), "error": str(e)})
+
+                writer.write((response + "\n").encode())
                 await writer.drain()
         except (asyncio.IncompleteReadError, ConnectionResetError):
             pass
@@ -92,151 +132,3 @@ class IPCServer:
                 await writer.wait_closed()
             except Exception:
                 pass
-
-    async def _dispatch(self, msg: dict) -> Any:
-        tool = msg.get("tool")
-        args = msg.get("args", {})
-        conductor = self._conductor
-
-        if conductor.ctx is None:
-            raise RuntimeError("daemon not ready")
-        ctx = conductor.ctx
-
-        # ── Observer ─────────────────────────────────────────────────────
-        if tool == "observe":
-            await conductor.observe(args["session_id"], args["text"])
-            return {"ok": True}
-
-        elif tool == "observe_user":
-            await conductor.observe_user(args["text"])
-            return {"ok": True}
-
-        # ── Session reads ────────────────────────────────────────────────
-        elif tool == "ctx_semantic":
-            from .tools.read import ctx_semantic
-            return await ctx_semantic(
-                args["query"], ctx,
-                top_n=args.get("top_n", 5),
-            )
-
-        elif tool == "ctx_get":
-            from .tools.read import ctx_get
-            return await ctx_get(args["session_id"], ctx)
-
-        elif tool == "ctx_search":
-            from .tools.read import ctx_search
-            return await ctx_search(
-                tags=args["tags"],
-                ctx=ctx,
-                importance=args.get("importance"),
-                age=args.get("age"),
-                limit=args.get("limit", 10),
-            )
-
-        elif tool == "ctx_full":
-            from .tools.read import ctx_full
-            result = await ctx_full(args["session_id"], ctx)
-            if result is None:
-                raise KeyError(f"session not found: {args['session_id']}")
-            return result
-
-        elif tool == "ctx_anchors":
-            from .tools.read import ctx_anchors
-            return await ctx_anchors(
-                ctx=ctx,
-                anchor_type=args.get("anchor_type"),
-                session_id=args.get("session_id"),
-                limit=args.get("limit", 20),
-            )
-
-        elif tool == "ctx_precision":
-            from .tools.read import ctx_precision
-            return await ctx_precision(
-                ctx=ctx,
-                precision_type=args.get("precision_type"),
-                importance=args.get("importance"),
-                limit=args.get("limit", 20),
-            )
-
-        elif tool == "ctx_recent":
-            from .tools.read import ctx_recent
-            return await ctx_recent(
-                ctx=ctx,
-                days=args.get("days", 7.0),
-                by=args.get("by", "created"),
-                limit=args.get("limit", 20),
-            )
-
-        elif tool == "ctx_active":
-            from .tools.read import ctx_active
-            return await ctx_active(ctx)
-
-        # ── Session writes ───────────────────────────────────────────────
-        elif tool == "ctx_expire":
-            from .tools.write import ctx_expire
-            await ctx_expire(args["session_id"], ctx)
-            return {"ok": True}
-
-        elif tool == "ctx_urgent":
-            from .tools.write import ctx_urgent
-            return await ctx_urgent(ctx, hours_ahead=args.get("hours_ahead", 72.0))
-
-        # ── Admin ────────────────────────────────────────────────────────
-        elif tool == "ctx_load":
-            from .tools.admin import ctx_load
-            result = await ctx_load(args["session_id"], ctx)
-            if result is None:
-                raise KeyError(f"session not found in SQLite: {args['session_id']}")
-            return result
-
-        elif tool == "ctx_bridge":
-            from .tools.admin import ctx_bridge
-            return await ctx_bridge(ctx)
-
-        # ── Content ─────────────────────────────────────────────────────
-        elif tool == "save_content":
-            from .tools.write import save_content
-            return await save_content(
-                content_id=args["content_id"],
-                text=args["text"],
-                ctx=ctx,
-            )
-
-        elif tool == "content_search":
-            from .tools.content import content_search
-            return await content_search(
-                query=args["query"],
-                ctx=ctx,
-                project_id=args.get("project_id"),
-                status=args.get("status", "active"),
-                top_k=args.get("top_k", 5),
-            )
-
-        elif tool == "content_get":
-            from .tools.content import content_get
-            result = await content_get(
-                content_id=args["content_id"],
-                ctx=ctx,
-                version=args.get("version"),
-            )
-            if result is None:
-                raise KeyError(f"content not found: {args['content_id']}")
-            return result
-
-        elif tool == "content_raw":
-            from .tools.content import content_raw
-            result = await content_raw(
-                content_id=args["content_id"],
-                ctx=ctx,
-                version=args.get("version"),
-            )
-            if result is None:
-                raise KeyError(f"content not found: {args['content_id']}")
-            return {"content": result}
-
-        elif tool == "content_history":
-            from .tools.content import content_history
-            return await content_history(args["content_id"], ctx)
-
-        else:
-            raise ValueError(f"unknown tool: {tool!r}")
