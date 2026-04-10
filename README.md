@@ -245,6 +245,36 @@ Mnemostroma is an MCP server. Add it to your `claude_desktop_config.json`:
 
 **Observer Principle:** You do not need to manually call "save_memory". The Mnemostroma Observer watches your conversation and handles everything in the background. You only call tools when you need to *remember* something from the past.
 
+### Multi-client setup (IDE + Claude Code simultaneously)
+
+Multiple clients connect to a single daemon via lightweight stdio adapters.
+Each adapter is ~5 MB RAM and forwards all tool calls to the daemon over a local Unix socket.
+
+```
+Claude Code  →  mcp_stdio_adapter (~5 MB)  ─┐
+                                              ├──→  daemon (~630 MB)  →  ~/.mnemostroma/mnemostroma.db
+Antigravity  →  mcp_stdio_adapter (~5 MB)  ─┘
+Cursor / Windsurf / ...
+```
+
+The daemon must be running (`mnemostroma on`) before any client connects.
+If the socket is unavailable, all tool calls return a clear error — no silent failures.
+
+For IDEs (Antigravity, Cursor, Windsurf, Cline, etc.) configure `mcp_stdio_adapter`:
+
+```json
+{
+  "mcpServers": {
+    "mnemostroma": {
+      "command": "/path/to/.venv/bin/python3",
+      "args": ["-m", "mnemostroma.integration.mcp_stdio_adapter"]
+    }
+  }
+}
+```
+
+Replace `/path/to/.venv` with the path from `pip show mnemostroma | grep Location`.
+
 ### claude.ai (SSE + real-time context capture)
 
 Connect Mnemostroma to claude.ai web chat — tools available to Claude, conversations stored in memory automatically.

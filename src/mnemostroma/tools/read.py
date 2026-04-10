@@ -6,6 +6,7 @@ from ..core import SystemContext
 from ..memory.search import semantic_search
 from ..feedback.implicit import signal_use, ImplicitFeedbackTracker
 from .admin import ctx_bridge as _ctx_bridge
+from .write import ctx_urgent
 
 logger = logging.getLogger("mnemostroma.tools.read")
 

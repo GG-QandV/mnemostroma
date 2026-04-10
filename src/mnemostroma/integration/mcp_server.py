@@ -30,6 +30,7 @@ logger = logging.getLogger("mnemostroma.mcp")
 # Global conductor instance — initialized once on server start
 _conductor: Conductor | None = None
 
+
 def _serialize(obj: Any) -> str:
     """Safely serialize tool output to JSON string.
 
@@ -58,9 +59,11 @@ def _serialize(obj: Any) -> str:
         return json.dumps(d, default=str, ensure_ascii=False)
     return json.dumps({"result": str(obj)})
 
+
 # ── MCP Server Definition ────────────────────────────────────────────
 
 app = Server("mnemostroma")
+
 
 @app.list_tools()
 async def list_tools() -> list[Tool]:
@@ -260,6 +263,7 @@ async def list_tools() -> list[Tool]:
         ),
     ]
 
+
 @app.call_tool()
 async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     """Route MCP tool calls to Mnemostroma async functions.
@@ -336,7 +340,8 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             return [TextContent(type="text", text=_serialize(result))]
 
         elif name == "ctx_urgent":
-            from mnemostroma.tools.write import ctx_urgent
+            # ctx_urgent — read-only операция, живёт в tools/read.py
+            from mnemostroma.tools.read import ctx_urgent
             result = await ctx_urgent(ctx, hours_ahead=arguments.get("hours_ahead", 72.0))
             return [TextContent(type="text", text=_serialize(result))]
 
@@ -345,7 +350,11 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             result = await save_content(
                 content_id=arguments["content_id"],
                 text=arguments["text"],
-                ctx=ctx
+                ctx=ctx,
+                content_type=arguments.get("content_type"),
+                session_id=arguments.get("session_id"),
+                tags=arguments.get("tags", []),
+                why_changed=arguments.get("why_changed"),
             )
             return [TextContent(type="text", text=_serialize(result))]
 
@@ -422,6 +431,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         logger.error(f"Tool {name} failed: {e}", exc_info=True)
         return [TextContent(type="text", text=json.dumps({"error": str(e)}))]
 
+
 # ── Entry Point ───────────────────────────────────────────────────────
 
 async def main() -> None:
@@ -434,8 +444,8 @@ async def main() -> None:
     """
     global _conductor
 
-    # Ensure CWD is the project root for config.json / models/ resolution
-    project_root = Path(__file__).resolve().parents[3]
+    # parents[2]: mcp_server.py → integration/ → mnemostroma/ → project_root/
+    project_root = Path(__file__).resolve().parents[2]
     os.chdir(project_root)
 
     logging.basicConfig(
@@ -464,6 +474,7 @@ async def main() -> None:
         if _conductor:
             await _conductor.stop()
             logger.info("Mnemostroma shutdown complete.")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

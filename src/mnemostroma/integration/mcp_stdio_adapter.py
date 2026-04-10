@@ -217,15 +217,44 @@ _TOOLS: list[Tool] = [
 
 _msg_id = 0
 
+
 def _next_id() -> int:
     global _msg_id
     _msg_id += 1
     return _msg_id
 
+
+# ── Windows Named Pipe helper ─────────────────────────────────────────
+
+if sys.platform == "win32":
+    async def _open_pipe() -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+        """Открыть Named Pipe через ProactorEventLoop (Windows-only).
+
+        ProactorEventLoop — дефолт на Windows начиная с Python 3.8.
+        create_pipe_connection() — низкоуровневый API, аналог open_unix_connection.
+        """
+        loop = asyncio.get_running_loop()
+        reader = asyncio.StreamReader()
+        protocol = asyncio.StreamReaderProtocol(reader)
+
+        transport, _ = await loop.create_pipe_connection(
+            lambda: protocol,
+            _PIPE_NAME,
+        )
+        writer = asyncio.StreamWriter(transport, protocol, reader, loop)
+        return reader, writer
+
+
 async def _ipc_call(tool: str, args: dict) -> Any:
     """Send one request to the daemon IPC socket, return result or raise."""
     if sys.platform == "win32":
-        reader, writer = await asyncio.open_connection(pipe=_PIPE_NAME)
+        try:
+            reader, writer = await _open_pipe()
+        except OSError as e:
+            raise ConnectionError(
+                f"Mnemostroma daemon not running (pipe unavailable): {e}\n"
+                "Start with: mnemostroma start"
+            ) from e
     else:
         if not _SOCKET_PATH.exists():
             raise ConnectionError(
@@ -252,13 +281,16 @@ async def _ipc_call(tool: str, args: dict) -> Any:
         except Exception:
             pass
 
+
 # ── MCP Server ────────────────────────────────────────────────────────
 
 app = Server("mnemostroma")
 
+
 @app.list_tools()
 async def list_tools() -> list[Tool]:
     return _TOOLS
+
 
 @app.call_tool()
 async def call_tool(name: str, arguments: dict) -> list[TextContent]:
@@ -275,6 +307,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         logger.error(f"Tool {name} failed: {exc}", exc_info=True)
         return [TextContent(type="text", text=json.dumps({"error": str(exc)}))]
 
+
 # ── Entry point ───────────────────────────────────────────────────────
 
 async def main() -> None:
@@ -284,6 +317,7 @@ async def main() -> None:
     )
     async with stdio_server() as (read_stream, write_stream):
         await app.run(read_stream, write_stream, app.create_initialization_options())
+
 
 if __name__ == "__main__":
     asyncio.run(main())
