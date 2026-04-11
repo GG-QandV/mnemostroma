@@ -94,11 +94,6 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
-            name="ctx_active",
-            description="Текущий активный контекст: intent, переменные, дедлайны.",
-            inputSchema={"type": "object", "properties": {}}
-        ),
-        Tool(
             name="ctx_search",
             description="Поиск сессий по тегам. Быстрее семантического, требует точного совпадения тегов.",
             inputSchema={
@@ -125,11 +120,11 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="ctx_anchors",
-            description="Якоря субсознательного слоя: решения, факты, персоны, события. Быстрый RAM-доступ.",
+            description="Якоря субсознательного слоя: решения, факты, персоны, события, дедлайны. Быстрый RAM-доступ. type=deadline заменяет ctx_urgent.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "anchor_type": {"type": "string", "description": "decision | constraint | milestone | event | observation"},
+                    "anchor_type": {"type": "string", "description": "decision | constraint | milestone | event | observation | deadline"},
                     "session_id": {"type": "string", "description": "Фильтр по сессии"},
                     "limit": {"type": "integer", "default": 20}
                 }
@@ -145,43 +140,6 @@ async def list_tools() -> list[Tool]:
                     "importance": {"type": "string", "description": "Фильтр по важности"},
                     "limit": {"type": "integer", "default": 20}
                 }
-            }
-        ),
-        Tool(
-            name="ctx_expire",
-            description="Пометить срочную задачу как выполненную/истёкшую.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "session_id": {"type": "string", "description": "ID сессии с дедлайном"}
-                },
-                "required": ["session_id"]
-            }
-        ),
-        Tool(
-            name="ctx_urgent",
-            description="Активные дедлайны и срочные задачи.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "hours_ahead": {"type": "number", "default": 72.0}
-                }
-            }
-        ),
-        Tool(
-            name="save_content",
-            description="Сохранить блок контента (код, конфиг, текст) с версионированием.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "content_id":   {"type": "string", "description": "Уникальный ID контента"},
-                    "text":         {"type": "string", "description": "Текст контента"},
-                    "content_type": {"type": "string", "description": "function | class | chapter | scene | config"},
-                    "session_id":   {"type": "string", "description": "ID текущей сессии"},
-                    "tags":         {"type": "array", "items": {"type": "string"}},
-                    "why_changed":  {"type": "string", "description": "Причина изменения"}
-                },
-                "required": ["content_id", "text"]
             }
         ),
         Tool(
@@ -231,17 +189,6 @@ async def list_tools() -> list[Tool]:
                     "content_id": {"type": "string"}
                 },
                 "required": ["content_id"]
-            }
-        ),
-        Tool(
-            name="ctx_load",
-            description="Загрузить архивную сессию из SQLite в RAM. Использовать когда ctx_get вернул null.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "session_id": {"type": "string"}
-                },
-                "required": ["session_id"]
             }
         ),
         Tool(
@@ -329,33 +276,16 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             )
             return [TextContent(type="text", text=_serialize(result))]
 
-        elif name == "ctx_expire":
-            from mnemostroma.tools.write import ctx_expire
-            await ctx_expire(arguments["session_id"], ctx)
-            return [TextContent(type="text", text='{"result": "expired"}')]
-
         elif name == "ctx_active":
-            from mnemostroma.tools.read import ctx_active
-            result = await ctx_active(ctx)
-            return [TextContent(type="text", text=_serialize(result))]
+            return [TextContent(type="text", text=json.dumps({
+                "error": "ctx_active removed: use <memorycontext> injected in system prompt",
+                "hint": "use ctx_semantic or ctx_anchors for programmatic access",
+            }))]
 
         elif name == "ctx_urgent":
-            # ctx_urgent — read-only операция, живёт в tools/read.py
-            from mnemostroma.tools.read import ctx_urgent
-            result = await ctx_urgent(ctx, hours_ahead=arguments.get("hours_ahead", 72.0))
-            return [TextContent(type="text", text=_serialize(result))]
-
-        elif name == "save_content":
-            from mnemostroma.tools.write import save_content
-            result = await save_content(
-                content_id=arguments["content_id"],
-                text=arguments["text"],
-                ctx=ctx,
-                content_type=arguments.get("content_type"),
-                session_id=arguments.get("session_id"),
-                tags=arguments.get("tags", []),
-                why_changed=arguments.get("why_changed"),
-            )
+            # Redirected: ctx_urgent merged into ctx_anchors(type="deadline")
+            from mnemostroma.tools.read import ctx_anchors
+            result = await ctx_anchors(ctx=ctx, anchor_type="deadline", limit=20)
             return [TextContent(type="text", text=_serialize(result))]
 
         elif name == "content_search":
@@ -394,13 +324,6 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         elif name == "content_history":
             from mnemostroma.tools.content import content_history
             result = await content_history(arguments["content_id"], ctx)
-            return [TextContent(type="text", text=_serialize(result))]
-
-        elif name == "ctx_load":
-            from mnemostroma.tools.admin import ctx_load
-            result = await ctx_load(arguments["session_id"], ctx)
-            if result is None:
-                return [TextContent(type="text", text='{"error": "session not found in SQLite"}')]
             return [TextContent(type="text", text=_serialize(result))]
 
         elif name == "ctx_bridge":

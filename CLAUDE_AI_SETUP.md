@@ -35,12 +35,15 @@ Installs `starlette` and `uvicorn`. The core daemon has no dependency on these.
 mnemostroma sse
 ```
 
-Starts two local HTTP servers:
+Starts local servers:
 
 | Port | Binding | Purpose |
 |------|---------|---------|
 | 8765 | 0.0.0.0 | MCP SSE endpoint for claude.ai (requires auth) |
 | 8766 | 127.0.0.1 | Browser extension observe receiver (no auth) |
+| 8767 | 127.0.0.1 | HTTPS passthrough proxy for Claude Code (requires `mnemostroma setup` for TLS cert) |
+
+> Port 8767 is only started if TLS cert files exist (`~/.mnemostroma/passthrough-*.pem`). See [README passthrough proxy section](../README.md#claude-code--passthrough-proxy-observer-for-cli-sessions).
 
 On first run, a token is generated:
 
@@ -182,11 +185,12 @@ After that: open claude.ai, start a conversation. The extension captures message
 → Check claude.ai DOM selector still works (Anthropic may have changed markup).  
 → Open DevTools on claude.ai → Console → look for `Mnemostroma:` log lines.
 
-**Port 8765 or 8766 already in use**  
+**Port 8765, 8766, or 8767 already in use**  
 → Find and stop the conflicting process:
 ```bash
 lsof -i :8765
 lsof -i :8766
+lsof -i :8767
 ```
 
 ---

@@ -4,7 +4,7 @@
 
 ![Version](https://img.shields.io/badge/version-v1.7.5--alpha-orange)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue)
-![Tests](https://img.shields.io/badge/tests-380%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-403%20passing-brightgreen)
 ![License](https://img.shields.io/badge/license-FSL--1.1--MIT-lightgrey)
 
 > *μνήμη (mnḗmē, memory) + στρῶμα (strôma, layer) — the substrate everything rests on.*
@@ -56,11 +56,11 @@ Your Agent
     │     Watches all I/O, extracts entities, embeds, scores, indexes
     │     Agent never writes memory — Observer does it silently
     │
-    ├── AGENT TOOLS (read-only)
-    │     ctx.active()    → current context         <0.01ms
-    │     ctx.semantic()  → find by meaning          ~20ms
-    │     ctx.search()    → find by tags            <0.1ms
-    │     ctx.bridge()    → session handoff packet  <0.01ms
+    ├── AGENT TOOLS (read-only, via MCP)
+    │     ctx_semantic()  → find by meaning          ~20ms
+    │     ctx_anchors()   → decisions, deadlines    <0.1ms
+    │     ctx_search()    → find by tags            <0.1ms
+    │     ctx_bridge()    → session handoff packet  <0.01ms
     │
     └── CONTENT BRANCH (versioned artifacts)
           Code, chapters, configs — with diffs and why_changed
@@ -103,134 +103,155 @@ This is not a database with TTL. This is how human memory works.
 
 ## Status
 
-**Current:** v1.7.5 alpha | 2026-04-09
+**Current:** v1.7.5 alpha | 2026-04-11
 
-| Component                                | Status                       |
-| ---------------------------------------- | ---------------------------- |
-| Core backend (Observer, Memory, Storage) | ✅ Implemented, 380/380 tests |
-| Anchor Layer / Emotional Patterns        | ✅ Implemented                |
-| Implicit Feedback (v1.5)                 | ✅ Implemented                |
-| PersistenceLayer Split (Phase 9.2)       | ✅ Implemented (v1.7.1)       |
-| CLI User Mode (setup/on/off/status)      | ✅ Implemented (v1.7.1)       |
-| MCP Server (stdio)                       | ✅ Implemented                |
-| Continuation Detection & Mention Type    | ✅ Implemented                |
-| Decay Engine & Dreamer                   | ✅ Implemented (Stage C/D)    |
-| Model install CLI                        | ✅ Implemented                |
+| Component                                | Status                          |
+| ---------------------------------------- | ------------------------------- |
+| Core backend (Observer, Memory, Storage) | ✅ Implemented, 403/403 tests   |
+| Anchor Layer / Emotional Patterns        | ✅ Implemented                  |
+| Implicit Feedback (v1.5)                 | ✅ Implemented                  |
+| PersistenceLayer Split (Phase 9.2)       | ✅ Implemented (v1.7.1)         |
+| CLI User Mode (setup/on/off/status)      | ✅ Implemented (v1.7.1)         |
+| MCP Server (stdio + SSE)                 | ✅ Implemented                  |
+| Continuation Detection & Mention Type    | ✅ Implemented                  |
+| Decay Engine & Dreamer                   | ✅ Implemented (Stage C/D)      |
+| Passthrough HTTPS Proxy (:8767)          | ✅ Implemented (v1.7.5)         |
+| `mnemo` launcher with proxy failsafe     | ✅ Implemented (v1.7.5)         |
+| Model install CLI                        | ✅ Implemented                  |
 
 ---
 
-## Quick Start (User Mode)
+## Installation
 
 **Requires Python 3.12+**
 
 > ⚠️ Not yet on PyPI. Install directly from GitHub:
 
+**Linux / macOS:**
 ```bash
-pip install git+https://github.com/GG-QandV/mnemostroma.git
-mnemostroma setup        # Initialize ~/.mnemostroma/ and download models
-mnemostroma on           # Start persistent memory daemon (background)
-mnemostroma service install   # Register as systemd/launchd service (autostart)
-mnemostroma status       # Check health, metrics, and RAM usage
+pip install "git+https://github.com/GG-QandV/mnemostroma.git"
+
+# With SSE extras (claude.ai + Claude Code passthrough proxy):
+pip install "git+https://github.com/GG-QandV/mnemostroma.git[sse]"
+
+# With system tray:
+pip install "git+https://github.com/GG-QandV/mnemostroma.git[all]"
+```
+
+**Windows (PowerShell):**
+```powershell
+pip install "git+https://github.com/GG-QandV/mnemostroma.git"
+
+# With SSE extras:
+pip install "git+https://github.com/GG-QandV/mnemostroma.git[sse]"
+```
+
+> **Tip:** Use [pipx](https://pipx.pypa.io) for a cleaner global install that doesn't pollute your system Python:
+> ```bash
+> pipx install "git+https://github.com/GG-QandV/mnemostroma.git"
+> ```
+
+---
+
+## Quick Start
+
+```bash
+mnemostroma setup        # Create ~/.mnemostroma/, download models (~300 MB), generate TLS cert + mnemo launcher
+mnemostroma on           # Start daemon in background
+mnemostroma status       # Check health, RAM usage, session count
 mnemostroma off          # Stop daemon
 ```
 
-### OS Support & Services
+**With passthrough proxy (captures Claude Code sessions into memory):**
+```bash
+mnemostroma sse          # Start SSE adapter + proxy on :8767
+mnemo                    # Launch Claude Code through the proxy (falls back to direct if proxy is down)
+```
 
-- **Linux**: Supported via `systemd` (user mode).
-- **macOS**: Supported via `launchd` (LaunchAgents).
-- **Windows 10/11**: Supported via **Task Scheduler** (`schtasks`).
-  - *Note:* Windows has limited support for signals (no `SIGUSR1/2` for flush/dump).
-  - **Alpha Recommendation:** For the best experience during alpha, we recommend using **WSL2** (Ubuntu) instead of native Windows.
+**Register as autostart service:**
 
-### Management Commands
+| OS | Command | Backend |
+|---|---|---|
+| Linux | `mnemostroma service install` | systemd user unit |
+| macOS | `mnemostroma service install` | launchd LaunchAgent |
+| Windows | `mnemostroma service install` | Task Scheduler |
 
-- `mnemostroma config list`  — View all 80+ tunable parameters
-- `mnemostroma logs --days 7` — Analyze memory growth and calibration
-- `mnemostroma watch`        — Live terminal activity dashboard
-- `mnemostroma tray`         — System tray indicator (optional)
+> **Windows note:** Signals `SIGUSR1/2` (flush/dump) are unavailable on Windows. Use `mnemostroma off` and `mnemostroma on` instead. For the best alpha experience, WSL2 (Ubuntu) is recommended.
+
+**Management commands:**
+
+```bash
+mnemostroma config list       # View all 80+ tunable parameters
+mnemostroma logs --days 7     # Memory growth and calibration report
+mnemostroma watch             # Live terminal dashboard
+mnemostroma tray              # System tray indicator (requires [tray] extra)
+```
 
 ---
 
 ## Model Setup
 
-Models are downloaded automatically during `mnemostroma setup`.  
-Required models (~300MB on disk):
+Downloaded automatically during `mnemostroma setup` (~300 MB total):
 
-- `multilingual-e5-small` (E5 int8, 384d) — session & content embedder
-- `distilbert-ner` (DistilBERT int8) — HybridNER
-- `tinybert-l2-v2` (TinyBERT, lazy) — reranker
-
----
-
-## Logging
-
-Mnemostroma writes local diagnostic logs to `logs.db` during alpha.  
-**Logs never leave your machine.** No network calls.
-
-To configure in `~/.mnemostroma/config.json`:
-
-```json
-"logging": { 
-  "enabled": true,
-  "mode": "safe" 
-}
-```
-
-*Note: `safe` mode redacts sensitive content from logs, keeping only event types and metadata.*
+| Model | Size | Role |
+|---|---|---|
+| `multilingual-e5-small` INT8 | ~117 MB | Session + content embedder (384d) |
+| `distilbert-ner` INT8 | ~60 MB | Named entity recognition |
+| `tinybert-l2-v2` INT8 | ~7 MB | Cross-encoder reranking (lazy load) |
 
 ---
 
 ## Stack
 
-| Component                   | Disk                         | RSS (estimated)                   |
-| --------------------------- | ---------------------------- | --------------------------------- |
-| multilingual-e5-small INT8  | ~117MB                       | Session & Content embedder (384d) |
-| distilbert-ner INT8         | ~60MB                        | HybridNER                         |
-| TinyBERT-L-2-v2 INT8        | ~7MB                         | Cross-encoder reranking (lazy)    |
-| ONNX Runtime + tokenizers   | —                            | Runtime overhead                  |
-| **Total working set (RSS)** | **~300MB disk · ~630MB RAM** |                                   |
-
 No torch. No transformers. No LangChain. No Docker. No Redis. No cloud.
-Dependencies: `onnxruntime, tokenizers, numpy, lz4, aiosqlite`
+
+| Component | Disk | Role |
+|---|---|---|
+| multilingual-e5-small INT8 | ~117 MB | Session & content embedder (384d) |
+| distilbert-ner INT8 | ~60 MB | HybridNER |
+| TinyBERT-L-2-v2 INT8 | ~7 MB | Reranker (lazy) |
+| **Total working set** | **~300 MB disk · ~630 MB RAM** | |
+
+Core dependencies: `onnxruntime, tokenizers, numpy, lz4, aiosqlite`
 
 ---
 
-## API surface (17 tools via MCP)
+## API surface (11 tools via MCP)
 
-**Read (6):**
+**Retrieval (5):**
 
-- `ctx_active()`: Current context snapshot (intent, variables, deadlines, subconscious signals)
+- `ctx_semantic(query)`: Meaning-based search (MatrixSearch ANN, ~20ms)
 - `ctx_get(id)`: Retrieve specific session by ID
 - `ctx_search(tags)`: Tag-based search (precise, multi-language)
-- `ctx_semantic(query)`: Meaning-based search (MatrixSearch ANN, ~20ms)
-- `ctx_anchors(type)`: Subconscious anchors (decisions, constraints, facts)
+- `ctx_anchors(type)`: Subconscious anchors — decisions, constraints, facts, **deadlines** (`type="deadline"`)
 - `ctx_precision(type)`: Exact data (links, formulas, quotes)
 
-**Extended (5):**
+**Extended (3):**
 
 - `ctx_full(id)`: Full-text version from SQLite (for exact quoting)
 - `ctx_bridge()`: Structured context handoff packet for next agent
 - `ctx_recent(n)`: Temporally ordered recent sessions (SQLite-backed)
-- `ctx_urgent()`: Active deadlines and time-sensitive tasks
-- `ctx_expire(id)`: Mark urgent task as completed/expired
 
-**Content Branch (5):**
+**Content Branch (4):**
 
-- `save_content(id, text)`: Versioned artifact save with `why_changed`
 - `content_search(query)`: Semantic search over artifacts (code, docs)
 - `content_get(id, version)`: Metadata retrieval for artifact
 - `content_raw(id, version)`: Full source retrieval (expensive)
 - `content_history(id)`: Version lineage and change log
 
-**Admin (1):**
+> **Note:** `ctx_active` is removed — current context is injected via `<memorycontext>` in the system prompt automatically. `ctx_urgent` is merged into `ctx_anchors(type="deadline")`. `ctx_load` is daemon-internal only.
 
-- `ctx_load(id)`: Force-load archived session from SQLite to RAM
+**Observer Principle:** You never call "save_memory". The Observer watches your conversation and handles everything in the background. Tools are for *reading* memory, not writing it.
 
 ---
 
 ## Connecting to LLM (MCP)
 
-Mnemostroma is an MCP server. Add it to your `claude_desktop_config.json`:
+The daemon must be running (`mnemostroma on`) before any client connects.
+
+### Claude Desktop
+
+**`claude_desktop_config.json`** — same config on all platforms:
 
 ```json
 {
@@ -243,43 +264,147 @@ Mnemostroma is an MCP server. Add it to your `claude_desktop_config.json`:
 }
 ```
 
-**Observer Principle:** You do not need to manually call "save_memory". The Mnemostroma Observer watches your conversation and handles everything in the background. You only call tools when you need to *remember* something from the past.
+> **Windows:** If `mnemostroma` is not in PATH, use the full path:
+> `C:\Users\YourName\AppData\Local\Programs\Python\Python312\Scripts\mnemostroma.exe`
 
-### Multi-client setup (IDE + Claude Code simultaneously)
+Config file locations:
+- **Linux/macOS:** `~/.config/Claude/claude_desktop_config.json`
+- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
 
-Multiple clients connect to a single daemon via lightweight stdio adapters.
-Each adapter is ~5 MB RAM and forwards all tool calls to the daemon over a local Unix socket.
+---
 
-```
-Claude Code  →  mcp_stdio_adapter (~5 MB)  ─┐
-                                              ├──→  daemon (~630 MB)  →  ~/.mnemostroma/mnemostroma.db
-Antigravity  →  mcp_stdio_adapter (~5 MB)  ─┘
-Cursor / Windsurf / ...
-```
+### Claude Code (CLI)
 
-The daemon must be running (`mnemostroma on`) before any client connects.
-If the socket is unavailable, all tool calls return a clear error — no silent failures.
+Claude Code uses the stdio adapter. Run `mnemostroma setup` first — it prints the ready-to-paste config.
 
-For IDEs (Antigravity, Cursor, Windsurf, Cline, etc.) configure `mcp_stdio_adapter`:
+**`~/.claude.json`** — `mcpServers` block:
 
+**Linux / macOS:**
 ```json
 {
   "mcpServers": {
     "mnemostroma": {
-      "command": "/path/to/.venv/bin/python3",
+      "command": "/home/yourname/.local/bin/mnemostroma",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+**Windows (PowerShell):**
+```json
+{
+  "mcpServers": {
+    "mnemostroma": {
+      "command": "C:\\Users\\YourName\\AppData\\Local\\Programs\\Python\\Python312\\Scripts\\mnemostroma.exe",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+> Find the correct path: `where mnemostroma` (Windows) / `which mnemostroma` (Linux/macOS)
+
+---
+
+### Claude Code — Passthrough Proxy (Observer for CLI sessions)
+
+To capture Claude Code conversations into memory, run the SSE adapter with the passthrough proxy.
+Requires `mnemostroma[sse]` and `mnemostroma setup` (generates TLS cert + wrapper script).
+
+**Step 1 — Setup (once):**
+```bash
+pip install "mnemostroma[sse]"
+mnemostroma setup   # generates TLS cert + ~/.local/bin/mnemo wrapper
+```
+
+**Step 2 — Start SSE adapter (includes proxy on :8767):**
+```bash
+mnemostroma sse
+```
+
+**Step 3 — Launch Claude Code via wrapper:**
+
+**Linux / macOS:**
+```bash
+mnemo           # instead of 'claude' — sets proxy env vars automatically
+```
+
+> `mnemo` is a wrapper script placed in `~/.local/bin/` by `mnemostroma setup`.
+> It sets `ANTHROPIC_BASE_URL` and `NODE_EXTRA_CA_CERTS` only for that process.
+> If the proxy is not running, Claude Code works normally (direct API, no capture).
+
+**Windows (PowerShell) — no wrapper, set manually:**
+```powershell
+$env:ANTHROPIC_BASE_URL = "https://localhost:8767"
+$env:NODE_EXTRA_CA_CERTS = "$env:USERPROFILE\.mnemostroma\certs\passthrough-ca.pem"
+claude
+```
+
+> The proxy forwards all traffic transparently to `api.anthropic.com`. It only intercepts `/v1/messages` responses to extract text and send it to the Observer. Your API key is never stored.
+
+---
+
+### IDEs (Cursor, Windsurf, Cline, Zed, Antigravity…)
+
+All IDEs use the same stdio adapter. Multiple IDEs can connect simultaneously — each gets a ~5 MB adapter process sharing one daemon.
+
+```
+Claude Code  →  adapter (~5 MB)  ─┐
+Cursor       →  adapter (~5 MB)  ─┤──→  daemon (~630 MB)  →  ~/.mnemostroma/mnemostroma.db
+Windsurf     →  adapter (~5 MB)  ─┘
+```
+
+**Linux / macOS** — add to your IDE's MCP config:
+```json
+{
+  "mcpServers": {
+    "mnemostroma": {
+      "command": "/path/to/venv/bin/python3",
       "args": ["-m", "mnemostroma.integration.mcp_stdio_adapter"]
     }
   }
 }
 ```
 
-Replace `/path/to/.venv` with the path from `pip show mnemostroma | grep Location`.
+**Windows** — add to your IDE's MCP config:
+```json
+{
+  "mcpServers": {
+    "mnemostroma": {
+      "command": "C:\\path\\to\\venv\\Scripts\\python.exe",
+      "args": ["-m", "mnemostroma.integration.mcp_stdio_adapter"]
+    }
+  }
+}
+```
 
-### claude.ai (SSE + real-time context capture)
+> Find the path: `pip show mnemostroma` → look at `Location`, then go one level up to `bin/` (Linux/macOS) or `Scripts/` (Windows).
 
-Connect Mnemostroma to claude.ai web chat — tools available to Claude, conversations stored in memory automatically.
+---
+
+### claude.ai (SSE + browser extension)
+
+Connect Mnemostroma to claude.ai web chat — tools available to Claude, conversations captured in real time.
 
 → **[Setup guide: docs/CLAUDE_AI_SETUP.md](docs/CLAUDE_AI_SETUP.md)**
+
+---
+
+## Logging
+
+Mnemostroma writes local diagnostic logs to `logs.db` during alpha.
+**Logs never leave your machine.**
+
+`~/.mnemostroma/config.json`:
+```json
+"logging": {
+  "enabled": true,
+  "mode": "safe"
+}
+```
+
+`safe` mode keeps only event types and metadata — no message content.
 
 ---
 
@@ -315,7 +440,7 @@ It gives your agent an actual memory.
 git clone https://github.com/GG-QandV/mnemostroma.git
 cd mnemostroma
 pip install -e ".[dev]"
-pytest tests/                          # run all 380 tests
+pytest tests/                          # run all 403 tests
 pytest tests/ --ignore=tests/test_memory_layers.py \
               --ignore=tests/test_data_contracts.py  # fast mode (~14s)
 ```
@@ -344,4 +469,4 @@ Cloud Sync, Subconscious Layer (personalized models), Shared Experience, and Tea
 ---
 
 *Mnemostroma — the memory layer for AI agents*
-*μνήμη + στρῶμα · offline · ~630MB RAM · ~20ms · 380 tests*
+*μνήμη + στρῶμα · offline · ~630MB RAM · ~20ms · 403 tests*

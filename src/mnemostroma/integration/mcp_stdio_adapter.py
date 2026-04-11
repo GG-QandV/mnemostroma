@@ -16,6 +16,7 @@ import asyncio
 import json
 import logging
 import sys
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -25,9 +26,10 @@ from mcp.server.stdio import stdio_server
 
 logger = logging.getLogger("mnemostroma.mcp_adapter")
 
-_MNEMO_DIR = Path.home() / ".mnemostroma"
-_SOCKET_PATH = _MNEMO_DIR / "daemon.sock"
-_PIPE_NAME = r"\\.\pipe\mnemostroma"
+_MNEMO_DIR            = Path.home() / ".mnemostroma"
+_SOCKET_PATH          = _MNEMO_DIR / "daemon.sock"
+_PIPE_NAME            = r"\\.\pipe\mnemostroma"
+_CURRENT_SESSION_FILE = _MNEMO_DIR / "current_session"
 
 # ── Tool list (mirrors mcp_server.py — keep in sync when adding tools) ─
 
@@ -54,11 +56,6 @@ _TOOLS: list[Tool] = [
         },
     ),
     Tool(
-        name="ctx_active",
-        description="Текущий активный контекст: intent, переменные, дедлайны.",
-        inputSchema={"type": "object", "properties": {}},
-    ),
-    Tool(
         name="ctx_search",
         description="Поиск сессий по тегам.",
         inputSchema={
@@ -83,7 +80,7 @@ _TOOLS: list[Tool] = [
     ),
     Tool(
         name="ctx_anchors",
-        description="Якоря субсознательного слоя: решения, факты, персоны, события.",
+        description="Якоря субсознательного слоя: решения, факты, персоны, события, дедлайны. type=deadline заменяет ctx_urgent.",
         inputSchema={
             "type": "object",
             "properties": {
@@ -103,39 +100,6 @@ _TOOLS: list[Tool] = [
                 "importance": {"type": "string"},
                 "limit": {"type": "integer", "default": 20},
             },
-        },
-    ),
-    Tool(
-        name="ctx_expire",
-        description="Пометить срочную задачу как выполненную/истёкшей.",
-        inputSchema={
-            "type": "object",
-            "properties": {"session_id": {"type": "string"}},
-            "required": ["session_id"],
-        },
-    ),
-    Tool(
-        name="ctx_urgent",
-        description="Активные дедлайны и срочные задачи.",
-        inputSchema={
-            "type": "object",
-            "properties": {"hours_ahead": {"type": "number", "default": 72.0}},
-        },
-    ),
-    Tool(
-        name="save_content",
-        description="Сохранить блок контента (код, конфиг, текст) с версионированием.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "content_id": {"type": "string"},
-                "text": {"type": "string"},
-                "content_type": {"type": "string"},
-                "session_id": {"type": "string"},
-                "tags": {"type": "array", "items": {"type": "string"}},
-                "why_changed": {"type": "string"},
-            },
-            "required": ["content_id", "text"],
         },
     ),
     Tool(
@@ -183,15 +147,6 @@ _TOOLS: list[Tool] = [
             "type": "object",
             "properties": {"content_id": {"type": "string"}},
             "required": ["content_id"],
-        },
-    ),
-    Tool(
-        name="ctx_load",
-        description="Загрузить архивную сессию из SQLite в RAM.",
-        inputSchema={
-            "type": "object",
-            "properties": {"session_id": {"type": "string"}},
-            "required": ["session_id"],
         },
     ),
     Tool(
@@ -256,11 +211,12 @@ async def _ipc_call(tool: str, args: dict) -> Any:
                 "Start with: mnemostroma start"
             ) from e
     else:
-        if not _SOCKET_PATH.exists():
+        try:
+            reader, writer = await asyncio.open_unix_connection(str(_SOCKET_PATH))
+        except (FileNotFoundError, ConnectionRefusedError) as e:
             raise ConnectionError(
                 "Mnemostroma daemon not running. Start with: mnemostroma start"
-            )
-        reader, writer = await asyncio.open_unix_connection(str(_SOCKET_PATH))
+            ) from e
 
     try:
         msg_id = _next_id()
@@ -268,12 +224,14 @@ async def _ipc_call(tool: str, args: dict) -> Any:
         writer.write((payload + "\n").encode())
         await writer.drain()
 
-        line = await reader.readline()
+        line = await asyncio.wait_for(reader.readline(), timeout=10.0)
         response = json.loads(line.decode())
 
         if "error" in response:
             raise RuntimeError(response["error"])
         return response.get("result")
+    except asyncio.TimeoutError:
+        raise ConnectionError("Mnemostroma daemon did not respond within 10s")
     finally:
         writer.close()
         try:
@@ -316,6 +274,16 @@ async def main() -> None:
         format="%(asctime)s %(name)s %(levelname)s %(message)s",
     )
     async with stdio_server() as (read_stream, write_stream):
+        # Write current session_id for proxy_passthrough to pick up.
+        # Hard deadline: 3s. If daemon is unresponsive, fall back to date-id
+        # and proceed — app.run() must not be delayed by a hung daemon.
+        try:
+            result = await asyncio.wait_for(_ipc_call("ctx_active", {}), timeout=3.0)
+            sid = (result or {}).get("session_id") or f"passthrough-{date.today().isoformat()}"
+        except Exception:
+            sid = f"passthrough-{date.today().isoformat()}"
+        _CURRENT_SESSION_FILE.write_text(sid, encoding="utf-8")
+
         await app.run(read_stream, write_stream, app.create_initialization_options())
 
 

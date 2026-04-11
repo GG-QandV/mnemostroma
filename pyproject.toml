@@ -1,14 +1,31 @@
 [project]
 name = "mnemostroma"
-version = "1.7.1"
-description = "Autonomous memory layer for AI agents"
+version = "1.7.5"
+description = "Autonomous memory layer for AI agents — offline, RAM-first, no cloud"
 readme = "README.md"
 requires-python = ">=3.12"
+license = { text = "FSL-1.1-MIT" }
+authors = [
+    { name = "GG-QandV" }
+]
+keywords = [
+    "ai", "agent", "memory", "mcp", "llm", "onnx",
+    "context", "rag", "semantic-search", "offline"
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows :: Windows 10",
+    "Operating System :: Microsoft :: Windows :: Windows 11",
+    "Environment :: Console",
+    "Typing :: Typed",
 ]
 dependencies = [
     "onnxruntime>=1.17",
@@ -21,29 +38,53 @@ dependencies = [
     "mcp>=1.0",
 ]
 
+[project.urls]
+Homepage    = "https://github.com/GG-QandV/mnemostroma"
+Repository  = "https://github.com/GG-QandV/mnemostroma"
+Issues      = "https://github.com/GG-QandV/mnemostroma/issues"
+Changelog   = "https://github.com/GG-QandV/mnemostroma/blob/main/CHANGELOG.md"
+
 [project.scripts]
 mnemostroma = "mnemostroma.__main__:cli"
 
 [project.optional-dependencies]
-dev = [
-    "pytest>=8.0",
-    "pytest-asyncio>=0.23",
-    "pytest-mock>=3.0",
+sse = [
+    "starlette>=0.36",
+    "uvicorn>=0.27",
+    "httpx>=0.27",
+    "cryptography>=42.0",
 ]
 tray = [
     "pystray>=0.19",
     "pillow>=10.0",
 ]
+all = [
+    "starlette>=0.36",
+    "uvicorn>=0.27",
+    "httpx>=0.27",
+    "cryptography>=42.0",
+    "pystray>=0.19",
+    "pillow>=10.0",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pip-audit>=2.7",
+]
 
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-mnemostroma = ["config_default.json", "models_manifest.json"]
+mnemostroma = [
+    "config_default.json",
+    "models_manifest.json",
+    "py.typed",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

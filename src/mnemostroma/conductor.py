@@ -20,7 +20,6 @@ from .core import SystemContext, ModelRegistry
 from .storage.sqlite import init_db, DatabaseManager, check_anchor_schema
 from .storage.persistence import PersistenceLayer
 from .storage.content_manager import ContentManager
-from .storage.log_writer import LogWriter
 from .memory.hnsw import init_session_index, init_content_index
 from .memory.dissolver import Dissolver
 from .memory.consolidation import ConsolidationWorker
@@ -81,13 +80,7 @@ class Conductor:
         # B0.7: Anchor t_rel migration (adds t_rel column if missing — v1.6 §5.1)
         await check_anchor_schema(db)
         
-        # 2.5 Logging (v1.0 spec) — skipped when logging.enabled: false
-        logs_path = config.logging.db_path
-        log_writer = None
-        if config.logging.enabled:
-            log_writer = LogWriter(logs_path)
-            await log_writer.start()
-        
+
         # 3. Memory Indices (matrix cosine search — ADR-002)
         session_index = init_session_index(config)
         content_index = init_content_index(config)
@@ -106,12 +99,12 @@ class Conductor:
         # Wire references
         persistence = PersistenceLayer(db_manager)
         self.ctx.persistence = persistence
-        self.ctx.log_writer = log_writer
         self.ctx.content = ContentManager(self.ctx)
         self.ctx.dissolver = Dissolver(self.ctx)
 
         # Provide ctx to db_manager for log_event access
         persistence.wire_ctx(self.ctx)
+        await persistence.start()
         
         # ADR-002: validate pipeline_width does not exceed available ONNX threads
         pw = config.search.pipeline_width
@@ -315,8 +308,6 @@ class Conductor:
                 await self.ctx.consolidation.stop()
             if self._dreamer_task:
                 await self._dreamer_task.stop()
-            if self.ctx.log_writer:
-                await self.ctx.log_writer.stop()
             if self.ctx.db:
                 await self.ctx.db.close()
             logger.info("Mnemostroma shutdown complete.")
@@ -439,7 +430,7 @@ class Conductor:
         if name == "ctx_semantic":
             from mnemostroma.tools.read import ctx_semantic
             return await ctx_semantic(query=args["query"], ctx=ctx,
-                                      topn=args.get("topn", 5))
+                                      top_n=args.get("topn", 5))
         if name == "ctx_get":
             from mnemostroma.tools.read import ctx_get
             return await ctx_get(args["session_id"], ctx)
@@ -518,7 +509,7 @@ class Conductor:
             return await content_search(query=args["query"], ctx=ctx,
                                         project_id=args.get("project_id"),
                                         status=args.get("status", "active"),
-                                        topk=args.get("topk", 5))
+                                        top_k=args.get("topk", 5))
         if name == "content_get":
             from mnemostroma.tools.content import content_get
             return await content_get(args["content_id"], ctx,

@@ -1,0 +1,25 @@
+[Unit]
+Description=Mnemostroma HTTP Proxy (port 8767)
+After=mnemostroma-daemon.service network.target
+BindsTo=mnemostroma-daemon.service
+
+[Service]
+Type=simple
+
+WorkingDirectory=%h/.mnemostroma
+ExecStart=%h/.mnemostroma/venv/bin/python3 -m mnemostroma.integration.http_proxy
+ExecReload=/bin/kill -HUP $MAINPID
+
+Restart=always
+RestartSec=1
+TimeoutStartSec=45
+TimeoutStopSec=5
+
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mnemostroma-proxy
+
+
+[Install]
+WantedBy=default.target
