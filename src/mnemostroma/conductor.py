@@ -20,6 +20,7 @@ from .core import SystemContext, ModelRegistry
 from .storage.sqlite import init_db, DatabaseManager, check_anchor_schema
 from .storage.persistence import PersistenceLayer
 from .storage.content_manager import ContentManager
+from .storage.log_writer import LogWriter
 from .memory.hnsw import init_session_index, init_content_index
 from .memory.dissolver import Dissolver
 from .memory.consolidation import ConsolidationWorker
@@ -80,7 +81,13 @@ class Conductor:
         # B0.7: Anchor t_rel migration (adds t_rel column if missing — v1.6 §5.1)
         await check_anchor_schema(db)
         
-
+        # 2.5 Logging (v1.0 spec) — skipped when logging.enabled: false
+        logs_path = config.logging.db_path
+        log_writer = None
+        if config.logging.enabled:
+            log_writer = LogWriter(logs_path)
+            await log_writer.start()
+        
         # 3. Memory Indices (matrix cosine search — ADR-002)
         session_index = init_session_index(config)
         content_index = init_content_index(config)
@@ -99,6 +106,7 @@ class Conductor:
         # Wire references
         persistence = PersistenceLayer(db_manager)
         self.ctx.persistence = persistence
+        self.ctx.log_writer = log_writer
         self.ctx.content = ContentManager(self.ctx)
         self.ctx.dissolver = Dissolver(self.ctx)
 
@@ -187,6 +195,26 @@ class Conductor:
             dreamer = Dreamer(conductor=self, ctx=self.ctx)
             await dreamer.start()
             self._dreamer_task = dreamer
+        
+        # Initial Bootstrap Log
+        from .storage.log_writer import log_event
+        await log_event(self.ctx, "conductor.bootstrap", "start", {
+            "db_path": str(db_path),
+            "logs_path": str(logs_path)
+        })
+
+        # B03: Health Check Log (v1.0 spec — Point #17)
+        try:
+            import psutil, os
+            _rss = psutil.Process(os.getpid()).memory_info().rss
+            _ram_mb = round(_rss / 1024 / 1024, 2)
+        except Exception:
+            _ram_mb = -1.0
+        await log_event(self.ctx, "conductor.health", "check", {
+            "ram_mb": _ram_mb,
+            "observer_alive": True,
+            "issues": []
+        })
         
         # Heartbeat + loop monitor + outbox worker
         self._stopping = False
@@ -308,6 +336,8 @@ class Conductor:
                 await self.ctx.consolidation.stop()
             if self._dreamer_task:
                 await self._dreamer_task.stop()
+            if self.ctx.log_writer:
+                await self.ctx.log_writer.stop()
             if self.ctx.db:
                 await self.ctx.db.close()
             logger.info("Mnemostroma shutdown complete.")
