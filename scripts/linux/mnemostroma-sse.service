@@ -1,0 +1,20 @@
+[Unit]
+Description=Mnemostroma SSE Adapter (MCP + Observe + Proxy)
+After=mnemostroma-daemon.service
+Requires=mnemostroma-daemon.service
+Wants=mnemostroma-watchdog.service
+
+[Service]
+Type=simple
+WorkingDirectory=%MNEMOSTROMA_DIR%
+ExecStart=%VENV_BIN%/python3 -m mnemostroma sse
+
+Restart=always
+RestartSec=3
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mnemostroma-sse
+
+[Install]
+WantedBy=default.target
