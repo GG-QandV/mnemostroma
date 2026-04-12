@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.mnemostroma.daemon</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>%VENV_BIN%/python3</string>
+    <string>-m</string>
+    <string>mnemostroma run</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>MNEMOSTROMA_DIR</key>
+    <string>%HOME%/.mnemostroma</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>%HOME%/.mnemostroma/daemon.log</string>
+  <key>StandardErrorPath</key>
+  <string>%HOME%/.mnemostroma/daemon.err</string>
+</dict>
+</plist>

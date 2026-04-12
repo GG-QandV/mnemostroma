@@ -118,6 +118,7 @@ This is not a database with TTL. This is how human memory works.
 | Passthrough HTTPS Proxy (:8767)          | ✅ Implemented (v1.7.5)         |
 | `mnemo` launcher with proxy failsafe     | ✅ Implemented (v1.7.5)         |
 | Model install CLI                        | ✅ Implemented                  |
+| **Daemon auto-start scripts**            | ✅ Linux (systemd), macOS, Win  |
 
 ---
 
@@ -187,6 +188,8 @@ mnemostroma watch             # Live terminal dashboard
 mnemostroma tray              # System tray indicator (requires [tray] extra)
 ```
 
+> **Next step:** Set up daemon auto-start on your OS ([Linux](./scripts/linux/README.md) | [macOS](./scripts/macos/README.md) | [Windows](./scripts/windows/README.md)) — see [Daemon Installation Guide →](./scripts/README.md)
+
 ---
 
 ## Model Setup
@@ -247,7 +250,85 @@ Core dependencies: `onnxruntime, tokenizers, numpy, lz4, aiosqlite`
 
 ## Connecting to LLM (MCP)
 
-The daemon must be running (`mnemostroma on`) before any client connects.
+The daemon must be running before any client connects.
+
+**Choose your OS for installation details:**
+- [Linux (systemd)](./scripts/linux/README.md)
+- [macOS (launchd)](./scripts/macos/README.md)
+- [Windows (Task Scheduler)](./scripts/windows/README.md)
+
+Or use the universal installer: `bash scripts/install-daemon.sh` (Linux/macOS)
+
+### Starting the Daemon
+
+The daemon is a background service that runs independently of any IDE or client. Set it up once per system, then forget about it.
+
+**Linux — systemd user unit**
+
+Use the provided installation script:
+
+```bash
+bash scripts/install-daemon.sh
+```
+
+→ **[Full Linux installation guide →](./scripts/linux/README.md)**
+
+This installs three systemd user units from `scripts/`:
+- `mnemostroma-daemon.service` — Main daemon (Observer + Memory + Storage)
+- `mnemostroma-proxy.service` — HTTPS passthrough proxy (optional, for Claude Code)
+- `mnemostroma-watchdog.service` — Health monitor
+
+Quick commands:
+```bash
+systemctl --user status mnemostroma-daemon
+systemctl --user start mnemostroma-daemon
+systemctl --user stop mnemostroma-daemon
+journalctl --user -u mnemostroma-daemon -f
+```
+
+**macOS — launchd LaunchAgent**
+
+Use the provided installation script:
+
+```bash
+bash scripts/install-daemon.sh
+```
+
+→ **[Full macOS installation guide →](./scripts/macos/README.md)**
+
+Or run directly:
+```bash
+bash scripts/macos/install.sh
+```
+
+Quick commands:
+```bash
+launchctl start com.mnemostroma.daemon
+launchctl stop com.mnemostroma.daemon
+tail -f ~/.mnemostroma/daemon.log
+```
+
+**Windows — Task Scheduler**
+
+Use the provided PowerShell script (run as Administrator):
+
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+.\scripts\windows\install-daemon.ps1
+```
+
+→ **[Full Windows installation guide →](./scripts/windows/README.md)**
+
+Quick commands:
+```powershell
+Start-ScheduledTask -TaskName "Mnemostroma Daemon"
+Stop-ScheduledTask -TaskName "Mnemostroma Daemon"
+taskschd.msc
+```
+
+> **Architecture note:** Clients (VS Code, Claude Code, Cursor) will spawn lightweight adapter processes (~70 MB) that connect to this daemon via socket. The daemon persists; adapters are ephemeral.
+
+---
 
 ### Claude Desktop
 
@@ -345,15 +426,16 @@ claude
 
 ---
 
-### IDEs (Cursor, Windsurf, Cline, Zed, Antigravity…)
+### IDEs (Cursor, Windsurf, Cline, Zed, Antigravity, Continue…)
 
-All IDEs use the same stdio adapter. Multiple IDEs can connect simultaneously — each gets a ~5 MB adapter process sharing one daemon.
+All IDEs use the stdio adapter. Multiple IDEs can connect simultaneously — each spawns a ~5 MB adapter process sharing one daemon.
 
-```
-Claude Code  →  adapter (~5 MB)  ─┐
-Cursor       →  adapter (~5 MB)  ─┤──→  daemon (~630 MB)  →  ~/.mnemostroma/mnemostroma.db
-Windsurf     →  adapter (~5 MB)  ─┘
-```
+| IDE | Config file | Status |
+|-----|-------------|--------|
+| **VS Code Copilot** | `~/.config/Code/User/mcp.json` | ✅ |
+| **Claude Code** | `~/.claude/mcp.json` | ✅ |
+| **Antigravity** | `mcp.json` (project root) | ✅ |
+| **Continue** | `~/.continue/config.yaml` | ⚠️ env block not supported in v1.2.22 |
 
 **Linux / macOS** — add to your IDE's MCP config:
 ```json
@@ -379,7 +461,7 @@ Windsurf     →  adapter (~5 MB)  ─┘
 }
 ```
 
-> Find the path: `pip show mnemostroma` → look at `Location`, then go one level up to `bin/` (Linux/macOS) or `Scripts/` (Windows).
+> Find the path: `pip show mnemostroma` → `Location` → one level up to `bin/` (Linux/macOS) or `Scripts/` (Windows).
 
 ---
 

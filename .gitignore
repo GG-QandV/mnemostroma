@@ -39,3 +39,8 @@ __pycache__/
 env/
 .pytest_cache/
 *.egg-info/
+scripts/issue_build.py
+scripts/identify_leak.py
+scripts/audit.sh
+scripts/audit_version_check.py
+scripts/.watermarks_registry.csv

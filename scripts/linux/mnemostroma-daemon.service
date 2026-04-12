@@ -1,0 +1,28 @@
+[Unit]
+Description=Mnemostroma Daemon (Conductor)
+After=network.target
+Wants=mnemostroma-proxy.service mnemostroma-watchdog.service
+
+[Service]
+Type=notify
+NotifyAccess=main
+
+WorkingDirectory=%h/.mnemostroma
+ExecStart=%h/.mnemostroma/venv/bin/python3 -m mnemostroma.conductor
+ExecReload=/bin/kill -HUP $MAINPID
+
+Restart=always
+RestartSec=1
+
+WatchdogSec=6
+TimeoutStartSec=60
+TimeoutStopSec=10
+
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mnemostroma-daemon
+
+
+[Install]
+WantedBy=default.target
