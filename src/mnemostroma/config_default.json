@@ -82,7 +82,9 @@
     "session_type_classify_after_n": 5,
     "gliner_mode": "small",
     "gliner_auto_switch_precision_threshold": 0.7,
-    "gliner_auto_switch_after_sessions": 50
+    "gliner_auto_switch_after_sessions": 50,
+    "mention_type_enabled": true,
+    "mention_type_threshold": 0.7
   },
   "tuner": {
     "conflict_signal_threshold": 0.75,

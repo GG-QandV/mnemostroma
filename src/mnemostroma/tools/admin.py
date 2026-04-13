@@ -8,6 +8,8 @@ from typing import Dict, Any, List, Optional
 from pathlib import Path
 
 from ..core import SystemContext
+from ..storage.log_writer import log_event
+from ..memory.growth_forecast import GrowthForecast
 
 logger = logging.getLogger("mnemostroma.tools.admin")
 
@@ -37,6 +39,10 @@ async def ctx_status(ctx: SystemContext) -> Dict[str, Any]:
     }
     
     # Log the status check
+    await log_event(ctx, "tools.admin", "status_check", {
+        "ram_count": stats["ram_index_count"],
+        "index_count": stats["session_index"]["count"]
+    })
     
     return stats
 
@@ -54,6 +60,7 @@ async def ctx_sync(ctx: SystemContext) -> bool:
         pass
             
         latency = (time.time() - start) * 1000
+        await log_event(ctx, "tools.admin", "sync", {"latency_ms": latency})
         return True
     except Exception as e:
         logger.error(f"Sync failed: {e}")
@@ -94,6 +101,7 @@ async def ctx_dump(ctx: SystemContext, target_dir: Optional[str] = None) -> str:
     with open(filepath, "w", encoding="utf-8") as f:
         json.dump(dump_data, f, indent=4, ensure_ascii=False)
         
+    await log_event(ctx, "tools.admin", "dump", {"path": filepath})
     return filepath
 
 
@@ -135,6 +143,7 @@ async def ctx_load(session_id: str, ctx: SystemContext):
     ctx.sid_to_id[session_id] = label
     ctx.id_to_sid[label] = session_id
 
+    await log_event(ctx, "tools.admin", "load", {"session_id": session_id})
     return sb
 
 
@@ -150,6 +159,8 @@ async def ctx_growth(ctx: SystemContext) -> Dict[str, Any]:
         "sessions_week": 0,
         "sessions_month": 0,
         "db_size_mb": 0.0,
+        "logs_size_mb": 0.0,       # ← ДОБАВИТЬ
+        "total_size_mb": 0.0,      # ← ДОБАВИТЬ
         "db_growth_per_day_mb": None,
         "days_to_1gb": None,
         "days_to_10gb": None,
@@ -192,18 +203,70 @@ async def ctx_growth(ctx: SystemContext) -> Dict[str, Any]:
             size_bytes = os.path.getsize(db_path)
             result["db_size_mb"] = round(size_bytes / (1024 * 1024), 2)
 
+            # --- TASK 1: добавляем logs.db ---
+            logs_path = Path.home() / ".mnemostroma" / "logs.db"
+            logs_size_mb = round(os.path.getsize(logs_path) / (1024 * 1024), 2) if logs_path.exists() else 0.0
+            result["logs_size_mb"] = logs_size_mb
+            result["total_size_mb"] = round(result["db_size_mb"] + logs_size_mb, 2)
+            # ---------------------------------
+
             # Growth rate: sessions_today * avg_session_size
             if result["sessions_total"] > 0 and result["db_size_mb"] > 0:
                 avg_mb_per_session = result["db_size_mb"] / result["sessions_total"]
                 daily_growth_mb = result["sessions_today"] * avg_mb_per_session
                 result["db_growth_per_day_mb"] = round(daily_growth_mb, 4)
                 if daily_growth_mb > 0:
-                    result["days_to_1gb"]  = int((1024  - result["db_size_mb"]) / daily_growth_mb)
-                    result["days_to_10gb"] = int((10240 - result["db_size_mb"]) / daily_growth_mb)
+                    result["days_to_1gb"]  = int((1024  - result["total_size_mb"]) / daily_growth_mb)
+                    result["days_to_10gb"] = int((10240 - result["total_size_mb"]) / daily_growth_mb)
+
+                # --- TASK 4: baseline validation ---
+                if result["sessions_today"] > 0:
+                    actual_kb = (daily_growth_mb * 1024) / result["sessions_today"]
+                    deviation_pct = (actual_kb - 3.0) / 3.0 * 100
+                    result["per_session_kb"] = round(actual_kb, 2)
+                    if abs(deviation_pct) > 50:
+                        result["baseline_status"] = "ANOMALY"
+                    elif abs(deviation_pct) > 20:
+                        result["baseline_status"] = "ELEVATED"
+                    else:
+                        result["baseline_status"] = "NORMAL"
+                # ------------------------------------
+
+        # --- GrowthForecast: two-model projection ---
+        _logs_db = Path.home() / ".mnemostroma" / "logs.db"
+        _history = await GrowthForecast.load_history(_logs_db, days_back=30)
+        _forecast = GrowthForecast(_history)
+        _best     = _forecast.best()
+        _linear   = _forecast.linear()
+        _exp      = _forecast.exponential()
+        # --- end GrowthForecast ---
+
+        result["forecast"] = {
+            "best_model":       _best.model,
+            "daily_rate_mb":    _best.daily_rate_mb,
+            "days_to_1gb":      _best.days_to_1gb,
+            "days_to_10gb":     _best.days_to_10gb,
+            "r_squared":        _best.r_squared,
+        }
+        result["forecast_linear"] = {
+            "daily_rate_mb": _linear.daily_rate_mb,
+            "days_to_1gb":   _linear.days_to_1gb,
+            "r_squared":     _linear.r_squared,
+        }
+        result["forecast_exp"] = {
+            "daily_rate_mb": _exp.daily_rate_mb,
+            "days_to_1gb":   _exp.days_to_1gb,
+            "r_squared":     _exp.r_squared,
+        }
+        result["history_points"] = len(_history)
 
     except Exception as e:
         logger.error(f"ctx_growth: error: {e}")
 
+    await log_event(ctx, "tools.admin", "growth", {
+        "total": result["sessions_total"],
+        "db_mb": result["db_size_mb"],
+    })
     return result
 
 
@@ -282,4 +345,9 @@ async def ctx_bridge(ctx: SystemContext) -> Dict[str, Any]:
         "ram_sessions": len(ctx.ram_index),
     }
 
+    await log_event(ctx, "tools.admin", "bridge", {
+        "variables": len(active_variables),
+        "decisions": len(last_decisions),
+        "open_issues": len(open_issues),
+    })
     return result

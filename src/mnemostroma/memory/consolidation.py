@@ -3,6 +3,7 @@ import asyncio
 import time
 import logging
 from typing import Any, Optional, List
+from pathlib import Path
 from ..memory.scoring import calculate_score
 
 _CONS_BUILD_TAG_ = ""  # consolidation build tag
@@ -47,12 +48,31 @@ class ConsolidationWorker:
         interval = self.ctx.config.dissolver.consolidation_interval_sec
         _retention_interval = 86400  # cleanup logs once per 24h
         _last_retention = time.time()
+        self._snapshot_tick = getattr(self, '_snapshot_tick', 0)
         while self._running:
             try:
                 await asyncio.sleep(interval)
+                
+                # --- db_snapshots: record DB sizes every hour (every 12 ticks × 300s) ---
+                self._snapshot_tick += 1
+                if self._snapshot_tick % 12 == 0:
+                    try:
+                        _mnemo_dir  = Path.home() / ".mnemostroma"
+                        _db_mb      = (_mnemo_dir / "mnemostroma.db").stat().st_size / 1_048_576 \
+                                      if (_mnemo_dir / "mnemostroma.db").exists() else 0.0
+                        _logs_mb    = (_mnemo_dir / "logs.db").stat().st_size / 1_048_576 \
+                                      if (_mnemo_dir / "logs.db").exists() else 0.0
+                        if hasattr(self.ctx, 'log_writer') and self.ctx.log_writer:
+                            await self.ctx.log_writer.snapshot_db_sizes(_db_mb, _logs_mb)
+                    except Exception:
+                        pass  # snapshots are non-critical, never crash the worker
+                # --- end db_snapshots ---
+                
                 await self.consolidate()
                 # Log retention: delete entries older than 30 days
                 if time.time() - _last_retention >= _retention_interval:
+                    if hasattr(self.ctx, 'log_writer') and self.ctx.log_writer:
+                        await self.ctx.log_writer.cleanup(retention_days=30)
                     _last_retention = time.time()
             except Exception as e:
                 logger.error(f"Error in ConsolidationWorker: {e}", exc_info=True)
@@ -82,6 +102,11 @@ class ConsolidationWorker:
             sb.score = await calculate_score(0.5, sb.created_at, sb.importance, self.ctx)
 
         # 2.5 Log Recalc (v1.0 spec — Point #8)
+        from ..storage.log_writer import log_event
+        await log_event(self.ctx, "consolidation.recalc", "batch", {
+            "sessions_checked": len(self.ctx.ram_index),
+            "duration_ms": int((time.time() - now) * 1000)
+        })
 
         # 3. Trigger Dissolver
         if hasattr(self.ctx, 'dissolver') and self.ctx.dissolver:
@@ -115,6 +140,12 @@ class ConsolidationWorker:
             if now - self._last_anchor_decay >= interval_sec:
                 decayed = await self._run_anchor_decay(now)
                 self._last_anchor_decay = now
+                if decayed:
+                    await log_event(self.ctx, "anchor.decay", "batch", {
+                        "anchors_decayed": decayed,
+                        "threshold_days": cfg_ad.threshold_days,
+                    })
+
         logger.info(f"Consolidation completed for {len(self.ctx.ram_index)} RAM sessions.")
 
     async def _run_anchor_decay(self, now: float) -> int:

@@ -138,6 +138,17 @@ class LogWriter:
             except Exception as e:
                 logger.error(f"LogWriter drain error: {e}")
 
+    async def snapshot_db_sizes(self, db_size_mb: float, logs_size_mb: float) -> None:
+        """Write a db size snapshot. Called by ConsolidationWorker every hour."""
+        if self._db is None:
+            return
+        ts = int(time.time())
+        await self._db.execute(
+            "INSERT INTO db_snapshots (ts, db_size_mb, logs_size_mb) VALUES (?, ?, ?)",
+            (ts, db_size_mb, logs_size_mb),
+        )
+        await self._db.commit()
+
     async def stop(self):
         """Shutdown LogWriter gracefully."""
         if not self._running:

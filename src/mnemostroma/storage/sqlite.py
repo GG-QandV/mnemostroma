@@ -12,6 +12,7 @@ _LOGS_ID_DB_ = ""  # internal diagnostics id
 
 logger = logging.getLogger("mnemostroma.storage")
 
+
 async def init_db(db_path: str | Path, config: Optional[Any] = None) -> aiosqlite.Connection:
     """Initialize SQLite database with WAL mode and schemas.
 
@@ -38,6 +39,17 @@ async def init_db(db_path: str | Path, config: Optional[Any] = None) -> aiosqlit
     for schema in ALL_SCHEMAS:
         await db.execute(schema)
 
+    await db.execute("""
+        CREATE TABLE IF NOT EXISTS db_snapshots (
+            ts        INTEGER NOT NULL,
+            db_size_mb  REAL NOT NULL DEFAULT 0.0,
+            logs_size_mb REAL NOT NULL DEFAULT 0.0
+        )
+    """)
+    await db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_snapshots_ts ON db_snapshots(ts)"
+    )
+
     # Migrations
     await check_anchor_schema(db)
     await check_session_schema(db)
@@ -45,6 +57,7 @@ async def init_db(db_path: str | Path, config: Optional[Any] = None) -> aiosqlit
     await db.commit()
     logger.info(f"Database initialized at {db_path}")
     return db
+
 
 async def check_anchor_schema(db: aiosqlite.Connection) -> None:
     """Add missing columns to anchors table (migrations)."""
@@ -60,6 +73,16 @@ async def check_anchor_schema(db: aiosqlite.Connection) -> None:
     # embedding — added in Phase 11 (Guardian/Surfacing semantic match)
     try:
         await db.execute("ALTER TABLE anchors ADD COLUMN embedding BLOB")
+        await db.commit()
+    except Exception:
+        pass
+    # idx_anchors_flags_outcome — added in Phase 2 (Dreamer disk scan)
+    # Expression indices require SQLite 3.9.0+. Silently skip on older builds.
+    try:
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_anchors_flags_outcome "
+            "ON anchors(json_extract(flags, '$.outcome'))"
+        )
         await db.commit()
     except Exception:
         pass
@@ -79,6 +102,7 @@ async def check_session_schema(db: aiosqlite.Connection) -> None:
         await db.commit()
     except Exception:
         pass
+
 
 class DatabaseManager:
     """Manager for async persistence to SQLite.
@@ -261,7 +285,7 @@ class DatabaseManager:
                         embedding=embedding,
                         implicit_score=implicit_score,
                         intensity=intensity,
-                        embedding_model_version="gte-multilingual-base-int8-v1"
+                        embedding_model_version="multilingual-e5-small"
                     )
                     results.append(sb)
         except Exception as e:
@@ -460,6 +484,197 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Error getting anchor {anchor_id}: {e}")
             return None
+
+    async def find_anchors_by_flags(
+        self,
+        outcome: Optional[str] = None,
+        multi_session: Optional[bool] = None,
+        anchor_type: Optional[str] = None,
+        decay_level_max: int = 3,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list:
+        """Query anchors from disk by flag patterns using json_extract.
+
+        Uses idx_anchors_flags_outcome expression index when outcome filter is set.
+
+        Args:
+            outcome: Filter by flags.outcome ('pending','success','failure','neutral',
+                     'abandoned'). None = no filter.
+            multi_session: Filter by flags.multi_session. None = no filter.
+                           NOTE (T1): bool is converted to int (1/0) — SQLite json_extract
+                           returns integers for JSON booleans, not Python bools.
+            anchor_type: Filter by anchor_type column. None = no filter.
+            decay_level_max: Inclusive upper bound on decay_level (0–3).
+            limit: Page size for iterative deepening.
+            offset: Pagination offset for iterative deepening.
+
+        Returns:
+            List of Anchor objects, ordered by last_accessed_at DESC.
+        """
+        import numpy as np
+        from ..subconscious.anchor import Anchor
+
+        conditions = ["decay_level <= ?"]
+        params: list = [decay_level_max]
+
+        if outcome is not None:
+            conditions.append("json_extract(flags, '$.outcome') = ?")
+            params.append(outcome)
+
+        if multi_session is not None:
+            # T1 fix: json_extract returns 1/0 for JSON true/false
+            conditions.append("json_extract(flags, '$.multi_session') = ?")
+            params.append(1 if multi_session else 0)
+
+        if anchor_type is not None:
+            conditions.append("anchor_type = ?")
+            params.append(anchor_type)
+
+        where = " AND ".join(conditions)
+        params.extend([limit, offset])
+
+        sql = (
+            f"SELECT anchor_id, session_id, anchor_type, brief, key_facts, flags, "
+            f"decay_level, access_count, last_accessed_at, t_rel, created_at, updated_at, "
+            f"embedding "
+            f"FROM anchors "
+            f"WHERE {where} "
+            f"ORDER BY last_accessed_at DESC "
+            f"LIMIT ? OFFSET ?"
+        )
+
+        results = []
+        try:
+            async with self.db.execute(sql, params) as cursor:
+                async for row in cursor:
+                    emb = None
+                    if row[12] is not None:
+                        try:
+                            emb = np.frombuffer(row[12], dtype=np.float16).astype(np.float32)
+                        except Exception:
+                            pass
+                    results.append(Anchor(
+                        anchor_id=row[0],
+                        session_id=row[1],
+                        anchor_type=row[2],
+                        brief=row[3],
+                        key_facts=json.loads(row[4]),
+                        flags=json.loads(row[5]),
+                        decay_level=row[6],
+                        access_count=row[7],
+                        last_accessed_at=row[8],
+                        t_rel=json.loads(row[9]),
+                        created_at=row[10],
+                        updated_at=row[11],
+                        embedding=emb,
+                    ))
+        except Exception as e:
+            logger.error("find_anchors_by_flags failed: %s", e)
+        return results
+
+    async def find_sessions_by_flags(
+        self,
+        importance: Optional[str] = None,
+        urgency: Optional[str] = None,
+        has_tag: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list:
+        """Query SessionBriefs from disk by field/tag patterns.
+
+        Uses indexed columns (importance, urgency) directly.
+        For has_tag: uses json_each() on SQLite 3.38.0+, falls back to LIKE
+        on older versions (T2 fix). Fallback warning logged once per process.
+
+        Args:
+            importance: Filter by importance column. None = no filter.
+            urgency: Filter by urgency column. None = no filter.
+            has_tag: Tags JSON array must contain this string. None = no filter.
+            limit: Page size.
+            offset: Pagination offset.
+
+        Returns:
+            List of SessionBrief objects ordered by created_at DESC.
+        """
+        from ..memory.session_index import SessionBrief
+        import numpy as np
+        import sqlite3
+
+        conditions = []
+        params: list = []
+
+        if importance is not None:
+            conditions.append("s.importance = ?")
+            params.append(importance)
+
+        if urgency is not None:
+            conditions.append("s.urgency = ?")
+            params.append(urgency)
+
+        if has_tag is not None:
+            # T2: json_each() available only in SQLite 3.38.0+
+            sqlite_ver = tuple(int(x) for x in sqlite3.sqlite_version.split("."))
+            if sqlite_ver >= (3, 38, 0):
+                conditions.append(
+                    "EXISTS (SELECT 1 FROM json_each(s.tags) WHERE value = ?)"
+                )
+                params.append(has_tag)
+            else:
+                if not getattr(self, "_json_each_warned", False):
+                    logger.warning(
+                        "find_sessions_by_flags: SQLite %s < 3.38.0, "
+                        "json_each() unavailable — using LIKE fallback for tag search",
+                        sqlite3.sqlite_version,
+                    )
+                    self._json_each_warned = True
+                conditions.append('s.tags LIKE ?')
+                params.append(f'%"{has_tag}"%')
+
+        where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+        params.extend([limit, offset])
+
+        sql = (
+            f"SELECT s.session_id, s.created_at, s.importance, s.tags, s.brief, "
+            f"s.conflict, s.urgency, s.deadline_ts, s.urgency_expired, s.bare_entity, "
+            f"s.implicit_score, s.resolution, s.intensity, s.embedding "
+            f"FROM sessions s "
+            f"{where} "
+            f"ORDER BY s.created_at DESC "
+            f"LIMIT ? OFFSET ?"
+        )
+
+        results = []
+        try:
+            async with self.db.execute(sql, params) as cursor:
+                async for row in cursor:
+                    embedding = None
+                    if row[13] is not None:
+                        try:
+                            embedding = np.frombuffer(row[13], dtype=np.float16)
+                        except Exception:
+                            pass
+                    results.append(SessionBrief(
+                        session_id=row[0],
+                        created_at=row[1],
+                        importance=row[2],
+                        tags=json.loads(row[3]),
+                        brief=row[4],
+                        score=0.0,
+                        resolution=row[11] if row[11] is not None else 1.0,
+                        conflict_flag=bool(row[5]),
+                        urgency=row[6],
+                        deadline_ts=row[7],
+                        urgency_expired=bool(row[8]),
+                        bare_entity=bool(row[9]),
+                        embedding=embedding,
+                        implicit_score=row[10] if row[10] is not None else 0.5,
+                        intensity=row[12] if row[12] is not None else 0.0,
+                        embedding_model_version="multilingual-e5-small",
+                    ))
+        except Exception as e:
+            logger.error("find_sessions_by_flags failed: %s", e)
+        return results
 
     async def check_experience_schema(self) -> None:
         """Add emotion columns to experience_metrics if they don't exist (v1.4 migration)."""
@@ -679,5 +894,14 @@ class DatabaseManager:
                 logger.error(f"SQLite error flushing batch item: {e}", exc_info=True)
 
         await self.db.commit()
+
+
+        # Log storage flush (v1.0 spec — Point #15)
+        if self.ctx is not None:
+            from .log_writer import log_event
+            await log_event(self.ctx, "storage.flush", "batch", {
+                "flushed_count": len(batch),
+                "queue_depth": self.queue.qsize()
+            })
 
         logger.debug(f"Flushed {len(batch)} sessions to SQLite")

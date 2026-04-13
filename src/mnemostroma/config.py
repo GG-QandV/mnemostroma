@@ -99,6 +99,9 @@ class ObserverConfig:
     gliner_mode: str
     gliner_auto_switch_precision_threshold: float
     gliner_auto_switch_after_sessions: int
+    # B.3 — embedding-based mention_type classification
+    mention_type_enabled: bool = True
+    mention_type_threshold: float = 0.7
 
 @dataclass(frozen=True)
 class TunerConfig:
@@ -168,6 +171,7 @@ class ModelManifest:
         for name, m_data in data['active_models'].items():
             models[name] = ModelDefinition(**m_data)
         return cls(active_models=models)
+
 
 @dataclass(frozen=True)
 class CalibrationConfig:

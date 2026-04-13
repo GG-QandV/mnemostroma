@@ -1217,18 +1217,59 @@ async def _cmd_growth_async(db_path: str) -> None:
             counts[label] = row[0] if row else 0
 
         size_mb = round(db_path_obj.stat().st_size / (1024 * 1024), 2)
+        # --- TASK 1: добавляем logs.db ---
+        logs_path_obj = Path.home() / ".mnemostroma" / "logs.db"
+        logs_size_mb = round(logs_path_obj.stat().st_size / (1024 * 1024), 2) if logs_path_obj.exists() else 0.0
+        total_size_mb = round(size_mb + logs_size_mb, 2)
+        # ---------------------------------
         avg_mb = size_mb / counts["total"] if counts["total"] > 0 else 0.0
         daily_mb = round(counts["today"] * avg_mb, 4)
-        days_to_1gb  = int((1024  - size_mb) / daily_mb) if daily_mb > 0 else None
-        days_to_10gb = int((10240 - size_mb) / daily_mb) if daily_mb > 0 else None
+        days_to_1gb  = int((1024  - total_size_mb) / daily_mb) if daily_mb > 0 else None
+        days_to_10gb = int((10240 - total_size_mb) / daily_mb) if daily_mb > 0 else None
 
     print(f"Sessions — total: {counts['total']}  today: {counts['today']}"
           f"  week: {counts['week']}  month: {counts['month']}")
-    print(f"DB size:  {size_mb} MB")
+    # --- TASK 1: три строки хранилища вместо одной ---
+    print(f"Storage:")
+    print(f"  mnemostroma.db  {size_mb} MB")
+    print(f"  logs.db         {logs_size_mb} MB")
+    print(f"  ─────────────────────────")
+    print(f"  total           {total_size_mb} MB")
+    # -------------------------------------------------
     print(f"Growth:   {daily_mb} MB/day" if daily_mb > 0 else "Growth:   insufficient data")
     if days_to_1gb is not None:
         print(f"Forecast: {days_to_1gb} days to 1 GB  |  {days_to_10gb} days to 10 GB")
+    # --- TASK 4: baseline validation ---
+    if daily_mb > 0 and counts["today"] > 0:
+        SPEC_BASELINE_KB_PER_SESSION = 3.0  # 9 MB/month / 3000 sessions = 3 KB/session
+        actual_kb = (daily_mb * 1024) / counts["today"]
+        deviation_pct = (actual_kb - SPEC_BASELINE_KB_PER_SESSION) / SPEC_BASELINE_KB_PER_SESSION * 100
+        if abs(deviation_pct) > 50:
+            status = "⚠️  ANOMALY"
+        elif abs(deviation_pct) > 20:
+            status = "△  ELEVATED"
+        else:
+            status = "✓  NORMAL"
+        print(f"Per-session: {round(actual_kb, 2)} KB/session  {status}  (spec: 3.0 KB)")
+    # -----------------------------------
+    fc = result.get("forecast", {})
+    fc_lin = result.get("forecast_linear", {})
+    fc_exp = result.get("forecast_exp", {})
+    pts    = result.get("history_points", 0)
 
+    if fc.get("model") == "insufficient_data":
+        print(f"\nForecast         insufficient data ({pts} snapshots, need ≥3)")
+        print(f"                 Snapshots are written hourly — check back tomorrow")
+    else:
+        print(f"\nForecast model   {fc['best_model']}  (R²={fc['r_squared']})")
+        print(f"  Daily rate:    {fc['daily_rate_mb']} MB/day")
+        d1 = fc['days_to_1gb']
+        d10 = fc['days_to_10gb']
+        print(f"  Days to 1 GB:  {d1 if d1 > 0 else '—'}")
+        print(f"  Days to 10 GB: {d10 if d10 > 0 else '—'}")
+        print(f"\n  Linear:  rate={fc_lin['daily_rate_mb']} MB/day  R²={fc_lin['r_squared']}")
+        print(f"  Exp:     rate={fc_exp['daily_rate_mb']} MB/day  R²={fc_exp['r_squared']}")
+        print(f"  History: {pts} snapshots (last 30 days)")
 
 def _print_help():
     print(
