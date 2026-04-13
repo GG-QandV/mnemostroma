@@ -3,6 +3,7 @@ import asyncio
 import signal
 import logging
 import sys
+import subprocess
 import json
 from pathlib import Path
 
@@ -438,6 +439,20 @@ def _cmd_setup() -> None:
         _macos_preflight()
     elif sys.platform == "win32":
         _windows_preflight()
+
+    # Tray support — silent auto-install
+    try:
+        import pystray
+    except ImportError:
+        print("  ↓ Installing tray support...")
+        try:
+            subprocess.run(
+                [sys.executable, "-m", "pip", "install", "pystray"],
+                check=True,
+                capture_output=True
+            )
+        except Exception:
+            pass
 
     # 6. Check/Install models
     manifest_dest = _MNEMO_DIR / "models_manifest.json"
