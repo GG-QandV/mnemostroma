@@ -1461,7 +1461,11 @@ def cli():
         run_logs(la.db, la.days, la.json)
 
     elif command == "tray":
-        from mnemostroma.tools.tray import run_tray
+        try:
+            from mnemostroma.tools.tray import run_tray
+        except ImportError:
+            print("Error: tray support not installed. Run: pip install mnemostroma[tray]")
+            return
         import argparse as _ap
         p = _ap.ArgumentParser(prog="mnemostroma tray", add_help=False)
         p.add_argument("--db",       default="logs.db", help="Path to logs.db")
@@ -1470,7 +1474,11 @@ def cli():
         run_tray(Path(ta.db), interval=ta.interval)
 
     elif command == "watch":
-        from mnemostroma.tools.watch import run_watch
+        try:
+            from mnemostroma.tools.watch import run_watch
+        except ImportError:
+            print("Error: watch module not found. Run: pip install -e .")
+            return
         import argparse as _ap
         p = _ap.ArgumentParser(prog="mnemostroma watch", add_help=False)
         p.add_argument("--db",       default="logs.db",  help="Path to logs.db")
