@@ -2,7 +2,7 @@
 
 ### The memory layer for AI agents
 
-![Version](https://img.shields.io/badge/version-v1.7.5--alpha-orange)
+![Version](https://img.shields.io/badge/version-v1.7.5-orange)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue)
 ![Tests](https://img.shields.io/badge/tests-403%20passing-brightgreen)
 ![License](https://img.shields.io/badge/license-FSL--1.1--MIT-lightgrey)
@@ -103,7 +103,7 @@ This is not a database with TTL. This is how human memory works.
 
 ## Status
 
-**Current:** v1.7.5 alpha | 2026-04-11
+**Current:** v1.7.5 | 2026-04-12
 
 | Component                                | Status                          |
 | ---------------------------------------- | ------------------------------- |
@@ -138,6 +138,19 @@ pip install "git+https://github.com/GG-QandV/mnemostroma.git[sse]"
 # With system tray:
 pip install "git+https://github.com/GG-QandV/mnemostroma.git[all]"
 ```
+
+### Installation Extras
+
+| Extra | Installs | Commands unlocked |
+|---|---|---|
+| *(base)* | Core daemon | `setup` `on` `off` `status` `watch` `logs` |
+| `[sse]` | SSE adapter + proxy | `sse` |
+| `[tray]` | System tray (pystray) | `tray` |
+| `[all]` | Everything above | All commands |
+
+> **Note:** On Linux, `[tray]` also requires system libraries:
+> `sudo apt install libgirepository1.0-dev gir1.2-appindicator3-0.1`
+
 
 **Windows (PowerShell):**
 ```powershell
@@ -187,6 +200,10 @@ mnemostroma logs --days 7     # Memory growth and calibration report
 mnemostroma watch             # Live terminal dashboard
 mnemostroma tray              # System tray indicator (requires [tray] extra)
 ```
+
+> **Note:** if `tray` command is missing or fails, ensure you installed the extra:
+> `pip install "mnemostroma[tray]"`
+
 
 > **Next step:** Set up daemon auto-start on your OS ([Linux](./scripts/linux/README.md) | [macOS](./scripts/macos/README.md) | [Windows](./scripts/windows/README.md)) — see [Daemon Installation Guide →](./scripts/README.md)
 
@@ -346,7 +363,7 @@ taskschd.msc
 ```
 
 > **Windows:** If `mnemostroma` is not in PATH, use the full path:
-> `C:\Users\YourName\AppData\Local\Programs\Python\Python312\Scripts\mnemostroma.exe`
+> `C:\Users\<YourName>\AppData\Local\Programs\Python\Python312\Scripts\mnemostroma.exe`
 
 Config file locations:
 - **Linux/macOS:** `~/.config/Claude/claude_desktop_config.json`
@@ -365,7 +382,7 @@ Claude Code uses the stdio adapter. Run `mnemostroma setup` first — it prints 
 {
   "mcpServers": {
     "mnemostroma": {
-      "command": "/home/yourname/.local/bin/mnemostroma",
+      "command": "/home/<yourname>/.local/bin/mnemostroma",
       "args": ["mcp"]
     }
   }
@@ -377,7 +394,7 @@ Claude Code uses the stdio adapter. Run `mnemostroma setup` first — it prints 
 {
   "mcpServers": {
     "mnemostroma": {
-      "command": "C:\\Users\\YourName\\AppData\\Local\\Programs\\Python\\Python312\\Scripts\\mnemostroma.exe",
+      "command": "C:\\Users\\<YourName>\\AppData\\Local\\Programs\\Python\\Python312\\Scripts\\mnemostroma.exe",
       "args": ["mcp"]
     }
   }
@@ -435,7 +452,9 @@ All IDEs use the stdio adapter. Multiple IDEs can connect simultaneously — eac
 | **VS Code Copilot** | `~/.config/Code/User/mcp.json` | ✅ |
 | **Claude Code** | `~/.claude/mcp.json` | ✅ |
 | **Antigravity** | `mcp.json` (project root) | ✅ |
-| **Continue** | `~/.continue/config.yaml` | ⚠️ env block not supported in v1.2.22 |
+| **Continue** | `~/.continue/config.yaml` | ❌ `env` blocks not supported in v1.2.22 (limitation) |
+
+> **Note on Continue (IDE):** As of v1.2.22, Continue does not support `env` blocks in MCP configurations. This prevents it from correctly using the `NODE_EXTRA_CA_CERTS` variable required for the Mnemostroma passthrough proxy. Use Claude Code or VS Code with standard stdio adapters for the full experience.
 
 **Linux / macOS** — add to your IDE's MCP config:
 ```json
@@ -551,4 +570,4 @@ Cloud Sync, Subconscious Layer (personalized models), Shared Experience, and Tea
 ---
 
 *Mnemostroma — the memory layer for AI agents*
-*μνήμη + στρῶμα · offline · ~630MB RAM · ~20ms · 403 tests*
+*μνήμη + στρῶма · offline · ~630MB RAM · ~20ms · 403 tests · v1.7.5*
