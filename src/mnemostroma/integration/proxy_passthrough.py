@@ -40,16 +40,34 @@ _metrics: dict[str, int] = {
     "errors":    0,
 }
 
+_session_id: str | None = None
 
-def _current_session() -> str:
+
+async def _resolve_session() -> str:
+    """Get session_id from daemon via IPC. Caches result in module-level var.
+    Falls back to file, then to date-based anonymous session."""
+    global _session_id
+    if _session_id:
+        return _session_id
+    try:
+        result = await asyncio.wait_for(_ipc_call("ctx_active", {}), timeout=3.0)
+        sid = (result or {}).get("session_id", "")
+        if sid:
+            _session_id = sid
+            logger.info("session bound via IPC: %s", sid)
+            return sid
+    except Exception as exc:
+        logger.debug("ctx_active IPC failed: %s", exc)
+    # fallback: file written by mcp_stdio_adapter
     try:
         sid = _SESSION_FILE.read_text(encoding="utf-8").strip()
-        if sid:
+        if sid and not sid.startswith("passthrough-"):
+            _session_id = sid
             return sid
     except OSError:
         pass
     sid = f"passthrough-{date.today().isoformat()}"
-    logger.warning("current_session missing — using fallback: %s", sid)
+    logger.warning("session fallback: %s", sid)
     return sid
 
 
@@ -57,7 +75,7 @@ async def _observe(text: str) -> None:
     if not text.strip():
         return
     try:
-        await _ipc_call("observe", {"session_id": _current_session(), "text": text})
+        await _ipc_call("observe", {"session_id": await _resolve_session(), "text": text})
         _metrics["observed"] += 1
     except Exception as exc:
         _metrics["errors"] += 1

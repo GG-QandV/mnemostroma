@@ -1,6 +1,6 @@
 [project]
 name = "mnemostroma"
-version = "1.7.5"
+version = "1.8.0"
 description = "Autonomous memory layer for AI agents — offline, RAM-first, no cloud"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -90,3 +90,29 @@ mnemostroma = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+strict = false
+files = ["src/mnemostroma"]
+ignore_missing_imports = true
+
+[tool.importlinter]
+root_package = "mnemostroma"
+
+[[tool.importlinter.contracts]]
+name = "Domain isolation"
+type = "forbidden"
+source_modules = ["mnemostroma.domain"]
+forbidden_modules = [
+    "mnemostroma.adapters",
+    "mnemostroma.ports",
+    "aiosqlite",
+    "onnxruntime",
+    "numpy",
+    "asyncio"
+]
