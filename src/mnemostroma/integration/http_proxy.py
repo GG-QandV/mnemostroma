@@ -270,15 +270,22 @@ def _make_socket(port: int) -> socket.socket:
 async def run(port: int = 8767) -> None:
     logging.basicConfig(level=logging.INFO)
     sock = _make_socket(port)
-    cfg  = uvicorn.Config(
+
+    _cert = _MNEMO_DIR / "certs" / "passthrough-cert.pem"
+    _key  = _MNEMO_DIR / "certs" / "passthrough-key.pem"
+    _tls  = _cert.exists() and _key.exists()
+
+    cfg = uvicorn.Config(
         app,
-        fd          = sock.fileno(),
-        log_level   = "warning",
-        access_log  = False,
+        fd            = sock.fileno(),
+        log_level     = "warning",
+        access_log    = False,
+        **({"ssl_certfile": str(_cert), "ssl_keyfile": str(_key)} if _tls else {}),
     )
     srv = uvicorn.Server(cfg)
-    logger.info(f"HTTP Proxy → http://127.0.0.1:{port}")
-    logger.info("Agent env: ANTHROPIC_BASE_URL=http://127.0.0.1:8767")
+    proto = "https" if _tls else "http"
+    logger.info(f"Proxy → {proto}://127.0.0.1:{port}  (TLS={'yes' if _tls else 'no'})")
+    logger.info(f"Agent env: ANTHROPIC_BASE_URL={proto}://127.0.0.1:{port}")
     try:
         await srv.serve()
     finally:
