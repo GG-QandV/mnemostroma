@@ -13,23 +13,28 @@ logger = logging.getLogger("mnemostroma.subconscious.anchor_index")
 
 # Fact priority for key_facts selection
 FACT_PRIORITY: Dict[str, int] = {
-    "решение": 1,
-    "запрет": 1,
     "decision": 1,
+    "решение": 1,
+    "prohibition": 1,
+    "запрет": 1,
     "ban": 1,
+    "person": 2,
     "человек": 2,
+    "organization": 2,
     "организация": 2,
     "per": 2,
     "org": 2,
+    "technology": 3,
     "технология": 3,
     "tech": 3,
-    "адрес": 3,
+    "address": 3,
     "loc": 3,
-    "дата": 4,
     "date": 4,
+    "дата": 4,
 }
 
 DEFAULT_MAX_CAPACITY = 1000
+
 
 class AnchorIndex:
     """RAM-resident anchor index.
@@ -152,12 +157,16 @@ class AnchorIndex:
         """Determine anchor type from importance + entities."""
         entity_types = {e.get("type", "") for e in entities}
         
-        if "решение" in entity_types or "decision" in entity_types:
+        if "decision" in entity_types or "решение" in entity_types:
             return "decision"
-        if "запрет" in entity_types or "ban" in entity_types:
+        if (
+            "prohibition" in entity_types 
+            or "ban" in entity_types 
+            or "запрет" in entity_types
+        ):
             return "constraint"
         if importance == "critical":
             return "milestone"
-        if "дата" in entity_types or "date" in entity_types:
+        if "date" in entity_types or "дата" in entity_types:
             return "event"
         return "observation"

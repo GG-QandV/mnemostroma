@@ -26,7 +26,7 @@ class BertNER:
             "5": "B-ORG", "6": "I-ORG",
             "7": "B-LOC", "8": "I-LOC"
         }
-        # Mapping to English labels for pipeline compatibility
+        # Mapping to Mnemostroma labels for pipeline compatibility
         self._label_map = {
             "DATE": "date",
             "PER": "person",
@@ -93,7 +93,7 @@ class BertNER:
                 continue
 
             bio, ent_type = label.split("-")
-            ru_type = self._label_map.get(ent_type, ent_type)
+            mapped_type = self._label_map.get(ent_type, ent_type)
             start, end = encoded.offsets[i]
             
             # Check if this token is a subword (## prefix or same word_id)
@@ -104,13 +104,13 @@ class BertNER:
                 if current_entity:
                     entities.append(current_entity)
                 current_entity = {
-                    "type": ru_type,
+                    "type": mapped_type,
                     "value": text[start:end],
                     "score": float(score),
                     "start": int(start),
                     "end": int(end)
                 }
-            elif bio == "I" and current_entity and current_entity["type"] == ru_type:
+            elif bio == "I" and current_entity and current_entity["type"] == mapped_type:
                 # Continue existing entity
                 current_entity["value"] = text[current_entity["start"]:end]
                 current_entity["end"] = int(end)

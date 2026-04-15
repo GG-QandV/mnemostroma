@@ -44,30 +44,26 @@ _session_id: str | None = None
 
 
 async def _resolve_session() -> str:
-    """Get session_id from daemon via IPC. Caches result in module-level var.
-    Falls back to file, then to date-based anonymous session."""
-    global _session_id
-    if _session_id:
-        return _session_id
+    """Get session_id from daemon via IPC or fallback to file/date."""
     try:
+        # Try IPC first
         result = await asyncio.wait_for(_ipc_call("ctx_active", {}), timeout=3.0)
         sid = (result or {}).get("session_id", "")
         if sid:
-            _session_id = sid
-            logger.info("session bound via IPC: %s", sid)
             return sid
     except Exception as exc:
         logger.debug("ctx_active IPC failed: %s", exc)
-    # fallback: file written by mcp_stdio_adapter
+
+    # Fallback 1: File written by mcp_stdio_adapter
     try:
         sid = _SESSION_FILE.read_text(encoding="utf-8").strip()
         if sid and not sid.startswith("passthrough-"):
-            _session_id = sid
             return sid
     except OSError:
         pass
+
+    # Fallback 2: Date-based anonymous session
     sid = f"passthrough-{date.today().isoformat()}"
-    logger.warning("session fallback: %s", sid)
     return sid
 
 

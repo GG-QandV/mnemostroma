@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     urgency_active          INTEGER DEFAULT 0,
     urgency_expired         INTEGER DEFAULT 0,
     bare_entity             INTEGER DEFAULT 0,
-    embedding_model_version TEXT    DEFAULT 'gte-multilingual-base-int8-v1',
+    embedding_model_version TEXT    DEFAULT 'multilingual-e5-small',
     embedding               BLOB    -- float16 768d binary
 );
 """
@@ -87,7 +87,7 @@ CREATE TABLE IF NOT EXISTS content_versions (
     status          TEXT,     -- draft/active/rejected/archived
     rejected_reason TEXT,
     embedding       BLOB,     -- float16 768d binary
-    embedding_model_version TEXT DEFAULT 'gte-multilingual-base-int8-v1',
+    embedding_model_version TEXT DEFAULT 'multilingual-e5-small',
     created_at      INTEGER,
     PRIMARY KEY (content_id, version)
 );
@@ -95,12 +95,12 @@ CREATE TABLE IF NOT EXISTS content_versions (
 
 SCHEMA_MODEL_REGISTRY = """
 CREATE TABLE IF NOT EXISTS embedding_model_registry (
-    model_key        TEXT PRIMARY KEY,   -- 'gte-multilingual-base-int8-v1'
+    model_key        TEXT PRIMARY KEY,   -- e.g. 'multilingual-e5-small'
     model_name       TEXT,               -- human-readable
     dim              INTEGER,            -- 768
     quantization     TEXT,               -- 'int8'
     registered_at    INTEGER,            -- unix timestamp
-    is_current       INTEGER DEFAULT 0   -- 1 = текущая активная модель
+    is_current       INTEGER DEFAULT 0   -- 1 = current active model
 );
 """
 
@@ -117,7 +117,8 @@ INDICES = [
     "CREATE INDEX IF NOT EXISTS idx_anchors_session ON anchors(session_id);",
     "CREATE INDEX IF NOT EXISTS idx_precision_session ON precision_log(session_id);",
     "CREATE INDEX IF NOT EXISTS idx_cv_status ON content_versions(status);",
-    "CREATE INDEX IF NOT EXISTS idx_cv_session ON content_versions(content_id);"
+    "CREATE INDEX IF NOT EXISTS idx_cv_session ON content_versions(content_id);",
+    "CREATE INDEX IF NOT EXISTS idx_anchors_flags_outcome ON anchors(json_extract(flags, '$.outcome'));",
 ]
 
 SCHEMA_EXPERIENCE = """

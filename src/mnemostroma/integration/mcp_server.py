@@ -71,37 +71,37 @@ async def list_tools() -> list[Tool]:
     return [
         Tool(
             name="ctx_semantic",
-            description="Семантический поиск по памяти. Возвращает релевантные сессии.",
+            description="Semantic search in memory. Returns relevant sessions based on meaning.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "Тема для поиска в памяти"},
-                    "top_k": {"type": "integer", "default": 20, "description": "Кандидаты для ранжирования"},
-                    "top_n": {"type": "integer", "default": 5, "description": "Финальных результатов после rerank"}
+                    "query": {"type": "string", "description": "Search query or topic"},
+                    "top_k": {"type": "integer", "default": 20, "description": "Number of candidates for initial ranking"},
+                    "top_n": {"type": "integer", "default": 5, "description": "Number of final results after reranking"}
                 },
                 "required": ["query"]
             }
         ),
         Tool(
             name="ctx_get",
-            description="Получить сессию по ID. Загружает из RAM или SQLite.",
+            description="Retrieve a specific session by its ID. Loads from RAM or SQLite.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "session_id": {"type": "string", "description": "ID сессии"}
+                    "session_id": {"type": "string", "description": "Unique session identifier"}
                 },
                 "required": ["session_id"]
             }
         ),
         Tool(
             name="ctx_search",
-            description="Поиск сессий по тегам. Быстрее семантического, требует точного совпадения тегов.",
+            description="Search for sessions using tags. Faster than semantic search, requires exact tag matches.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "tags": {"type": "array", "items": {"type": "string"}, "description": "Теги для фильтрации"},
+                    "tags": {"type": "array", "items": {"type": "string"}, "description": "List of tags to filter by"},
                     "importance": {"type": "string", "description": "critical | important | background | principle"},
-                    "age": {"type": "string", "description": "Фильтр по age_signal"},
+                    "age": {"type": "string", "description": "Filter by age signal"},
                     "limit": {"type": "integer", "default": 10}
                 },
                 "required": ["tags"]
@@ -109,47 +109,47 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="ctx_full",
-            description="Полный текст сессии из SQLite включая content_full. Использовать только когда нужна точная цитата.",
+            description="Get the complete session transcript including full content from SQLite. Use only when exact wording is required.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "session_id": {"type": "string", "description": "ID сессии"}
+                    "session_id": {"type": "string", "description": "Unique session identifier"}
                 },
                 "required": ["session_id"]
             }
         ),
         Tool(
             name="ctx_anchors",
-            description="Якоря субсознательного слоя: решения, факты, персоны, события, дедлайны. Быстрый RAM-доступ. type=deadline заменяет ctx_urgent.",
+            description="Retrieve subconscious layer anchors: decisions, facts, people, events, or deadlines. Fast RAM access. type=deadline replaces ctx_urgent.",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "anchor_type": {"type": "string", "description": "decision | constraint | milestone | event | observation | deadline"},
-                    "session_id": {"type": "string", "description": "Фильтр по сессии"},
+                    "session_id": {"type": "string", "description": "Filter by specific session ID"},
                     "limit": {"type": "integer", "default": 20}
                 }
             }
         ),
         Tool(
             name="ctx_precision",
-            description="Прецизионные артефакты: ссылки, формулы, цитаты, данные. Хранятся дословно.",
+            description="Retrieve high-precision artifacts: links, formulas, quotes, or specific data points. Stored verbatim.",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "precision_type": {"type": "string", "description": "link | concept | quote | formula | data"},
-                    "importance": {"type": "string", "description": "Фильтр по важности"},
+                    "importance": {"type": "string", "description": "Filter by importance"},
                     "limit": {"type": "integer", "default": 20}
                 }
             }
         ),
         Tool(
             name="content_search",
-            description="Семантический поиск по контентной ветке (код, конфиги, тексты). Возвращает метаданные блоков.",
+            description="Semantic search across the content branch (code, configs, docs). Returns block metadata.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "Описание искомого контента"},
-                    "project_id": {"type": "string", "description": "Фильтр по проекту"},
+                    "query": {"type": "string", "description": "Search query or topic"},
+                    "project_id": {"type": "string", "description": "Filter by project identifier"},
                     "status": {"type": "string", "default": "active", "description": "active | archived | all"},
                     "top_k": {"type": "integer", "default": 5}
                 },
@@ -158,19 +158,19 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="content_get",
-            description="Метаданные блока контента по ID. version=null → последняя активная версия.",
+            description="Retrieve metadata for a specific content block by ID. version=null returns the latest active version.",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "content_id": {"type": "string"},
-                    "version": {"type": "integer", "description": "Конкретная версия (опционально)"}
+                    "version": {"type": "integer", "description": "Specific version number (optional)"}
                 },
                 "required": ["content_id"]
             }
         ),
         Tool(
             name="content_raw",
-            description="Полный текст версии контента. Дорогой вызов — только когда нужен точный текст.",
+            description="Retrieve the full raw text of a content version. High latency call — use only when exact text is needed.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -182,7 +182,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="content_history",
-            description="История всех версий контентного блока включая отклонённые. Только метаданные.",
+            description="Retrieve the history of all versions for a content block, including rejected ones. Returns metadata only.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -193,12 +193,12 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="ctx_bridge",
-            description="Структурированный пакет передачи контекста следующему агенту: intent, решения, конфликты, дедлайны.",
+            description="Generate a structured context bridge package for handoff to the next agent (intent, decisions, conflicts, deadlines).",
             inputSchema={"type": "object", "properties": {}}
         ),
         Tool(
             name="ctx_recent",
-            description="Вернуть сессии за последние N дней. by='created' — по дате создания, by='accessed' — по последнему обращению.",
+            description="Retrieve sessions from the last N days. by='created' (creation date) or by='accessed' (last access date).",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -208,6 +208,56 @@ async def list_tools() -> list[Tool]:
                 },
             },
         ),
+        # Tool(
+        #     name="ctx_active",
+        #     description="Summary of current active context: goals, variables, deadlines, conflicts.",
+        #     inputSchema={"type": "object", "properties": {}}
+        # ),
+        # Tool(
+        #     name="ctx_urgent",
+        #     description="Urgent tasks and deadlines for the near future.",
+        #     inputSchema={
+        #         "type": "object",
+        #         "properties": {
+        #             "hours_ahead": {"type": "number", "default": 72.0}
+        #         }
+        #     }
+        # ),
+        # Tool(
+        #     name="ctx_expire",
+        #     description="Mark a session's urgency status as expired.",
+        #     inputSchema={
+        #         "type": "object",
+        #         "properties": {
+        #             "session_id": {"type": "string", "description": "Session ID"}
+        #         },
+        #         "required": ["session_id"]
+        #     }
+        # ),
+        # Tool(
+        #     name="ctx_load",
+        #     description="Lazy load a session from cold storage into the RAM index.",
+        #     inputSchema={
+        #         "type": "object",
+        #         "properties": {
+        #             "session_id": {"type": "string", "description": "Session ID"}
+        #         },
+        #         "required": ["session_id"]
+        #     }
+        # ),
+        # Tool(
+        #     name="save_content",
+        #     description="Save a new version of a content block (code, text, data).",
+        #     inputSchema={
+        #         "type": "object",
+        #         "properties": {
+        #             "content_id": {"type": "string"},
+        #             "text": {"type": "string", "description": "Full content text"},
+        #             "why_changed": {"type": "string", "description": "Reason for change"}
+        #         },
+        #         "required": ["content_id", "text"]
+        #     }
+        # ),
     ]
 
 
@@ -276,17 +326,11 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             )
             return [TextContent(type="text", text=_serialize(result))]
 
-        elif name == "ctx_active":
-            return [TextContent(type="text", text=json.dumps({
-                "error": "ctx_active removed: use <memorycontext> injected in system prompt",
-                "hint": "use ctx_semantic or ctx_anchors for programmatic access",
-            }))]
-
-        elif name == "ctx_urgent":
-            # Redirected: ctx_urgent merged into ctx_anchors(type="deadline")
-            from mnemostroma.tools.read import ctx_anchors
-            result = await ctx_anchors(ctx=ctx, anchor_type="deadline", limit=20)
-            return [TextContent(type="text", text=_serialize(result))]
+        # DISABLED ctx_active — replaced by ConductorProxy XML injection
+        # DISABLED ctx_urgent — merged into ctx_anchors(type="deadline")
+        # DISABLED ctx_expire — API minimization 2026-04-10
+        # DISABLED ctx_load   — internal only
+        # DISABLED save_content — API minimization 2026-04-10
 
         elif name == "content_search":
             from mnemostroma.tools.content import content_search

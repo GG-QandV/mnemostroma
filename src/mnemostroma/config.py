@@ -130,6 +130,8 @@ class StorageConfig:
     sqlite_archive_cutoff_years: int
     async_flush_interval_sec: int
     batch_flush_size: int
+    session_repo: str = "legacy"  # "legacy" | "shadow" | "new"
+    backup_interval_hours: int = 3
 
 @dataclass(frozen=True)
 class ExperienceConfig:

@@ -379,8 +379,11 @@ async def test_observe_calls_ipc_with_correct_args(tmp_path):
          patch.object(proxy_passthrough, "_ipc_call", _fake_ipc):
         await proxy_passthrough._observe("important decision made")
 
-    assert captured == [("observe", {"session_id": "explicit-sid",
-                                     "text": "important decision made"})]
+    assert captured == [
+        ("ctx_active", {}),
+        ("observe", {"session_id": "explicit-sid",
+                     "text": "important decision made"})
+    ]
 
 
 @pytest.mark.asyncio
@@ -678,7 +681,8 @@ async def test_metrics_track_requests_observed_skipped_independently(tmp_path):
                        return_value=mock_model):
                 await client.get("/v1/models")
 
-        await asyncio.sleep(0.02)
+            # drain fire-and-forget _observe task while _ipc_call is still patched
+            await asyncio.sleep(0.02)
 
     assert _metrics["requests"] == before["requests"] + 2   # both counted
     assert _metrics["observed"]  >= before["observed"] + 1  # at least 1 from POST

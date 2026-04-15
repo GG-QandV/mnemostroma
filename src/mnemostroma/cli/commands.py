@@ -373,10 +373,10 @@ _BANNER = """
 def _cmd_cleanup(args: list) -> bool:
     """
     Logic:
-    есть процессы -> проверяем сокет
-      ├── один владеет сокетом -> он Master, остальных убить
-      ├── несколько владеют -> оставить самый старый, остальных убить  
-      └── никто не владеет -> убить всех -> предложить mnemostroma on
+    processes exist -> check socket
+      ├── one owns socket -> it is Master, kill others
+      ├── several own -> keep oldest, kill others
+      └── nobody owns -> kill all -> suggest mnemostroma on
     """
     verbose = "--silent" not in args
     full = "--full" in args
@@ -541,6 +541,42 @@ def _handle_config(args: list) -> None:
         if _CONFIG_PATH.exists():
             print(_CONFIG_PATH.read_text())
 
+def _cmd_db_dump_time(args: list) -> None:
+    """Set backup_interval_hours in config.json."""
+    if not args:
+        print("Usage: mnemostroma db-dump-time <HOURS>")
+        return
+    
+    try:
+        hours = int(args[0])
+        if hours < 1:
+            print("Error: interval must be at least 1 hour")
+            return
+    except ValueError:
+        print(f"Error: '{args[0]}' is not a valid integer")
+        return
+
+    config_path = _CONFIG_PATH
+    if not config_path.exists():
+        print(f"Error: config not found at {config_path}. Run 'mnemostroma setup' first.")
+        return
+
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        
+        if "storage" not in data:
+            data["storage"] = {}
+        
+        data["storage"]["backup_interval_hours"] = hours
+        
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+            
+        print(f"✓ Backup interval set to {hours} hour(s). (Restart daemon to apply)")
+    except Exception as e:
+        print(f"Error updating config: {e}")
+
 # ---------------------------------------------------------------------------
 # Service
 # ---------------------------------------------------------------------------
@@ -602,6 +638,7 @@ def dispatch(args_namespace: argparse.Namespace) -> None:
         from mnemostroma.tools.watch import run_watch
         db_path = _MNEMO_DIR / "logs.db"
         run_watch(db_path)
+    elif command == "db-dump-time": _cmd_db_dump_time(cargs)
     elif command == "cleanup": _cmd_cleanup(cargs)
     else:
         print(f"Unknown command: {command}")

@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
-"""Watchdog — детектирует crash и hang daemon и proxy.
+"""Watchdog — detects crashes and hangs of the daemon and proxy.
 
-Запускается systemd отдельно от daemon и proxy.
-Проверяет каждые CHECK_INTERVAL секунд.
-Recovery < 5 секунд при любом сценарии:
-  CHECK_INTERVAL=1 + HEARTBEAT_TIMEOUT=3 + RestartSec=1 = 5s worst case.
+Started by systemd separately from the daemon and proxy.
+Checks every CHECK_INTERVAL seconds.
+Recovery < 25 seconds in any scenario:
+  CHECK_INTERVAL=5 + HEARTBEAT_TIMEOUT=15 + RestartSec=1 = 21s worst case.
 """
 import asyncio
 import json
@@ -14,8 +14,6 @@ import signal
 import time
 from pathlib import Path
 
-import httpx
-
 logger = logging.getLogger("mnemostroma.watchdog")
 
 _MNEMO_DIR      = Path.home() / ".mnemostroma"
@@ -24,11 +22,11 @@ _SOCKET_PATH    = _MNEMO_DIR / "daemon.sock"
 _PID_DAEMON     = _MNEMO_DIR / "daemon.pid"
 _PID_PROXY      = _MNEMO_DIR / "proxy.pid"
 
-HEARTBEAT_TIMEOUT = 3    # секунд без обновления = hang
-PROXY_TIMEOUT     = 3    # секунд на /health
-CHECK_INTERVAL    = 1    # секунд между проверками
+HEARTBEAT_TIMEOUT = 15   # seconds without update = hang
+PROXY_TIMEOUT     = 3    # seconds for /health
+CHECK_INTERVAL    = 5    # seconds between checks
 
-# sd_notify — опционально, для systemd WatchdogSec
+# sd_notify — optional, for systemd WatchdogSec
 try:
     import sdnotify as _sdn
     _sd = _sdn.SystemdNotifier()
@@ -51,7 +49,7 @@ def _heartbeat_ok() -> bool:
 
 
 async def _socket_responsive() -> bool:
-    """Проверяет что socket принимает запросы — не просто существует."""
+    """Checks that the socket accepts requests — not just exists."""
     if not _SOCKET_PATH.exists():
         return False
     try:
@@ -60,7 +58,7 @@ async def _socket_responsive() -> bool:
             timeout=2.0,
         )
         w.write(
-            (json.dumps({"id": 1, "tool": "ctx_active", "args": {}}) + "\n").encode()
+            (json.dumps({"id": 1, "tool": "ctx_semantic", "args": {"query": "test"}}) + "\n").encode()
         )
         await w.drain()
         line = await asyncio.wait_for(r.readline(), timeout=2.0)
@@ -71,10 +69,15 @@ async def _socket_responsive() -> bool:
 
 
 async def _proxy_healthy() -> bool:
+    """TCP connect check — no httpx needed."""
     try:
-        async with httpx.AsyncClient(timeout=PROXY_TIMEOUT) as c:
-            r = await c.get("http://127.0.0.1:8767/health")
-            return r.status_code == 200
+        _, writer = await asyncio.wait_for(
+            asyncio.open_connection("127.0.0.1", 8767),
+            timeout=PROXY_TIMEOUT,
+        )
+        writer.close()
+        await writer.wait_closed()
+        return True
     except Exception:
         return False
 
@@ -98,13 +101,13 @@ async def _check_daemon() -> None:
     sock_ok   = await _socket_responsive()
 
     if hb_ok and sock_ok:
-        return  # норма
+        return  # normal
 
     if _HEARTBEAT_FILE.exists() and not hb_ok:
         logger.error("Daemon HANG (heartbeat stale) → SIGKILL")
         _kill(_PID_DAEMON, signal.SIGKILL)
         _clean_socket()
-        # systemd Restart=always поднимет daemon снова
+        # systemd Restart=always will bring the daemon back up
         return
 
     if _SOCKET_PATH.exists() and not sock_ok:

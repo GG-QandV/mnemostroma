@@ -3,7 +3,7 @@
     "version": "1.4",
     "product": "mnemostroma",
     "generated": "2026-04-04",
-    "parameters_count": 80,
+    "parameters_count": 81,
     "config_profile": "default",
     "specialization": null
   },
@@ -109,7 +109,8 @@
     "sqlite_compress_threshold_mb": 500,
     "sqlite_archive_cutoff_years": 3,
     "async_flush_interval_sec": 5,
-    "batch_flush_size": 50
+    "batch_flush_size": 50,
+    "backup_interval_hours": 3
   },
   "experience": {
     "layer_enabled": true,

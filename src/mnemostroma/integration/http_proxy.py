@@ -1,16 +1,16 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
-"""HTTP Reverse Proxy — прозрачный перехват I/O агента.
+"""HTTP Reverse Proxy — transparent agent I/O interception.
 
-ДО запроса  → IPC "inject"      → <memory_context> в system prompt
-ПОСЛЕ ответа → IPC "outbox_put" → Observer пишет в RAM/SQLite
+BEFORE request → IPC "inject"      → <memory_context> in system prompt
+AFTER response → IPC "outbox_put" → Observer writes to RAM/SQLite
 
-Агент: ANTHROPIC_BASE_URL=http://127.0.0.1:8767
+Agent: ANTHROPIC_BASE_URL=http://127.0.0.1:8767
 
-Надёжность:
-  • Circuit Breaker — fail-open при недоступном daemon
-  • SO_REUSEPORT   — быстрый рестарт без "port in use"
-  • streaming finally — Observer получает текст даже при disconnect
-  • Correlation ID  — стабильный session_id через X-Session-Id
+Reliability:
+  • Circuit Breaker — fail-open if daemon is unavailable
+  • SO_REUSEPORT   — fast restart without "port in use"
+  • streaming finally — Observer receives text even on disconnect
+  • Correlation ID  — stable session_id via X-Session-Id
 """
 import asyncio
 import json
@@ -53,7 +53,7 @@ async def lifespan(app):
     _MNEMO_DIR.mkdir(parents=True, exist_ok=True)
     _PROXY_PID.write_text(str(os.getpid()))
 
-    # Ждём socket до 30s — daemon может стартовать чуть позже
+    # Wait for socket up to 30s — daemon might start slightly later
     for attempt in range(15):
         if _SOCKET.exists():
             break
@@ -78,8 +78,8 @@ async def lifespan(app):
 # ── Correlation ID ────────────────────────────────────────────────────
 
 def _get_or_create_sid(request: Request) -> tuple[str, bool]:
-    """Вернуть (session_id, is_new).
-    is_new=True — нужно отдать X-Session-Id в response headers.
+    """Return (session_id, is_new).
+    is_new=True — need to provide X-Session-Id in response headers.
     """
     for h in ("x-session-id", "x-mnemo-session", "x-correlation-id"):
         if sid := request.headers.get(h):
@@ -119,7 +119,7 @@ async def _inject_memory(body: dict, sid: str) -> dict:
         fallback=None,
     )
     if not xml:
-        return body  # fail-open: продолжаем без памяти
+        return body  # fail-open: continue without memory
 
     body = dict(body)
     sys_prompt = body.get("system", "")
@@ -139,7 +139,7 @@ async def _observe(text: str, sid: str) -> None:
         _pool.call,
         "outbox_put",
         {"session_id": sid, "text": text},
-        fallback=None,  # fail-open: потеря при полном отказе daemon
+        fallback=None,  # fail-open: data loss on total daemon failure
     )
 
 
@@ -202,7 +202,7 @@ async def _handle_stream(client, body, headers, sid, extra) -> StreamingResponse
                 "POST", "/v1/messages", json=body, headers=headers
             ) as resp:
                 async for chunk in resp.aiter_bytes():
-                    # Парсим SSE для сбора текста
+                    # Parse SSE to collect text
                     try:
                         for line in chunk.decode(errors="replace").splitlines():
                             if not line.startswith("data: "):
@@ -219,7 +219,7 @@ async def _handle_stream(client, body, headers, sid, extra) -> StreamingResponse
                         pass
                     yield chunk
         finally:
-            # finally гарантирует вызов даже при disconnect клиента
+            # finally guarantees call even on client disconnect
             asyncio.create_task(_observe("".join(collected), sid))
 
     return StreamingResponse(
@@ -258,7 +258,7 @@ app = Starlette(
 
 
 def _make_socket(port: int) -> socket.socket:
-    """SO_REUSEPORT — быстрый рестарт без "Address already in use"."""
+    """SO_REUSEPORT — fast restart without "Address already in use"."""
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     if hasattr(socket, "SO_REUSEPORT"):

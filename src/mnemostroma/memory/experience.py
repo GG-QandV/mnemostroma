@@ -246,13 +246,13 @@ class ExperienceIndex:
                 signals.append({
                     "type": "ATTRACT",
                     "tag": tag,
-                    "message": f"'{tag}' reflects a positive emotional experience (valence {cluster.emotion_valence:.2f}).",
+                    "message": f"'{tag}' is a positive emotional experience (valence {cluster.emotion_valence:.2f}).",
                 })
             elif esig == "REPEL":
                 signals.append({
                     "type": "REPEL",
                     "tag": tag,
-                    "message": f"'{tag}' reflects a negative emotional experience (valence {cluster.emotion_valence:.2f}).",
+                    "message": f"'{tag}' is a negative emotional experience (valence {cluster.emotion_valence:.2f}).",
                 })
             elif esig == "AMBIVALENT":
                 signals.append({

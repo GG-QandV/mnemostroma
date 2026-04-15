@@ -57,10 +57,10 @@ def _next_id() -> int:
 
 if sys.platform == "win32":
     async def _open_pipe() -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
-        """Открыть Named Pipe через ProactorEventLoop (Windows-only).
+        """Open Named Pipe via ProactorEventLoop (Windows-only).
 
-        ProactorEventLoop — дефолт на Windows начиная с Python 3.8.
-        create_pipe_connection() — низкоуровневый API, аналог open_unix_connection.
+        ProactorEventLoop is the default on Windows starting from Python 3.8.
+        create_pipe_connection() is a low-level API, analogous to open_unix_connection.
         """
         loop = asyncio.get_running_loop()
         reader = asyncio.StreamReader()
@@ -109,14 +109,14 @@ async def _ipc_call(tool: str, args: dict) -> Any:
             pass
 
 # ── MCP Server factory ────────────────────────────────────────────────
-# Создаём новый Server() на каждое SSE-соединение.
-# SseServerTransport (sse) — шарится безопасно: изолирует сессии по UUID.
+# Create a new Server() for each SSE connection.
+# SseServerTransport (sse) — safely shared: isolates sessions by UUID.
 
 def _make_mcp_server() -> Server:
-    """Фабрика: свежий Server() с зарегистрированными handlers.
+    """Factory: fresh Server() with registered handlers.
 
-    Вызывается внутри handle_sse() для каждого нового клиента.
-    Гарантирует изолированный negotiation state и отсутствие race conditions.
+    Called inside handle_sse() for each new client.
+    Guarantees isolated negotiation state and absence of race conditions.
     """
     srv = Server("mnemostroma")
 
@@ -140,7 +140,7 @@ def _make_mcp_server() -> Server:
     return srv
 
 
-# SseServerTransport безопасно шарить: каждая сессия изолирована по UUID.
+# SseServerTransport is safe to share: each session is isolated by UUID.
 sse = SseServerTransport("/messages/")
 
 # ── Starlette App (MCP SSE) ───────────────────────────────────────────
@@ -151,7 +151,7 @@ async def handle_sse(request):
     if not auth or auth != f"Bearer {TOKEN}":
         return Response("Unauthorized", status_code=401)
 
-    # Новый изолированный Server() для этого соединения
+    # New isolated Server() for this connection
     mcp_instance = _make_mcp_server()
 
     async with sse.connect_sse(request.scope, request.receive, request._send) as (read_stream, write_stream):

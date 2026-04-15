@@ -31,8 +31,8 @@ class LogWriter:
             component   TEXT NOT NULL,             -- "observer.filter", "tuner.conflict"
             event       TEXT NOT NULL,             -- "classify", "extract", "encode"
             data        TEXT NOT NULL,             -- JSON
-            latency_ms  REAL DEFAULT 0.0,          -- время выполнения компонента
-            session_id  TEXT,                       -- привязка к сессии (если есть)
+            latency_ms  REAL DEFAULT 0.0,          -- component execution time
+            session_id  TEXT,                       -- session identifier (if any)
             level       TEXT DEFAULT 'INFO'         -- INFO / WARNING / ERROR
         );
         """)

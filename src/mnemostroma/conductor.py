@@ -43,6 +43,7 @@ class Conductor:
         self._dreamer_task: Optional[asyncio.Task] = None
         self._pulse_writer: Optional[PulseWriter] = None
         self._status_writer: Optional[StatusWriter] = None
+        self._backup_worker: Optional[Any] = None
         self._stopping: bool = False
 
     async def start(
@@ -109,6 +110,22 @@ class Conductor:
         self.ctx.log_writer = log_writer
         self.ctx.content = ContentManager(self.ctx)
         self.ctx.dissolver = Dissolver(self.ctx)
+
+        # Phase 2: SessionRepo Wiring
+        repo_mode = config.storage.session_repo
+        if repo_mode in ("new", "shadow"):
+            from .adapters.sqlite.session_repo import SessionRepo
+            from .adapters.sqlite.precision_repo import PrecisionRepo
+            from .adapters.sqlite.anchor_repo import AnchorRepo
+            self.ctx.session_repo = SessionRepo(db_manager)
+            self.ctx.precision_repo = PrecisionRepo(db_manager)
+            self.ctx.anchor_repo = AnchorRepo(db_manager)
+            logger.info("SessionRepo mode: ACTIVE (adapters-only)")
+        else:
+            self.ctx.session_repo = None # Legacy/PersistenceLayer only
+            self.ctx.precision_repo = None
+            self.ctx.anchor_repo = None
+            logger.info("SessionRepo mode: LEGACY (PersistenceLayer direct)")
 
         # Provide ctx to db_manager for log_event access
         persistence.wire_ctx(self.ctx)
@@ -185,8 +202,17 @@ class Conductor:
         # 6.6 Daemon metrics writers (pulse.json + status.json for external monitoring)
         self._pulse_writer = PulseWriter(self.ctx)
         self._status_writer = StatusWriter(self.ctx)
+        self._backup_worker = None
+        if hasattr(self.ctx.config, "storage"):
+            from .core.backup import BackupWorker
+            self._backup_worker = BackupWorker(self.ctx)
+            # Store db_path for BackupWorker
+            self.ctx.db_path = str(db_path)
+
         await self._pulse_writer.start()
         await self._status_writer.start()
+        if self._backup_worker:
+            await self._backup_worker.start()
 
         # 6.5 Dreamer (Stage D — idle-triggered anchor reassessment)
         dreamer_cfg = getattr(config, 'dreamer', None)
@@ -328,6 +354,8 @@ class Conductor:
                 await self._pulse_writer.stop()
             if self._status_writer:
                 await self._status_writer.stop()
+            if self._backup_worker:
+                await self._backup_worker.stop()
             if self.ctx.persistence:
                 await self.ctx.persistence.stop()
             if self.ctx.dissolver:
@@ -460,7 +488,7 @@ class Conductor:
         if name == "ctx_semantic":
             from mnemostroma.tools.read import ctx_semantic
             return await ctx_semantic(query=args["query"], ctx=ctx,
-                                      top_n=args.get("topn", 5))
+                                      top_n=args.get("top_n", 5))
         if name == "ctx_get":
             from mnemostroma.tools.read import ctx_get
             return await ctx_get(args["session_id"], ctx)

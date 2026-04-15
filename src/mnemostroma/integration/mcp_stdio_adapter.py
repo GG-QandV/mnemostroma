@@ -29,7 +29,7 @@ _PROTOCOL = "2024-11-05"
 _TOOLS = [
     {
         "name": "ctx_semantic",
-        "description": "Семантический поиск по памяти. Возвращает релевантные сессии.",
+        "description": "Semantic search in memory. Returns relevant sessions based on meaning.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -41,7 +41,7 @@ _TOOLS = [
     },
     {
         "name": "ctx_get",
-        "description": "Получить сессию по ID.",
+        "description": "Retrieve a specific session by its ID.",
         "inputSchema": {
             "type": "object",
             "properties": {"session_id": {"type": "string"}},
@@ -50,7 +50,7 @@ _TOOLS = [
     },
     {
         "name": "ctx_search",
-        "description": "Поиск сессий по тегам.",
+        "description": "Search for sessions using tags, importance, or age filters.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -64,7 +64,7 @@ _TOOLS = [
     },
     {
         "name": "ctx_full",
-        "description": "Полный текст сессии из SQLite включая content_full.",
+        "description": "Get the complete session transcript including full content from SQLite.",
         "inputSchema": {
             "type": "object",
             "properties": {"session_id": {"type": "string"}},
@@ -73,7 +73,7 @@ _TOOLS = [
     },
     {
         "name": "ctx_anchors",
-        "description": "Якоря субсознательного слоя: решения, факты, персоны, события, дедлайны. type=deadline заменяет ctx_urgent.",
+        "description": "Retrieve subconscious layer anchors: decisions, facts, people, events, or deadlines.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -85,7 +85,7 @@ _TOOLS = [
     },
     {
         "name": "ctx_precision",
-        "description": "Прецизионные артефакты: ссылки, формулы, цитаты, данные.",
+        "description": "Retrieve high-precision artifacts: links, formulas, quotes, or specific data points.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -97,7 +97,7 @@ _TOOLS = [
     },
     {
         "name": "content_search",
-        "description": "Семантический поиск по контентной ветке.",
+        "description": "Semantic search across the content branch (code, docs, configs).",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -111,7 +111,7 @@ _TOOLS = [
     },
     {
         "name": "content_get",
-        "description": "Метаданные блока контента по ID.",
+        "description": "Retrieve metadata for a specific content block by ID.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -123,7 +123,7 @@ _TOOLS = [
     },
     {
         "name": "content_raw",
-        "description": "Полный текст версии контента.",
+        "description": "Retrieve the full raw text of a specific content version.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -135,7 +135,7 @@ _TOOLS = [
     },
     {
         "name": "content_history",
-        "description": "История всех версий контентного блока.",
+        "description": "Retrieve the version history for a specific content block.",
         "inputSchema": {
             "type": "object",
             "properties": {"content_id": {"type": "string"}},
@@ -144,12 +144,12 @@ _TOOLS = [
     },
     {
         "name": "ctx_bridge",
-        "description": "Структурированный пакет передачи контекста следующему агенту.",
+        "description": "Generate a structured context bridge package for handoff to the next agent.",
         "inputSchema": {"type": "object", "properties": {}},
     },
     {
         "name": "ctx_recent",
-        "description": "Вернуть сессии за последние N дней. by='created' — по дате создания, by='accessed' — по дате последнего обращения.",
+        "description": "Retrieve sessions from the last N days, filtered by creation or access date.",
         "inputSchema": {
             "type": "object",
             "properties": {

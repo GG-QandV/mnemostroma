@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
-"""Circuit Breaker для IPC вызовов.
+"""Circuit Breaker for IPC calls.
 
 States:
-  CLOSED    — норма, вызовы проходят
-  OPEN      — после N ошибок, bypass на T секунд (fail-open)
-  HALF_OPEN — пробный вызов после timeout
+  CLOSED    — normal, calls pass through
+  OPEN      — after N errors, bypass for T seconds (fail-open)
+  HALF_OPEN — trial call after timeout
 """
 import asyncio
 import logging
@@ -25,9 +25,9 @@ class CircuitBreaker:
     def __init__(
         self,
         name: str,
-        failure_threshold: int   = 3,    # ошибок до OPEN
-        recovery_timeout:  float = 30.0, # секунд в OPEN
-        half_open_timeout: float = 5.0,  # таймаут пробного вызова
+        failure_threshold: int   = 3,    # errors before OPEN
+        recovery_timeout:  float = 30.0, # seconds in OPEN
+        half_open_timeout: float = 5.0,  # trial call timeout
     ):
         self.name        = name
         self._threshold  = failure_threshold
@@ -67,7 +67,7 @@ class CircuitBreaker:
                 )
             else:
                 result = await fn(*args, **kwargs)
-            # Успех — сбросить счётчик
+            # Success — reset counter
             if self._state != State.CLOSED:
                 logger.info(f"Circuit [{self.name}]: → CLOSED")
             self._state    = State.CLOSED
@@ -85,4 +85,4 @@ class CircuitBreaker:
                 logger.error(
                     f"Circuit [{self.name}]: → OPEN for {self._recovery}s"
                 )
-            return fallback  # всегда fail-open: возвращаем fallback, не бросаем
+            return fallback  # always fail-open: return fallback, don't raise

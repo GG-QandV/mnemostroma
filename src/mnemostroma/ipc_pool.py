@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
-"""IPC Connection Pool — постоянные соединения к daemon socket.
+"""IPC Connection Pool — persistent connections to daemon socket.
 
 Latency: 2ms → 0.1ms per call.
-Прозрачное переподключение при обрыве.
+Transparent reconnection on failure.
 """
 import asyncio
 import json
@@ -22,7 +22,7 @@ def _next_id() -> int:
 
 
 class _IPCConn:
-    """Одно постоянное Unix-socket соединение к daemon."""
+    """A single persistent Unix-socket connection to the daemon."""
 
     def __init__(self, path: str):
         self._path   = path
@@ -68,9 +68,9 @@ class _IPCConn:
 
 
 class IPCPool:
-    """Пул из N постоянных соединений к daemon IPC socket.
+    """A pool of N persistent connections to the daemon IPC socket.
 
-    Использование:
+    Usage:
         pool = IPCPool("~/.mnemostroma/daemon.sock", size=4)
         await pool.start()
         result = await pool.call("ctx_active", {})
@@ -104,7 +104,7 @@ class IPCPool:
         try:
             return await conn.call(tool, args)
         except Exception:
-            # Пересоздать соединение перед возвратом в пул
+            # Recreate connection before returning to the pool
             try:
                 await conn.close()
                 await conn.connect()

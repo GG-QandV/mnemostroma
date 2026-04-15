@@ -159,8 +159,8 @@ async def ctx_growth(ctx: SystemContext) -> Dict[str, Any]:
         "sessions_week": 0,
         "sessions_month": 0,
         "db_size_mb": 0.0,
-        "logs_size_mb": 0.0,       # ← ДОБАВИТЬ
-        "total_size_mb": 0.0,      # ← ДОБАВИТЬ
+        "logs_size_mb": 0.0,       # ← ADD
+        "total_size_mb": 0.0,      # ← ADD
         "db_growth_per_day_mb": None,
         "days_to_1gb": None,
         "days_to_10gb": None,
@@ -203,7 +203,7 @@ async def ctx_growth(ctx: SystemContext) -> Dict[str, Any]:
             size_bytes = os.path.getsize(db_path)
             result["db_size_mb"] = round(size_bytes / (1024 * 1024), 2)
 
-            # --- TASK 1: добавляем logs.db ---
+            # --- TASK 1: adding logs.db ---
             logs_path = Path.home() / ".mnemostroma" / "logs.db"
             logs_size_mb = round(os.path.getsize(logs_path) / (1024 * 1024), 2) if logs_path.exists() else 0.0
             result["logs_size_mb"] = logs_size_mb
