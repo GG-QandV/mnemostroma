@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
 """NER extraction using Standard BERT/DistilBERT ONNX (No Torch)."""
+import gc
 import logging
 from typing import List, Dict, Any
 
@@ -47,6 +48,15 @@ class NERObserver:
         except Exception as e:
             logger.error(f"HybridNER extraction failed: {e}")
             raise
+
+    def unload(self) -> None:
+        """Release ONNX session after observer run to free ~200 MB in idle."""
+        if not self._loaded:
+            return
+        self.model.close()
+        self._loaded = False
+        gc.collect()
+        logger.debug("NERObserver unloaded (ONNX session released)")
 
 # For backward compatibility during migration
 GLiNERObserver = NERObserver

@@ -78,11 +78,18 @@ async def observer_pipeline(
     async def _pre_ner():
         if ctx.models and ctx.models.ner:
             try:
-                return await ctx.models.ner.extract_entities(
+                result = await ctx.models.ner.extract_entities(
                     text, threshold=ctx.config.importance.ner_score_threshold
                 )
+                return result
             except Exception as e:
                 logger.warning(f"observer: pre-ner failed: {e}")
+            finally:
+                # Lazy-unload: free ~200 MB ONNX session after each run.
+                try:
+                    ctx.models.ner.unload()
+                except Exception:
+                    pass
         return []
 
     pre_embedding, pre_entities = await asyncio.gather(_pre_embed(), _pre_ner())

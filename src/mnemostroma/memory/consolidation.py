@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
 import asyncio
+import ctypes
+import gc
 import time
 import logging
 from typing import Any, Optional, List
@@ -145,6 +147,13 @@ class ConsolidationWorker:
                         "anchors_decayed": decayed,
                         "threshold_days": cfg_ad.threshold_days,
                     })
+
+        # Release fragmented Python heap pages back to OS
+        gc.collect()
+        try:
+            ctypes.CDLL("libc.so.6").malloc_trim(0)
+        except Exception:
+            pass
 
         logger.info(f"Consolidation completed for {len(self.ctx.ram_index)} RAM sessions.")
 
