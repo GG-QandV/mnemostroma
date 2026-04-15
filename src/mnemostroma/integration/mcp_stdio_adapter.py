@@ -1,16 +1,10 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
 """MCP stdio adapter — thin proxy between Claude Code and the Mnemostroma daemon.
 
-Replaces mcp_server.py as the MCP entry point for Claude Code.
-Speaks MCP protocol on stdio; forwards tool/call to the daemon IPC socket.
+Zero-dependency MCP implementation: JSON-RPC 2.0 over stdin/stdout.
+No mcp SDK, no pydantic, no anyio — stdlib only (asyncio + json).
 
-The daemon must be running before this adapter is spawned.
-If the socket is unavailable, all tool calls return an error — this is
-correct behaviour: MCP without the daemon is meaningless.
-
-Usage (in ~/.claude.json mcpServers config):
-    "command": "/path/to/.venv/bin/python"
-    "args": ["-m", "mnemostroma.integration.mcp_stdio_adapter"]
+Protocol: MCP 2024-11-05
 """
 import asyncio
 import json
@@ -18,11 +12,7 @@ import logging
 import sys
 from datetime import date
 from pathlib import Path
-from typing import Any
-
-from mcp.server import Server
-from mcp.types import Tool, TextContent
-from mcp.server.stdio import stdio_server
+from typing import Any, Optional
 
 logger = logging.getLogger("mnemostroma.mcp_adapter")
 
@@ -31,13 +21,16 @@ _SOCKET_PATH          = _MNEMO_DIR / "daemon.sock"
 _PIPE_NAME            = r"\\.\pipe\mnemostroma"
 _CURRENT_SESSION_FILE = _MNEMO_DIR / "current_session"
 
-# ── Tool list (mirrors mcp_server.py — keep in sync when adding tools) ─
+_VERSION  = "1.8.0"
+_PROTOCOL = "2024-11-05"
 
-_TOOLS: list[Tool] = [
-    Tool(
-        name="ctx_semantic",
-        description="Семантический поиск по памяти. Возвращает релевантные сессии.",
-        inputSchema={
+# ── Tool definitions — plain dicts, no pydantic ───────────────────────
+
+_TOOLS = [
+    {
+        "name": "ctx_semantic",
+        "description": "Семантический поиск по памяти. Возвращает релевантные сессии.",
+        "inputSchema": {
             "type": "object",
             "properties": {
                 "query": {"type": "string"},
@@ -45,20 +38,20 @@ _TOOLS: list[Tool] = [
             },
             "required": ["query"],
         },
-    ),
-    Tool(
-        name="ctx_get",
-        description="Получить сессию по ID.",
-        inputSchema={
+    },
+    {
+        "name": "ctx_get",
+        "description": "Получить сессию по ID.",
+        "inputSchema": {
             "type": "object",
             "properties": {"session_id": {"type": "string"}},
             "required": ["session_id"],
         },
-    ),
-    Tool(
-        name="ctx_search",
-        description="Поиск сессий по тегам.",
-        inputSchema={
+    },
+    {
+        "name": "ctx_search",
+        "description": "Поиск сессий по тегам.",
+        "inputSchema": {
             "type": "object",
             "properties": {
                 "tags": {"type": "array", "items": {"type": "string"}},
@@ -68,20 +61,20 @@ _TOOLS: list[Tool] = [
             },
             "required": ["tags"],
         },
-    ),
-    Tool(
-        name="ctx_full",
-        description="Полный текст сессии из SQLite включая content_full.",
-        inputSchema={
+    },
+    {
+        "name": "ctx_full",
+        "description": "Полный текст сессии из SQLite включая content_full.",
+        "inputSchema": {
             "type": "object",
             "properties": {"session_id": {"type": "string"}},
             "required": ["session_id"],
         },
-    ),
-    Tool(
-        name="ctx_anchors",
-        description="Якоря субсознательного слоя: решения, факты, персоны, события, дедлайны. type=deadline заменяет ctx_urgent.",
-        inputSchema={
+    },
+    {
+        "name": "ctx_anchors",
+        "description": "Якоря субсознательного слоя: решения, факты, персоны, события, дедлайны. type=deadline заменяет ctx_urgent.",
+        "inputSchema": {
             "type": "object",
             "properties": {
                 "anchor_type": {"type": "string"},
@@ -89,11 +82,11 @@ _TOOLS: list[Tool] = [
                 "limit": {"type": "integer", "default": 20},
             },
         },
-    ),
-    Tool(
-        name="ctx_precision",
-        description="Прецизионные артефакты: ссылки, формулы, цитаты, данные.",
-        inputSchema={
+    },
+    {
+        "name": "ctx_precision",
+        "description": "Прецизионные артефакты: ссылки, формулы, цитаты, данные.",
+        "inputSchema": {
             "type": "object",
             "properties": {
                 "precision_type": {"type": "string"},
@@ -101,11 +94,11 @@ _TOOLS: list[Tool] = [
                 "limit": {"type": "integer", "default": 20},
             },
         },
-    ),
-    Tool(
-        name="content_search",
-        description="Семантический поиск по контентной ветке.",
-        inputSchema={
+    },
+    {
+        "name": "content_search",
+        "description": "Семантический поиск по контентной ветке.",
+        "inputSchema": {
             "type": "object",
             "properties": {
                 "query": {"type": "string"},
@@ -115,11 +108,11 @@ _TOOLS: list[Tool] = [
             },
             "required": ["query"],
         },
-    ),
-    Tool(
-        name="content_get",
-        description="Метаданные блока контента по ID.",
-        inputSchema={
+    },
+    {
+        "name": "content_get",
+        "description": "Метаданные блока контента по ID.",
+        "inputSchema": {
             "type": "object",
             "properties": {
                 "content_id": {"type": "string"},
@@ -127,11 +120,11 @@ _TOOLS: list[Tool] = [
             },
             "required": ["content_id"],
         },
-    ),
-    Tool(
-        name="content_raw",
-        description="Полный текст версии контента.",
-        inputSchema={
+    },
+    {
+        "name": "content_raw",
+        "description": "Полный текст версии контента.",
+        "inputSchema": {
             "type": "object",
             "properties": {
                 "content_id": {"type": "string"},
@@ -139,25 +132,25 @@ _TOOLS: list[Tool] = [
             },
             "required": ["content_id"],
         },
-    ),
-    Tool(
-        name="content_history",
-        description="История всех версий контентного блока.",
-        inputSchema={
+    },
+    {
+        "name": "content_history",
+        "description": "История всех версий контентного блока.",
+        "inputSchema": {
             "type": "object",
             "properties": {"content_id": {"type": "string"}},
             "required": ["content_id"],
         },
-    ),
-    Tool(
-        name="ctx_bridge",
-        description="Структурированный пакет передачи контекста следующему агенту.",
-        inputSchema={"type": "object", "properties": {}},
-    ),
-    Tool(
-        name="ctx_recent",
-        description="Вернуть сессии за последние N дней. by='created' — по дате создания, by='accessed' — по дате последнего обращения.",
-        inputSchema={
+    },
+    {
+        "name": "ctx_bridge",
+        "description": "Структурированный пакет передачи контекста следующему агенту.",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "ctx_recent",
+        "description": "Вернуть сессии за последние N дней. by='created' — по дате создания, by='accessed' — по дате последнего обращения.",
+        "inputSchema": {
             "type": "object",
             "properties": {
                 "days": {"type": "number", "default": 7.0},
@@ -165,7 +158,7 @@ _TOOLS: list[Tool] = [
                 "limit": {"type": "integer", "default": 20},
             },
         },
-    ),
+    },
 ]
 
 # ── IPC client ────────────────────────────────────────────────────────
@@ -179,54 +172,31 @@ def _next_id() -> int:
     return _msg_id
 
 
-# ── Windows Named Pipe helper ─────────────────────────────────────────
-
 if sys.platform == "win32":
-    async def _open_pipe() -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
-        """Открыть Named Pipe через ProactorEventLoop (Windows-only).
-
-        ProactorEventLoop — дефолт на Windows начиная с Python 3.8.
-        create_pipe_connection() — низкоуровневый API, аналог open_unix_connection.
-        """
+    async def _open_connection() -> tuple:
         loop = asyncio.get_running_loop()
         reader = asyncio.StreamReader()
         protocol = asyncio.StreamReaderProtocol(reader)
-
-        transport, _ = await loop.create_pipe_connection(
-            lambda: protocol,
-            _PIPE_NAME,
-        )
+        transport, _ = await loop.create_pipe_connection(lambda: protocol, _PIPE_NAME)
         writer = asyncio.StreamWriter(transport, protocol, reader, loop)
         return reader, writer
+else:
+    async def _open_connection() -> tuple:
+        return await asyncio.open_unix_connection(str(_SOCKET_PATH))
 
 
 async def _ipc_call(tool: str, args: dict) -> Any:
-    """Send one request to the daemon IPC socket, return result or raise."""
-    if sys.platform == "win32":
-        try:
-            reader, writer = await _open_pipe()
-        except OSError as e:
-            raise ConnectionError(
-                f"Mnemostroma daemon not running (pipe unavailable): {e}\n"
-                "Start with: mnemostroma start"
-            ) from e
-    else:
-        try:
-            reader, writer = await asyncio.open_unix_connection(str(_SOCKET_PATH))
-        except (FileNotFoundError, ConnectionRefusedError) as e:
-            raise ConnectionError(
-                "Mnemostroma daemon not running. Start with: mnemostroma start"
-            ) from e
+    try:
+        reader, writer = await _open_connection()
+    except (FileNotFoundError, ConnectionRefusedError, OSError) as e:
+        raise ConnectionError("Mnemostroma daemon not running. Start with: mnemostroma on") from e
 
     try:
-        msg_id = _next_id()
-        payload = json.dumps({"id": msg_id, "tool": tool, "args": args}, ensure_ascii=False)
+        payload = json.dumps({"id": _next_id(), "tool": tool, "args": args}, ensure_ascii=False)
         writer.write((payload + "\n").encode())
         await writer.drain()
-
         line = await asyncio.wait_for(reader.readline(), timeout=10.0)
         response = json.loads(line.decode())
-
         if "error" in response:
             raise RuntimeError(response["error"])
         return response.get("result")
@@ -240,30 +210,52 @@ async def _ipc_call(tool: str, args: dict) -> Any:
             pass
 
 
-# ── MCP Server ────────────────────────────────────────────────────────
+# ── JSON-RPC 2.0 handler ──────────────────────────────────────────────
 
-app = Server("mnemostroma")
-
-
-@app.list_tools()
-async def list_tools() -> list[Tool]:
-    return _TOOLS
+def _ok(req_id: Any, result: Any) -> dict:
+    return {"jsonrpc": "2.0", "id": req_id, "result": result}
 
 
-@app.call_tool()
-async def call_tool(name: str, arguments: dict) -> list[TextContent]:
-    try:
-        result = await _ipc_call(name, arguments)
-        if isinstance(result, (dict, list)):
+def _err(req_id: Any, code: int, message: str) -> dict:
+    return {"jsonrpc": "2.0", "id": req_id, "error": {"code": code, "message": message}}
+
+
+async def _handle(req: dict) -> Optional[dict]:
+    method = req.get("method", "")
+    rid    = req.get("id")          # None for notifications
+    params = req.get("params") or {}
+
+    # Notifications — no response
+    if rid is None:
+        return None
+
+    if method == "initialize":
+        return _ok(rid, {
+            "protocolVersion": _PROTOCOL,
+            "capabilities": {"tools": {}},
+            "serverInfo": {"name": "mnemostroma", "version": _VERSION},
+        })
+
+    if method == "ping":
+        return _ok(rid, {})
+
+    if method == "tools/list":
+        return _ok(rid, {"tools": _TOOLS})
+
+    if method == "tools/call":
+        name = params.get("name", "")
+        args = params.get("arguments") or {}
+        try:
+            result = await _ipc_call(name, args)
             text = json.dumps(result, default=str, ensure_ascii=False)
-        else:
-            text = json.dumps({"result": result}, default=str, ensure_ascii=False)
-        return [TextContent(type="text", text=text)]
-    except ConnectionError as exc:
-        return [TextContent(type="text", text=json.dumps({"error": str(exc)}))]
-    except Exception as exc:
-        logger.error(f"Tool {name} failed: {exc}", exc_info=True)
-        return [TextContent(type="text", text=json.dumps({"error": str(exc)}))]
+        except ConnectionError as e:
+            text = json.dumps({"error": str(e)})
+        except Exception as e:
+            logger.error("Tool %s failed: %s", name, e, exc_info=True)
+            text = json.dumps({"error": str(e)})
+        return _ok(rid, {"content": [{"type": "text", "text": text}]})
+
+    return _err(rid, -32601, f"Method not found: {method}")
 
 
 # ── Entry point ───────────────────────────────────────────────────────
@@ -273,18 +265,34 @@ async def main() -> None:
         level=logging.WARNING,
         format="%(asctime)s %(name)s %(levelname)s %(message)s",
     )
-    async with stdio_server() as (read_stream, write_stream):
-        # Write current session_id for proxy_passthrough to pick up.
-        # Hard deadline: 3s. If daemon is unresponsive, fall back to date-id
-        # and proceed — app.run() must not be delayed by a hung daemon.
-        try:
-            result = await asyncio.wait_for(_ipc_call("ctx_active", {}), timeout=3.0)
-            sid = (result or {}).get("session_id") or f"passthrough-{date.today().isoformat()}"
-        except Exception:
-            sid = f"passthrough-{date.today().isoformat()}"
-        _CURRENT_SESSION_FILE.write_text(sid, encoding="utf-8")
 
-        await app.run(read_stream, write_stream, app.create_initialization_options())
+    # Write current session_id for proxy_passthrough
+    try:
+        result = await asyncio.wait_for(_ipc_call("ctx_active", {}), timeout=3.0)
+        sid = (result or {}).get("session_id") or f"passthrough-{date.today().isoformat()}"
+    except Exception:
+        sid = f"passthrough-{date.today().isoformat()}"
+    _CURRENT_SESSION_FILE.write_text(sid, encoding="utf-8")
+
+    # Connect stdin/stdout as async streams
+    loop = asyncio.get_event_loop()
+    reader = asyncio.StreamReader()
+    await loop.connect_read_pipe(
+        lambda: asyncio.StreamReaderProtocol(reader), sys.stdin
+    )
+
+    async for raw in reader:
+        line = raw.strip()
+        if not line:
+            continue
+        try:
+            req = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        resp = await _handle(req)
+        if resp is not None:
+            sys.stdout.buffer.write(json.dumps(resp, ensure_ascii=False).encode() + b"\n")
+            sys.stdout.buffer.flush()
 
 
 if __name__ == "__main__":

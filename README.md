@@ -2,9 +2,9 @@
 
 ### The memory layer for AI agents
 
-![Version](https://img.shields.io/badge/version-v1.7.5-orange)
+![Version](https://img.shields.io/badge/version-v1.8.0-orange)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue)
-![Tests](https://img.shields.io/badge/tests-403%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-411%20passing-brightgreen)
 ![License](https://img.shields.io/badge/license-FSL--1.1--MIT-lightgrey)
 
 > *μνήμη (mnḗmē, memory) + στρῶμα (strôma, layer) — the substrate everything rests on.*
@@ -39,11 +39,9 @@ Every time you work with an AI agent, Mnemostroma:
 
 ---
 
-## Architecture in one sentence
-
-A dual-stream async pipeline (Observer + Content) backed by 4 memory layers,
-numpy MatrixSearch ANN, ONNX INT8 inference, and a formal PersistenceLayer (SQLite WAL) —
-all in ~630MB RAM, ~20ms retrieval (estimated, numpy matmul on CPU), fully offline.
+A dual-stream async pipeline (Observer + Content) backed by 4 memory layers and
+a Formal Hexagonal Architecture — strictly decoupled via Ports and Repository Adapters
+(SessionRepo, PrecisionRepo) over SQLite WAL. All in ~420MB RAM (baseline) / ~650MB (zoo), ~20ms retrieval.
 
 ---
 
@@ -103,22 +101,23 @@ This is not a database with TTL. This is how human memory works.
 
 ## Status
 
-**Current:** v1.7.5 | 2026-04-12
+**Current:** v1.8.0 | 2026-04-15
 
 | Component                                | Status                          |
 | ---------------------------------------- | ------------------------------- |
-| Core backend (Observer, Memory, Storage) | ✅ Implemented, 403/403 tests   |
-| Anchor Layer / Emotional Patterns        | ✅ Implemented                  |
-| Implicit Feedback (v1.5)                 | ✅ Implemented                  |
-| PersistenceLayer Split (Phase 9.2)       | ✅ Implemented (v1.7.1)         |
-| CLI User Mode (setup/on/off/status)      | ✅ Implemented (v1.7.1)         |
-| MCP Server (stdio + SSE)                 | ✅ Implemented                  |
-| Continuation Detection & Mention Type    | ✅ Implemented                  |
-| Decay Engine & Dreamer                   | ✅ Implemented (Stage C/D)      |
-| Passthrough HTTPS Proxy (:8767)          | ✅ Implemented (v1.7.5)         |
-| `mnemo` launcher with proxy failsafe     | ✅ Implemented (v1.7.5)         |
-| Model install CLI                        | ✅ Implemented                  |
-| **Daemon auto-start scripts**            | ✅ Linux (systemd), macOS, Win  |
+| Core backend (Observer, Memory, Storage) | DONE Implemented, 411/411 tests   |
+| Anchor Layer / Emotional Patterns        | DONE Implemented                  |
+| Implicit Feedback (v1.5)                 | DONE Implemented                  |
+| PersistenceLayer Split (Phase 9.2)       | DONE Implemented (v1.7.1)         |
+| CLI User Mode (setup/on/off/status)      | DONE Implemented (v1.7.1)         |
+| MCP Server (stdio + SSE)                 | DONE Implemented                  |
+| Continuation Detection & Mention Type    | DONE Implemented                  |
+| Decay Engine & Dreamer                   | DONE Implemented (Stage C/D)      |
+| Passthrough HTTPS Proxy (:8767)          | DONE Implemented (v1.7.5)         |
+| `mnemo` launcher with proxy failsafe     | DONE Implemented (v1.7.5)         |
+| Model install CLI                        | DONE Implemented                  |
+| **Daemon auto-start scripts**            | DONE Linux (systemd), macOS, Win  |
+| **Hexagonal Storage Refactor**           | DONE Implemented (v1.8.0)         |
 
 ---
 
@@ -126,7 +125,7 @@ This is not a database with TTL. This is how human memory works.
 
 **Requires Python 3.12+**
 
-> ⚠️ Not yet on PyPI. Install directly from GitHub:
+> WARNING Not yet on PyPI. Install directly from GitHub:
 
 **Linux / macOS:**
 ```bash
@@ -230,34 +229,31 @@ No torch. No transformers. No LangChain. No Docker. No Redis. No cloud.
 | multilingual-e5-small INT8 | ~117 MB | Session & content embedder (384d) |
 | distilbert-ner INT8 | ~60 MB | HybridNER |
 | TinyBERT-L-2-v2 INT8 | ~7 MB | Reranker (lazy) |
-| **Total working set** | **~300 MB disk · ~630 MB RAM** | |
+| **Total working set** | **~300 MB disk · ~420-750 MB RAM** | |
 
 Core dependencies: `onnxruntime, tokenizers, numpy, lz4, aiosqlite`
 
 ---
 
-## API surface (11 tools via MCP)
+## API surface (12 tools via MCP)
 
-**Retrieval (5):**
-
-- `ctx_semantic(query)`: Meaning-based search (MatrixSearch ANN, ~20ms)
-- `ctx_get(id)`: Retrieve specific session by ID
-- `ctx_search(tags)`: Tag-based search (precise, multi-language)
-- `ctx_anchors(type)`: Subconscious anchors — decisions, constraints, facts, **deadlines** (`type="deadline"`)
-- `ctx_precision(type)`: Exact data (links, formulas, quotes)
-
-**Extended (3):**
+**Recollection (8):**
 
 - `ctx_full(id)`: Full-text version from SQLite (for exact quoting)
+- `ctx_anchors(type)`: Subconscious anchors (decisions, facts, deadlines)
+- `ctx_precision(type)`: Exact data (links, formulas, quotes)
 - `ctx_bridge()`: Structured context handoff packet for next agent
-- `ctx_recent(n)`: Temporally ordered recent sessions (SQLite-backed)
-
-**Content Branch (4):**
-
 - `content_search(query)`: Semantic search over artifacts (code, docs)
 - `content_get(id, version)`: Metadata retrieval for artifact
 - `content_raw(id, version)`: Full source retrieval (expensive)
 - `content_history(id)`: Version lineage and change log
+
+**Navigation (4):**
+
+- `ctx_semantic(query)`: Meaning-based search (MatrixSearch ANN, ~20ms)
+- `ctx_get(id)`: Retrieve specific session by ID
+- `ctx_search(tags)`: Tag-based search (precise, multi-language)
+- `ctx_recent(n)`: Temporally ordered recent sessions (Repo-backed)
 
 > **Note:** `ctx_active` is removed — current context is injected via `<memorycontext>` in the system prompt automatically. `ctx_urgent` is merged into `ctx_anchors(type="deadline")`. `ctx_load` is daemon-internal only.
 
@@ -449,10 +445,10 @@ All IDEs use the stdio adapter. Multiple IDEs can connect simultaneously — eac
 
 | IDE | Config file | Status |
 |-----|-------------|--------|
-| **VS Code Copilot** | `~/.config/Code/User/mcp.json` | ✅ |
-| **Claude Code** | `~/.claude/mcp.json` | ✅ |
-| **Antigravity** | `mcp.json` (project root) | ✅ |
-| **Continue** | `~/.continue/config.yaml` | ❌ `env` blocks not supported in v1.2.22 (limitation) |
+| **VS Code Copilot** | `~/.config/Code/User/mcp.json` | DONE |
+| **Claude Code** | `~/.claude/mcp.json` | DONE |
+| **Antigravity** | `mcp.json` (project root) | DONE |
+| **Continue** | `~/.continue/config.yaml` | FAILED `env` blocks not supported in v1.2.22 (limitation) |
 
 > **Note on Continue (IDE):** As of v1.2.22, Continue does not support `env` blocks in MCP configurations. This prevents it from correctly using the `NODE_EXTRA_CA_CERTS` variable required for the Mnemostroma passthrough proxy. Use Claude Code or VS Code with standard stdio adapters for the full experience.
 
@@ -541,7 +537,7 @@ It gives your agent an actual memory.
 git clone https://github.com/GG-QandV/mnemostroma.git
 cd mnemostroma
 pip install -e ".[dev]"
-pytest tests/                          # run all 403 tests
+pytest tests/                          # run all 411 tests
 pytest tests/ --ignore=tests/test_memory_layers.py \
               --ignore=tests/test_data_contracts.py  # fast mode (~14s)
 ```
@@ -570,4 +566,26 @@ Cloud Sync, Subconscious Layer (personalized models), Shared Experience, and Tea
 ---
 
 *Mnemostroma — the memory layer for AI agents*
-*μνήμη + στρῶма · offline · ~630MB RAM · ~20ms · 403 tests · v1.7.5*
+*offline · ~420MB RAM (baseline) · ~20ms · 411 tests · v1.8.0*
+
+# [mnemostroma-protocol]
+## Memory Protocol (Mnemostroma)
+
+You have persistent memory tools. This is not optional guidance —
+this is how you operate.
+
+REQUIRED at session start (before your first response):
+  → call ctx_active()
+
+REQUIRED when user references past work, decisions, or prior context:
+  → call ctx_semantic(query) or ctx_search(tags)
+
+REQUIRED before session ends (if any decisions made or work continues):
+  → call ctx_bridge()
+
+Rules:
+- Never say "I don't have context from previous sessions"
+  without first calling ctx_active()
+- Not using memory tools when they are available is an error
+- The user expects continuity across sessions
+# [mnemostroma-protocol]-end
