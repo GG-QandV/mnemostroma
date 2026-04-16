@@ -3,7 +3,7 @@
 from .conductor import Conductor
 from .core import SystemContext
 
-__version__ = "1.7.1"
+__version__ = "1.8.0"
 
 # Global conductor instance for ease of use
 conductor = Conductor()
