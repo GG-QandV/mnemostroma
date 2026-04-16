@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "Mnemostroma Connector",
+  "version": "1.0.0",
+  "description": "Captured Claude.ai context for Mnemostroma Memory",
+  "permissions": [
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://claude.ai/*",
+    "http://localhost:8766/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://claude.ai/*"],
+      "js": ["content_script.js"]
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  }
+}

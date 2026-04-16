@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Mnemostroma Observer</title>
+  <style>
+    body { font-family: system-ui, sans-serif; min-width: 240px; padding: 12px; }
+    h3   { margin: 0 0 8px; font-size: 14px; }
+    .row { display: flex; justify-content: space-between; font-size: 12px; margin: 4px 0; }
+    .ok  { color: #2a9d2a; }
+    .err { color: #cc3333; }
+    button { margin-top: 10px; font-size: 12px; width: 100%; cursor: pointer; padding: 4px; }
+  </style>
+</head>
+<body>
+  <h3>Mnemostroma Observer</h3>
+  <div class="row"><span>Daemon</span><span id="daemon-status">…</span></div>
+  <div class="row"><span>Queue</span><span id="queue-size">…</span></div>
+  <button id="retry-btn">Retry queue now</button>
+  <script src="popup.js"></script>
+</body>
+</html>
