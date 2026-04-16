@@ -17,10 +17,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("mnemostroma.subconscious.precision_guard")
 
-# Reuse patterns from filter.py — only the precision-relevant types
-_CHECK_TYPES = ("link", "version", "number")
+# Reuse patterns from filter.py — precision-relevant types (expanded)
+_CHECK_TYPES = ("link", "version", "number", "hash", "ip", "port", "uuid", "api", "config")
 
 _COMPILED: Dict[str, re.Pattern] = {}
+
 
 def _get_compiled() -> Dict[str, re.Pattern]:
     """Lazy-compile patterns from filter.py to avoid circular import at module load."""
@@ -33,6 +34,7 @@ def _get_compiled() -> Dict[str, re.Pattern]:
             if name in _CHECK_TYPES
         }
     return _COMPILED
+
 
 def precision_extract(text: str) -> List[Dict[str, Any]]:
     """Extract precision artifacts from text.
@@ -49,6 +51,7 @@ def precision_extract(text: str) -> List[Dict[str, Any]]:
             })
     return results
 
+
 def _derive_context_tag(artifact: Dict[str, Any], text: str) -> str:
     """Heuristic: extract the last meaningful word before the artifact in text.
 
@@ -63,17 +66,26 @@ def _derive_context_tag(artifact: Dict[str, Any], text: str) -> str:
     words = [w for w in prefix.split() if len(w) > 3 and w.isalpha()]
     return words[-1].lower() if words else "unknown"
 
+
 def _same_value(a: str, b: str, ptype: str) -> bool:
     """True if a and b are considered the same value for ptype.
 
     link:    same netloc + path (ignores query/fragment)
     version: strip leading 'v/V', compare full string
     number:  compare numeric part only, normalise comma→dot
+    hash:    compare as-is (git hashes are deterministic)
+    ip:      extract IP and port, compare separately
+    uuid:    canonical lowercase comparison
+    api:     normalize slashes and compare path
+    config:  compare key + value
     """
     if ptype == "link":
         from urllib.parse import urlparse
-        pa, pb = urlparse(a), urlparse(b)
-        return pa.netloc == pb.netloc and pa.path == pb.path
+        try:
+            pa, pb = urlparse(a), urlparse(b)
+            return pa.netloc == pb.netloc and pa.path == pb.path
+        except:
+            return a == b
     if ptype == "version":
         return a.lstrip("vV") == b.lstrip("vV")
     if ptype == "number":
@@ -81,7 +93,27 @@ def _same_value(a: str, b: str, ptype: str) -> bool:
         nb = re.search(r"[\d.,]+", b)
         if na and nb:
             return na.group(0).replace(",", ".") == nb.group(0).replace(",", ".")
+    if ptype == "hash":
+        return a.lower() == b.lower()
+    if ptype == "ip":
+        # Compare IP without port
+        ip_a = re.match(r"(\d+\.\d+\.\d+\.\d+)", a)
+        ip_b = re.match(r"(\d+\.\d+\.\d+\.\d+)", b)
+        if ip_a and ip_b:
+            return ip_a.group(0) == ip_b.group(0)
+    if ptype == "uuid":
+        return a.lower() == b.lower()
+    if ptype == "api":
+        # Normalize path separators
+        return a.replace("\\", "/").rstrip("/") == b.replace("\\", "/").rstrip("/")
+    if ptype == "config":
+        # Extract key from "key=value" and compare
+        key_a = re.match(r"(\w+)\s*[:=]", a)
+        key_b = re.match(r"(\w+)\s*[:=]", b)
+        if key_a and key_b:
+            return key_a.group(1) == key_b.group(1)
     return a == b
+
 
 def precision_guard(text: str, ctx: "SystemContext") -> None:
     """Extract precision artifacts from text and compare against precision_ram.

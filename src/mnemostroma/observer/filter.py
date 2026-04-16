@@ -13,13 +13,20 @@ from typing import Dict, List, Tuple, Any, Optional
 
 # ── Structural / language-agnostic precision patterns ───────────────────────
 PRECISION_PATTERNS = {
-    "link":    r"https?://[^\s]+",
+    "link":    r"https?://[^\s\)\]\"']+",
     "email":   r"[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}",
     "phone":   r"\+?\d[\d\s\-\(\)]{7,}",
-    "number":  r"\d+[.,]?\d*\s*(?:MB|GB|KB|TB|ms|µs|ns|s\b|%|руб|rub|\$|€|EUR|USD|RUB)",
-    "version": r"\bv?\d+\.\d+(?:\.\d+)?(?:-[a-z0-9]+)?\b",
-    "error":   r"\b(?:error|exception|traceback|errno|assert(?:ion)?|fail(?:ed|ure)?)\b",
-    "hash":    r"\b[0-9a-f]{7,40}\b",  # git hashes, IDs
+    # Expanded number: with units OR standalone large numbers OR percentages/currencies
+    "number":  r"(?:\d+[.,]?\d*\s*(?:MB|GB|KB|TB|ms|µs|ns|s\b|%|руб|rub|\$|€|EUR|USD|RUB)|\d{3,}(?:[.,]\d+)?(?:\s*(?:KB|MB|GB|TB|ms|%))?)|\b\d{2,}\b(?=\s*(?:MB|GB|%|ms))",
+    "version": r"\bv?(?:\d+\.\d+(?:\.\d+)?(?:[._-]?(?:alpha|beta|rc|dev|a|b|pre|post|rev)\d*)?|release[_-]?\d+(?:\.\d+)*)\b",
+    "error":   r"\b(?:error|exception|traceback|errno|assert(?:ion)?|fail(?:ed|ure)?|exception|panic|fatal)\b",
+    "hash":    r"\b(?:[0-9a-f]{7,40}|[A-Fa-f0-9]{32,64})\b",  # git, md5, sha hashes
+    "ip":      r"\b(?:\d{1,3}\.){3}\d{1,3}\b(?::\d+)?",  # IP + optional port
+    "port":    r":\d{4,5}\b",  # port numbers
+    "path":    r"(?:/[\w\-._~:/?#\[\]@!$&'()*+,;=%]*)+",  # URL paths and file paths
+    "uuid":    r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b",  # UUIDs
+    "api":     r"/(?:api|v\d+|graphql|rest|rpc)/[\w\-._/]*",  # API endpoints
+    "config":  r"(?:config|setting|param|flag|option|mode|state)\s*[:=]\s*[^\s\n]+",  # config=value
 }
 
 # ── Multilingual critical signals ────────────────────────────────────────────
