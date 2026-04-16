@@ -189,7 +189,7 @@ mnemo                    # Launch Claude Code through the proxy (falls back to d
 | macOS | `mnemostroma service install` | launchd LaunchAgent |
 | Windows | `mnemostroma service install` | Task Scheduler |
 
-> **Windows note:** Signals `SIGUSR1/2` (flush/dump) are unavailable on Windows. Use `mnemostroma off` and `mnemostroma on` instead. For the best alpha experience, WSL2 (Ubuntu) is recommended.
+> **Windows note:** Signals `SIGUSR1/2` (flush/dump) are unavailable on Windows. Use `mnemostroma off` and `mnemostroma on` instead. For the best beta experience, WSL2 (Ubuntu) is recommended.
 
 **Management commands:**
 
@@ -490,7 +490,7 @@ Connect Mnemostroma to claude.ai web chat — tools available to Claude, convers
 
 ## Logging
 
-Mnemostroma writes local diagnostic logs to `logs.db` during alpha.
+Mnemostroma writes local diagnostic logs to `logs.db` during beta.
 **Logs never leave your machine.**
 
 `~/.mnemostroma/config.json`:
