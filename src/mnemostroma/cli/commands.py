@@ -18,6 +18,38 @@ _PID_FILE  = _MNEMO_DIR / "daemon.pid"
 _CONFIG_PATH = _MNEMO_DIR / "config.json"
 
 # ---------------------------------------------------------------------------
+# Terminal & UI Management
+# ---------------------------------------------------------------------------
+
+def _open_watch_terminal() -> None:
+    """Open mnemostroma watch in new terminal (platform-specific)."""
+    import os
+    import shlex
+
+    cmd = f"source ~/.mnemostroma/venv/bin/activate && mnemostroma watch"
+
+    try:
+        if sys.platform == "darwin":
+            # macOS: use open with AppleScript
+            apple_script = f'tell app "Terminal" to do script "{cmd}"'
+            subprocess.Popen(["osascript", "-e", apple_script])
+        elif sys.platform == "win32":
+            # Windows: use PowerShell
+            ps_cmd = f"powershell -NoExit -Command \"&{{ . $PROFILE; {cmd} }}\""
+            subprocess.Popen(ps_cmd, shell=True)
+        else:
+            # Linux: try gnome-terminal, xterm, or tilix
+            for term in ["gnome-terminal", "tilix", "xfce4-terminal", "konsole", "xterm"]:
+                try:
+                    subprocess.Popen([term, "-e", f"bash -c '{cmd}'"])
+                    return
+                except FileNotFoundError:
+                    continue
+            print(f"  ⚠ No terminal found. Run manually: {cmd}")
+    except Exception as e:
+        print(f"  ⚠ Could not open terminal: {e}")
+
+# ---------------------------------------------------------------------------
 # Process & PID Management (psutil based)
 # ---------------------------------------------------------------------------
 
@@ -358,7 +390,29 @@ def _cmd_setup() -> None:
         _write_claude_wrapper(Path.home() / ".local" / "bin" / "mnemo", ca_cert)
     except Exception:
         pass
-    print("\nSetup complete. Run: mnemostroma on\n")
+    print("\nSetup complete.\n")
+
+    # Auto-start daemon, tray, and watch
+    print("  ⚙️  Starting daemon & dashboard...\n")
+    _cmd_on()
+    _time.sleep(2)
+
+    # Start tray in background
+    print("  🎯 Starting system tray...")
+    try:
+        subprocess.Popen(
+            [sys.executable, "-m", "mnemostroma", "tray"],
+            start_new_session=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        print("  ✓ Tray icon running")
+    except Exception as e:
+        print(f"  ⚠ Tray failed: {e}")
+
+    # Open watch in new terminal
+    print("  📊 Opening live dashboard...\n")
+    _open_watch_terminal()
 
 _BANNER = """
   ███╗   ███╗███╗  ██╗███████╗███╗   ███╗ ██████╗
