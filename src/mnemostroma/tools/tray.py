@@ -167,10 +167,30 @@ def run_tray(db_path: Path, interval: int = 3):
         except Exception:
             pass  # notifications not supported on all platforms
 
+    def _on_restart_daemon(icon, item):
+        """Restart the daemon."""
+        import subprocess
+        import os
+        subprocess.Popen(["mnemostroma", "off"], env=os.environ.copy())
+        time.sleep(1)
+        subprocess.Popen(["mnemostroma", "on"], env=os.environ.copy())
+
+    def _on_open_watch(icon, item):
+        """Open watch in terminal."""
+        import subprocess
+        for term in ["gnome-terminal", "xterm", "tilix", "konsole"]:
+            try:
+                subprocess.Popen([term, "-e", "bash -c 'mnemostroma watch'"])
+                return
+            except FileNotFoundError:
+                continue
+
     menu = pystray.Menu(
         pystray.MenuItem("Status", _on_status),
+        pystray.MenuItem("Open Watch", _on_open_watch),
+        pystray.MenuItem("Restart Daemon", _on_restart_daemon),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem("Quit", _on_quit),
+        pystray.MenuItem("Exit", _on_quit),
     )
 
     initial_status = _detect_status(db_path)
