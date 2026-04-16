@@ -17,6 +17,7 @@ logger = logging.getLogger("mnemostroma.subconscious.guardian")
 
 GUARDIAN_TYPES = {"principle", "constraint", "critical", "decision"}
 
+
 async def anchor_guardian(
     embedding: np.ndarray,
     ctx: "SystemContext",
@@ -71,6 +72,7 @@ async def anchor_guardian(
     warnings.sort(key=lambda x: x["similarity"], reverse=True)
     return warnings
 
+
 def _keyword_anchor_check(text: str, ctx: "SystemContext") -> List[Dict[str, Any]]:
     """Layer 1: fast keyword match against anchor briefs. Same-turn detection.
 
@@ -113,6 +115,7 @@ def _keyword_anchor_check(text: str, ctx: "SystemContext") -> List[Dict[str, Any
                 ctx.recently_warned[anchor.anchor_id] = now
 
     return hits[:3]
+
 
 async def scan_open_loops(
     embedding: np.ndarray,
@@ -171,6 +174,7 @@ async def scan_open_loops(
         recently_looped[h["anchor_id"]] = now
     return result
 
+
 def _keyword_open_loop(
     text: str,
     ctx: "SystemContext",
@@ -212,6 +216,7 @@ def _keyword_open_loop(
             recently_looped[anchor.anchor_id] = now
 
     return hits[:3]
+
 
 def _merge_warnings(
     layer1: List[Dict[str, Any]],

@@ -42,7 +42,7 @@ class SessionBrief:
     deadline_ts: Optional[int] = None
     urgency_expired: bool = False
     bare_entity: bool = False
-    embedding_model_version: str = "gte-multilingual-base-int8-v1"
+    embedding_model_version: str = "multilingual-e5-small"
     
     layer: str = "RAM_HOT"
     embedding: Optional[np.ndarray] = None

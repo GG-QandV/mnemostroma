@@ -62,6 +62,7 @@ async def semantic_search(
     # If no reranker, use distances/relevance directly
     relevances = []
     if ctx.models.reranker:
+        loop = asyncio.get_event_loop()
         briefs = [f"{c.brief} {' '.join(c.tags)}" for c in candidates]
         raw = await loop.run_in_executor(
             None, ctx.models.reranker.rerank, query, briefs

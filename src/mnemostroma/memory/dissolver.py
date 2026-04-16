@@ -164,12 +164,15 @@ def _rebuild_session_index(ctx: "SystemContext") -> None:
     ctx._next_session_label = 0
 
     vectors, labels = [], []
+    import numpy as np
     for sid, sb in ctx.ram_index.items():
         emb = getattr(sb, 'embedding', None)
         if emb is None:
             continue
-        import numpy as np
-        label = ctx.get_session_label(sid)
+        label = ctx._next_session_label
+        ctx._next_session_label += 1
+        ctx.sid_to_id[sid] = label
+        ctx.id_to_sid[label] = sid
         vectors.append(np.array(emb, dtype='float32').flatten())
         labels.append(label)
 

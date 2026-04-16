@@ -183,9 +183,6 @@ async def tuner_check(entity: SessionBrief, ctx: SystemContext) -> SessionBrief:
 
     # Log START of check
     if hasattr(ctx, "log_writer") and ctx.log_writer:
-        from ..storage.log_writer import log_event
-        await log_event(ctx, "tuner.conflict", "start", analysis_data,
-                       session_id=entity.session_id)
 
     # 1. Conflict check (blocks dissolution if flagged)
     conflict_details = {}
@@ -199,7 +196,6 @@ async def tuner_check(entity: SessionBrief, ctx: SystemContext) -> SessionBrief:
 
     # Log RESULT of check with full details
     if hasattr(ctx, "log_writer") and ctx.log_writer:
-        from ..storage.log_writer import log_event
         result_data = {
             "detected": bool(flags),
             "flags": flags,
@@ -209,7 +205,5 @@ async def tuner_check(entity: SessionBrief, ctx: SystemContext) -> SessionBrief:
             "embedding_available": entity.embedding is not None,
             "latency_ms": round(latency, 2),
         }
-        await log_event(ctx, "tuner.conflict", "check", result_data,
-                       latency_ms=latency, session_id=entity.session_id)
 
     return entity

@@ -341,6 +341,83 @@ class DatabaseManager:
             logger.error(f"get_session_by_id({session_id}): {e}")
             return None
 
+    # Alias for SessionPort compatibility
+    load_session = get_session_by_id
+
+    async def delete_session(self, session_id: str) -> None:
+        """Permanently delete a session and its associated content/precision logs."""
+        try:
+            await self.db.execute("DELETE FROM sessions WHERE session_id = ?", (session_id,))
+            await self.db.execute("DELETE FROM content_blocks WHERE session_id = ?", (session_id,))
+            await self.db.execute("DELETE FROM precision_log WHERE session_id = ?", (session_id,))
+            await self.db.commit()
+            logger.info(f"Session {session_id} deleted from SQLite")
+        except Exception as e:
+            logger.error(f"Failed to delete session {session_id}: {e}")
+            raise
+
+    async def update_session_score(self, session_id: str, score: float) -> None:
+        """Update the implicit_score for a session."""
+        try:
+            await self.db.execute(
+                "UPDATE sessions SET implicit_score = ?, updated_at = ? WHERE session_id = ?",
+                (score, int(time.time()), session_id)
+            )
+            await self.db.commit()
+        except Exception as e:
+            logger.error(f"Failed to update score for session {session_id}: {e}")
+            raise
+
+    async def list_sessions_by_score(self, limit: int = 50) -> list:
+        """List sessions ordered by implicit_score DESC."""
+        from ..memory.session_index import SessionBrief
+        import numpy as np
+        results = []
+        try:
+            async with self.db.execute(
+                """SELECT session_id, created_at, importance, tags, brief,
+                          conflict, urgency, deadline_ts, urgency_expired, bare_entity,
+                          implicit_score, resolution, intensity, embedding
+                   FROM sessions
+                   ORDER BY implicit_score DESC
+                   LIMIT ?""",
+                (limit,)
+            ) as cursor:
+                async for row in cursor:
+                    embedding = None
+                    if row[13] is not None:
+                        try:
+                            embedding = np.frombuffer(row[13], dtype=np.float16)
+                        except Exception:
+                            pass
+                    results.append(SessionBrief(
+                        session_id=row[0],
+                        created_at=row[1],
+                        importance=row[2],
+                        tags=json.loads(row[3]),
+                        brief=row[4],
+                        score=row[10], # Use implicit_score
+                        resolution=row[11] if row[11] is not None else 1.0,
+                        conflict_flag=bool(row[5]),
+                        urgency=row[6],
+                        deadline_ts=row[7],
+                        urgency_expired=bool(row[8]),
+                        bare_entity=bool(row[9]),
+                        embedding=embedding,
+                        implicit_score=row[10] if row[10] is not None else 0.5,
+                        intensity=row[12] if row[12] is not None else 0.0,
+                        embedding_model_version="multilingual-e5-small",
+                    ))
+        except Exception as e:
+            logger.error(f"list_sessions_by_score failed: {e}")
+        return results
+
+    async def list_sessions_by_tags(self, tags: list[str], limit: int = 50) -> list:
+        """Unified wrapper for find_sessions_by_flags(has_tag=...)."""
+        # For multi-tag support, we take the first one or implement a complex query.
+        # Starting with simpler mapping as requested.
+        return await self.find_sessions_by_flags(has_tag=tags[0] if tags else None, limit=limit)
+
     async def get_all_content_embeddings(self, expected_dim: int = 768) -> list[tuple[str, int, Any]]:
         """Retrieve all content embeddings for HNSW content hydration.
 
@@ -490,6 +567,7 @@ class DatabaseManager:
         outcome: Optional[str] = None,
         multi_session: Optional[bool] = None,
         anchor_type: Optional[str] = None,
+        session_id: Optional[str] = None,
         decay_level_max: int = 3,
         limit: int = 50,
         offset: int = 0,
@@ -505,6 +583,7 @@ class DatabaseManager:
                            NOTE (T1): bool is converted to int (1/0) — SQLite json_extract
                            returns integers for JSON booleans, not Python bools.
             anchor_type: Filter by anchor_type column. None = no filter.
+            session_id: Filter by session_id column. None = no filter.
             decay_level_max: Inclusive upper bound on decay_level (0–3).
             limit: Page size for iterative deepening.
             offset: Pagination offset for iterative deepening.
@@ -530,6 +609,10 @@ class DatabaseManager:
         if anchor_type is not None:
             conditions.append("anchor_type = ?")
             params.append(anchor_type)
+
+        if session_id is not None:
+            conditions.append("session_id = ?")
+            params.append(session_id)
 
         where = " AND ".join(conditions)
         params.extend([limit, offset])
@@ -675,6 +758,121 @@ class DatabaseManager:
         except Exception as e:
             logger.error("find_sessions_by_flags failed: %s", e)
         return results
+
+    async def get_full_session(self, session_id: str) -> Optional[dict]:
+        """Load full session record from SQLite including content_full.
+        
+        Returns dict matching tool expectations or None.
+        """
+        try:
+            async with self.db.execute(
+                """SELECT session_id, brief, why_log, content_full, tags,
+                          importance, created_at, conflict
+                   FROM sessions WHERE session_id = ?""",
+                (session_id,)
+            ) as cursor:
+                row = await cursor.fetchone()
+                if row is None:
+                    return None
+                
+                try:
+                    tags_val = json.loads(row[4]) if row[4] else []
+                except Exception:
+                    tags_val = []
+
+                return {
+                    "session_id": row[0],
+                    "brief": row[1],
+                    "why_log": row[2],
+                    "content_full": row[3],
+                    "tags": tags_val,
+                    "importance": row[5],
+                    "created_at": row[6],
+                    "conflict": bool(row[7]),
+                }
+        except Exception as e:
+            logger.error(f"get_full_session: db error for {session_id}: {e}")
+            return None
+
+    async def list_recent_sessions(self, cutoff_ts: float, sql_field: str, limit: int) -> list[dict]:
+        """List sessions observed or accessed within the last N days."""
+        results: list[dict] = []
+        try:
+            async with self.db.execute(
+                f"""SELECT session_id, brief, importance, created_at,
+                           last_use_ts, tags, resolution
+                    FROM sessions
+                    WHERE {sql_field} >= ?
+                    ORDER BY {sql_field} DESC
+                    LIMIT ?""",
+                (cutoff_ts, limit)
+            ) as cursor:
+                rows = await cursor.fetchall()
+            
+            now = time.time()
+            for row in rows:
+                try:
+                    tags = json.loads(row[5]) if row[5] else []
+                except Exception:
+                    tags = []
+                age_days = (now - row[3]) / 86400
+                results.append({
+                    "session_id": row[0],
+                    "brief": row[1],
+                    "importance": row[2],
+                    "created_at": row[3],
+                    "last_accessed_at": row[4] or row[3],
+                    "age_days": round(age_days, 2),
+                    "resolution": row[6] if row[6] is not None else 1.0,
+                    "tags": tags,
+                })
+        except Exception as e:
+            logger.error(f"list_recent_sessions: SQLite error: {e}")
+            
+        return results
+
+    async def list_precision_entries(
+        self,
+        precision_type: Optional[str] = None,
+        importance: Optional[str] = None,
+        limit: int = 20,
+    ) -> list[dict]:
+        """Read precision artifacts from SQLite precision_log table."""
+        conditions = []
+        params: List[Any] = []
+        if precision_type:
+            conditions.append("type = ?")
+            params.append(precision_type)
+        if importance:
+            conditions.append("importance = ?")
+            params.append(importance)
+
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        params.append(limit)
+
+        try:
+            async with self.db.execute(
+                f"""SELECT precision_id, session_id, type, value, context_tag, importance, created_at
+                    FROM precision_log {where} ORDER BY created_at DESC LIMIT ?""",
+                params
+            ) as cursor:
+                rows = await cursor.fetchall()
+        except Exception as e:
+            logger.error(f"list_precision_entries: db error: {e}")
+            return []
+
+        return [
+            {
+                "precision_id": r[0],
+                "session_id": r[1],
+                "type": r[2],
+                "value": r[3],
+                "context_tag": r[4],
+                "importance": r[5],
+                "created_at": r[6],
+            }
+            for r in rows
+        ]
 
     async def check_experience_schema(self) -> None:
         """Add emotion columns to experience_metrics if they don't exist (v1.4 migration)."""
@@ -898,10 +1096,19 @@ class DatabaseManager:
 
         # Log storage flush (v1.0 spec — Point #15)
         if self.ctx is not None:
-            from .log_writer import log_event
-            await log_event(self.ctx, "storage.flush", "batch", {
-                "flushed_count": len(batch),
-                "queue_depth": self.queue.qsize()
-            })
 
         logger.debug(f"Flushed {len(batch)} sessions to SQLite")
+
+
+# Backward compatibility alias
+    async def delete_anchors_by_session(self, session_id: str) -> None:
+        """Delete all anchors associated with a specific session."""
+        try:
+            await self.db.execute("DELETE FROM anchors WHERE session_id = ?", (session_id,))
+            await self.db.commit()
+            logger.info(f"Anchors for session {session_id} deleted from SQLite")
+        except Exception as e:
+            logger.error(f"Failed to delete anchors for session {session_id}: {e}")
+            raise
+
+SQLiteStorage = DatabaseManager

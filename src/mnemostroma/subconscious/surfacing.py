@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("mnemostroma.subconscious.surfacing")
 
+
 async def associative_scan(
     embedding: np.ndarray,
     ctx: "SystemContext",
@@ -77,6 +78,7 @@ async def associative_scan(
             deduped.append(r)
 
     return deduped[:max_results]
+
 
 def _keyword_surface(text: str, ctx: "SystemContext") -> List[Dict[str, Any]]:
     """Layer 1: fast keyword match of anchor briefs against incoming text.

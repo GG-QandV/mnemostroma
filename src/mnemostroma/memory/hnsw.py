@@ -10,6 +10,7 @@ import numpy as np
 from pathlib import Path
 from typing import List, Tuple, Any
 
+
 def time_decay(age_days: float, half_life: float) -> float:
     """Exponential recency decay factor.
 
@@ -27,6 +28,7 @@ def time_decay(age_days: float, half_life: float) -> float:
     if half_life <= 0:
         return 1.0
     return math.exp(-age_days * math.log(2) / half_life)
+
 
 class MatrixSearch:
     """Cosine nearest-neighbour search over a float32 embedding matrix.
@@ -154,8 +156,10 @@ class MatrixSearch:
             if max_elements:
                 self._max_elements = max_elements
 
+
 # Aliases kept so imports of the old name still work
 HNSWIndex = MatrixSearch
+
 
 def init_session_index(config: Any) -> MatrixSearch:
     """Initialize matrix search index for sessions from config."""
@@ -163,6 +167,7 @@ def init_session_index(config: Any) -> MatrixSearch:
         dim=config.search.embedding_dim,
         max_elements=10000,
     )
+
 
 def init_content_index(config: Any) -> MatrixSearch:
     """Initialize matrix search index for content blocks from config."""

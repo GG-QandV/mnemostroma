@@ -193,6 +193,22 @@ class PersistenceLayer:
         """Load a single anchor by ID."""
         return await self._db.get_anchor(anchor_id)
 
+    async def find_anchors_by_flags(self, **kwargs) -> list:
+        """Disk search for anchors by flag patterns.
+
+        Delegates to DatabaseManager.find_anchors_by_flags.
+        See sqlite.py for full argument documentation.
+        """
+        return await self._db.find_anchors_by_flags(**kwargs)
+
+    async def find_sessions_by_flags(self, **kwargs) -> list:
+        """Disk search for sessions by field/tag patterns.
+
+        Delegates to DatabaseManager.find_sessions_by_flags.
+        See sqlite.py for full argument documentation.
+        """
+        return await self._db.find_sessions_by_flags(**kwargs)
+
     def pending_writes(self) -> int:
         """Return current queue depth (pending session writes)."""
         return self._db.queue.qsize()

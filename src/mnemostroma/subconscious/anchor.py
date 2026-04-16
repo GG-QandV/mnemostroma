@@ -13,6 +13,7 @@ import numpy as np
 
 logger = logging.getLogger("mnemostroma.subconscious.anchor")
 
+
 @dataclass
 class Anchor:
     """Irreducible event skeleton.
