@@ -26,12 +26,70 @@ class BackupWorker:
         self.interval_sec = getattr(ctx.config.storage, "backup_interval_hours", 3) * 3600
 
     async def start(self) -> None:
-        """Start the background backup loop."""
+        """Start the background backup loop.
+
+        On startup, checks if there are unbackedup records older than the interval.
+        If yes → backup immediately. Otherwise → wait for next interval.
+        """
         if self._task is not None:
             return
         self._running = True
-        self._task = asyncio.create_task(self._loop(), name="backup_worker")
+
+        # Check if immediate backup is needed (unbackedup records older than interval)
+        should_backup_now = await self._check_unbackedup_records()
+
+        async def _startup_aware_loop():
+            if should_backup_now:
+                try:
+                    await self._do_backup()
+                    logger.info("BackupWorker: immediate backup triggered (unbackedup records detected)")
+                except Exception as e:
+                    logger.error("BackupWorker: immediate backup failed: %s", e, exc_info=True)
+
+            # Continue with normal periodic backups
+            await self._loop()
+
+        self._task = asyncio.create_task(_startup_aware_loop(), name="backup_worker")
         logger.info("BackupWorker started (interval=%.1fh)", self.interval_sec / 3600)
+
+    async def _check_unbackedup_records(self) -> bool:
+        """Check if there are records older than backup interval that were not backed up.
+
+        Returns:
+            True if immediate backup should be triggered, False otherwise.
+        """
+        try:
+            # Get last backup timestamp from db_snapshots
+            last_backup_row = await self.ctx.db.execute(
+                "SELECT MAX(ts) FROM db_snapshots"
+            )
+            last_backup_ts = await last_backup_row.fetchone()
+            last_backup_ts = last_backup_ts[0] if last_backup_ts and last_backup_ts[0] else 0
+
+            # Get earliest session created_at
+            earliest_session = await self.ctx.db.execute(
+                "SELECT MIN(created_at) FROM sessions"
+            )
+            earliest_ts_row = await earliest_session.fetchone()
+            earliest_ts = earliest_ts_row[0] if earliest_ts_row and earliest_ts_row[0] else int(_time.time())
+
+            # Check if earliest unbackedup record is older than interval
+            now = int(_time.time())
+            oldest_unbackedup = min(earliest_ts, last_backup_ts)
+
+            # If there's a gap between last backup and earliest record, and it's >= interval
+            if earliest_ts > last_backup_ts and (now - earliest_ts) >= self.interval_sec:
+                logger.info(
+                    "BackupWorker: unbackedup records detected (oldest: %d, age: %.1fh)",
+                    earliest_ts,
+                    (now - earliest_ts) / 3600,
+                )
+                return True
+
+            return False
+        except Exception as e:
+            logger.debug("BackupWorker: check_unbackedup_records failed: %s", e)
+            return False
 
     async def stop(self) -> None:
         """Stop the background backup loop."""
