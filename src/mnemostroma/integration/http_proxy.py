@@ -35,6 +35,8 @@ from mnemostroma.circuit_breaker import CircuitBreaker
 
 logger     = logging.getLogger("mnemostroma.http_proxy")
 _ANTHROPIC = "https://api.anthropic.com"
+_GEMINI    = "https://generativelanguage.googleapis.com"
+_GEMINI_OAI = "https://generativelanguage.googleapis.com/v1beta/openai"
 
 _MNEMO_DIR  = Path.home() / ".mnemostroma"
 _PROXY_PID  = _MNEMO_DIR / "proxy.pid"
@@ -84,6 +86,8 @@ def _get_or_create_sid(request: Request) -> tuple[str, bool]:
     for h in ("x-session-id", "x-mnemo-session", "x-correlation-id"):
         if sid := request.headers.get(h):
             return sid, False
+    if gkey := request.headers.get("x-goog-api-key"):
+        return "proxy_" + gkey[:16], True
     return "proxy_" + uuid.uuid4().hex[:16], True
 
 
@@ -163,19 +167,70 @@ async def proxy_messages(request: Request) -> Response:
         timeout=httpx.Timeout(connect=10, read=300, write=30, pool=10),
     ) as client:
         if streaming:
-            return await _handle_stream(client, body, fwd, sid, extra)
+            return await _handle_stream(client, "/v1/messages", body, fwd, sid, extra, "anthropic")
         else:
-            return await _handle_simple(client, body, fwd, sid, extra)
+            return await _handle_simple(client, "/v1/messages", body, fwd, sid, extra, "anthropic")
 
 
-async def _handle_simple(client, body, headers, sid, extra) -> Response:
-    resp = await client.post("/v1/messages", json=body, headers=headers)
+async def proxy_gemini(request: Request) -> Response:
+    raw = await request.body()
+    try:
+        body = json.loads(raw)
+    except json.JSONDecodeError:
+        return Response("Bad JSON", status_code=400)
+
+    sid, is_new = _get_or_create_sid(request)
+    # Gemini streaming uses streamGenerateContent in the URL path
+    streaming   = "streamGenerateContent" in request.url.path
+    fwd         = _forward_headers(request)
+    extra       = {"X-Session-Id": sid} if is_new else {}
+
+    async with httpx.AsyncClient(
+        base_url=_GEMINI,
+        timeout=httpx.Timeout(connect=10, read=300, write=30, pool=10),
+    ) as client:
+        if streaming:
+            return await _handle_stream(client, request.url.path, body, fwd, sid, extra, "gemini")
+        else:
+            return await _handle_simple(client, request.url.path, body, fwd, sid, extra, "gemini")
+
+
+async def proxy_gemini_oai(request: Request) -> Response:
+    """OpenAI-compatible endpoint → Google generativelanguage.googleapis.com/v1beta/openai"""
+    raw = await request.body()
+    try:
+        body = json.loads(raw)
+    except json.JSONDecodeError:
+        return Response("Bad JSON", status_code=400)
+
+    sid, is_new = _get_or_create_sid(request)
+    streaming   = body.get("stream", False)
+    fwd         = _forward_headers(request)
+    extra       = {"X-Session-Id": sid} if is_new else {}
+
+    async with httpx.AsyncClient(
+        base_url=_GEMINI_OAI,
+        timeout=httpx.Timeout(connect=10, read=300, write=30, pool=10),
+    ) as client:
+        if streaming:
+            return await _handle_stream(client, "/chat/completions", body, fwd, sid, extra, "oai")
+        else:
+            return await _handle_simple(client, "/chat/completions", body, fwd, sid, extra, "oai")
+
+
+async def _handle_simple(client, path, body, headers, sid, extra, provider) -> Response:
+    resp = await client.post(path, json=body, headers=headers)
     try:
         data = resp.json()
-        text = "".join(
-            b.get("text", "") for b in data.get("content", [])
-            if b.get("type") == "text"
-        )
+        if provider == "anthropic":
+            text = "".join(
+                b.get("text", "") for b in data.get("content", [])
+                if b.get("type") == "text"
+            )
+        elif provider == "oai":
+            text = data.get("choices", [{}])[0].get("message", {}).get("content", "") or ""
+        else:  # gemini
+            text = data["candidates"][0]["content"]["parts"][0].get("text", "")
         if text:
             asyncio.create_task(_observe(text, sid))
     except Exception:
@@ -193,13 +248,13 @@ async def _handle_simple(client, body, headers, sid, extra) -> Response:
     )
 
 
-async def _handle_stream(client, body, headers, sid, extra) -> StreamingResponse:
+async def _handle_stream(client, path, body, headers, sid, extra, provider) -> StreamingResponse:
     collected: list[str] = []
 
     async def generate() -> AsyncIterator[bytes]:
         try:
             async with client.stream(
-                "POST", "/v1/messages", json=body, headers=headers
+                "POST", path, json=body, headers=headers
             ) as resp:
                 async for chunk in resp.aiter_bytes():
                     # Parse SSE to collect text
@@ -208,13 +263,22 @@ async def _handle_stream(client, body, headers, sid, extra) -> StreamingResponse
                             if not line.startswith("data: "):
                                 continue
                             payload = line[6:].strip()
-                            if payload in ("", "[DONE]"):
+                            if not payload or payload == "[DONE]":
                                 continue
                             ev = json.loads(payload)
-                            if ev.get("type") == "content_block_delta":
-                                d = ev.get("delta", {})
-                                if d.get("type") == "text_delta":
-                                    collected.append(d.get("text", ""))
+                            if provider == "anthropic":
+                                if ev.get("type") == "content_block_delta":
+                                    d = ev.get("delta", {})
+                                    if d.get("type") == "text_delta":
+                                        collected.append(d.get("text", ""))
+                            elif provider == "oai":
+                                text = ev.get("choices", [{}])[0].get("delta", {}).get("content") or ""
+                                if text:
+                                    collected.append(text)
+                            else:  # gemini
+                                text = ev["candidates"][0]["content"]["parts"][0].get("text", "")
+                                if text:
+                                    collected.append(text)
                     except Exception:
                         pass
                     yield chunk
@@ -246,13 +310,41 @@ async def health(request: Request) -> Response:
         )
 
 
+async def capture(request: Request) -> Response:
+    """Manually capture text into Mnemostroma RAG.
+    Expects JSON: {"text": "...", "session_id": "optional"}
+    """
+    try:
+        data = await request.json()
+    except Exception:
+        return Response('{"error":"Invalid JSON"}', status_code=400, media_type="application/json")
+
+    text = data.get("text")
+    if not text:
+        return Response('{"error":"Field \'text\' is required"}', status_code=400, media_type="application/json")
+
+    sid = data.get("session_id") or data.get("sid")
+    if not sid:
+        sid, _ = _get_or_create_sid(request)
+
+    asyncio.create_task(_observe(text, sid))
+    return Response(
+        json.dumps({"status": "captured", "session_id": sid}),
+        media_type="application/json"
+    )
+
+
 # ── App ───────────────────────────────────────────────────────────────
 
 app = Starlette(
     lifespan=lifespan,
     routes=[
-        Route("/v1/messages", proxy_messages, methods=["POST"]),
-        Route("/health",      health,         methods=["GET"]),
+        Route("/v1/messages",             proxy_messages,   methods=["POST"]),
+        Route("/v1/chat/completions",     proxy_gemini_oai, methods=["POST"]),
+        Route("/v1/models/{path:path}",   proxy_gemini,     methods=["POST"]),
+        Route("/v1beta/models/{path:path}", proxy_gemini,   methods=["POST"]),
+        Route("/health",                    health,         methods=["GET"]),
+        Route("/capture",                   capture,        methods=["POST"]),
     ],
 )
 
