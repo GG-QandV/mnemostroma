@@ -2,9 +2,11 @@ import curses
 import json
 import sqlite3
 import time
+import asyncio
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Optional, List, Any
+from mnemostroma.ipc_pool import IPCPool
 
 def _fmt_ts(ts_ms: int) -> str:
     return time.strftime("%H:%M:%S", time.localtime(ts_ms / 1000))
@@ -108,10 +110,14 @@ class WatchUI:
             
             self.stdscr.addstr(y, 2, status_text, curses.color_pair(status_pair) | curses.A_BOLD)
             if health:
+                # Support both IPC (ctx_active) and DB (health) keys
                 ram_mb = health.get('ram_mb', 0)
+                active_vars = health.get('active_variables', [])
                 ram_color = 2 if ram_mb < 500 else 3 if ram_mb < 1000 else 4
                 self.stdscr.addstr(" RAM: ", curses.A_DIM)
                 self.stdscr.addstr(f"{ram_mb:.0f}MB", curses.color_pair(ram_color) | curses.A_BOLD)
+                if active_vars:
+                    self.stdscr.addstr(f"  vars: {len(active_vars)}", curses.A_DIM)
             
             self.stdscr.addstr(f"  events: {len(logs)}", curses.A_DIM)
             if errors: self.stdscr.addstr(f"  err: {len(errors)}", curses.color_pair(4))
@@ -186,11 +192,18 @@ class WatchUI:
         self.stdscr.addstr(h-1, 2, "Press 'q' or Ctrl+C to exit", curses.A_DIM)
         self.stdscr.refresh()
 
-def run_watch_curses(stdscr, db_path: Path, interval: int, window_sec: int):
+async def run_watch_curses(stdscr, db_path: Path, interval: int, window_sec: int):
     ui = WatchUI(stdscr)
     conn = _connect(db_path)
     if not conn:
         return
+
+    sock_path = str(db_path.parent / "daemon.sock")
+    pool = IPCPool(sock_path, size=1)
+    try:
+        await pool.start()
+    except Exception:
+        pool = None # Degraded mode: SQLite only
 
     try:
         while True:
@@ -198,31 +211,56 @@ def run_watch_curses(stdscr, db_path: Path, interval: int, window_sec: int):
             ch = stdscr.getch()
             if ch == ord('q'): break
             
-            since_ms = int((time.time() - window_sec) * 1000)
-            logs = _fetch(conn, since_ms)
+            # Logic: If no events in last 30s, check if there's anything in last 5m.
+            # If still nothing, check if the DB file was modified recently (daemon is alive).
+            since_ms_live = int((time.time() - window_sec) * 1000)
+            logs = _fetch(conn, since_ms_live)
             is_history = False
             
             if not logs:
-                # Fallback to history
-                logs = _fetch(conn, 0) # Implicitly limited to 500 in _fetch, but good for overview
-                logs = logs[:50] # Just top 50 for dashboard
-                is_history = True
+                since_ms_recent = int((time.time() - 300) * 1000) # 5 minutes
+                logs = _fetch(conn, since_ms_recent)
+                if not logs:
+                    # Check DB file modification time as a last resort for "liveness"
+                    db_mtime_age = time.time() - db_path.stat().st_mtime
+                    if db_mtime_age < 300: # 5 minutes
+                        # Still fetch top logs for context, but keep is_history=False
+                        logs = _fetch(conn, 0)[:50]
+                        is_history = False
+                    else:
+                        # Truly historic
+                        logs = _fetch(conn, 0)[:50]
+                        is_history = True
+                else:
+                    is_history = False # Still consider "live" if active in last 5m
             
-            health = _fetch_health(conn)
+            # Hybrid Health: IPC first, then fallback to DB log
+            health = None
+            if pool:
+                try:
+                    # ctx_active returns {ram_mb, ram_index_count, active_variables, ...}
+                    health = await pool.call("ctx_active", {})
+                except Exception:
+                    health = None
+            
+            if health is None:
+                health = _fetch_health(conn)
+            
             ui.draw(logs, health, db_path, interval, window_sec, is_history=is_history)
-            time.sleep(interval)
+            await asyncio.sleep(interval)
     finally:
+        if pool: await pool.stop()
         conn.close()
 
 def run_watch(db_path: Path, interval: int = 2, window_sec: int = 30):
     """Main watch loop. Falls back to text mode if curses unavailable."""
     try:
-        curses.wrapper(run_watch_curses, db_path, interval, window_sec)
+        asyncio.run(curses.wrapper(run_watch_curses, db_path, interval, window_sec))
     except (KeyboardInterrupt, SystemExit):
         pass
     except Exception as e:
         # Fallback to simple text mode
-        print(f"⚠️  Curses failed: {e.__class__.__name__}. Switching to text mode...")
+        print(f"⚠️  Watch failed: {e.__class__.__name__}. Switching to text mode...")
         _run_watch_text(db_path, interval, window_sec)
 
 def _run_watch_text(db_path: Path, interval: int, window_sec: int):
