@@ -46,12 +46,14 @@ _pool: IPCPool | None = None
 _cb_inject  = CircuitBreaker("inject",  failure_threshold=3, recovery_timeout=30)
 _cb_observe = CircuitBreaker("observe", failure_threshold=5, recovery_timeout=10)
 
+_client: httpx.AsyncClient | None = None
+
 
 # ── Lifespan ──────────────────────────────────────────────────────────
 
 @asynccontextmanager
 async def lifespan(app):
-    global _pool
+    global _pool, _client
     _MNEMO_DIR.mkdir(parents=True, exist_ok=True)
     _PROXY_PID.write_text(str(os.getpid()))
 
@@ -70,10 +72,17 @@ async def lifespan(app):
     except Exception as e:
         logger.warning(f"IPC pool start failed ({e}) — Circuit Breaker will handle")
 
+    _client = httpx.AsyncClient(
+        timeout=httpx.Timeout(connect=10, read=300, write=30, pool=10),
+        limits=httpx.Limits(max_connections=100, max_keepalive_connections=20)
+    )
+
     logger.info("HTTP Proxy ready on http://127.0.0.1:8767")
     yield
 
     _PROXY_PID.unlink(missing_ok=True)
+    if _client:
+        await _client.aclose()
     await _pool.stop()
 
 
@@ -162,14 +171,11 @@ async def proxy_messages(request: Request) -> Response:
     fwd         = _forward_headers(request)
     extra       = {"X-Session-Id": sid} if is_new else {}
 
-    async with httpx.AsyncClient(
-        base_url=_ANTHROPIC,
-        timeout=httpx.Timeout(connect=10, read=300, write=30, pool=10),
-    ) as client:
-        if streaming:
-            return await _handle_stream(client, "/v1/messages", body, fwd, sid, extra, "anthropic")
-        else:
-            return await _handle_simple(client, "/v1/messages", body, fwd, sid, extra, "anthropic")
+    client = _client or httpx.AsyncClient(base_url=_ANTHROPIC)
+    if streaming:
+        return await _handle_stream(client, _ANTHROPIC + "/v1/messages", body, fwd, sid, extra, "anthropic")
+    else:
+        return await _handle_simple(client, _ANTHROPIC + "/v1/messages", body, fwd, sid, extra, "anthropic")
 
 
 async def proxy_gemini(request: Request) -> Response:
@@ -185,14 +191,11 @@ async def proxy_gemini(request: Request) -> Response:
     fwd         = _forward_headers(request)
     extra       = {"X-Session-Id": sid} if is_new else {}
 
-    async with httpx.AsyncClient(
-        base_url=_GEMINI,
-        timeout=httpx.Timeout(connect=10, read=300, write=30, pool=10),
-    ) as client:
-        if streaming:
-            return await _handle_stream(client, request.url.path, body, fwd, sid, extra, "gemini")
-        else:
-            return await _handle_simple(client, request.url.path, body, fwd, sid, extra, "gemini")
+    client = _client or httpx.AsyncClient(base_url=_GEMINI)
+    if streaming:
+        return await _handle_stream(client, _GEMINI + request.url.path, body, fwd, sid, extra, "gemini")
+    else:
+        return await _handle_simple(client, _GEMINI + request.url.path, body, fwd, sid, extra, "gemini")
 
 
 async def proxy_gemini_oai(request: Request) -> Response:
@@ -208,14 +211,11 @@ async def proxy_gemini_oai(request: Request) -> Response:
     fwd         = _forward_headers(request)
     extra       = {"X-Session-Id": sid} if is_new else {}
 
-    async with httpx.AsyncClient(
-        base_url=_GEMINI_OAI,
-        timeout=httpx.Timeout(connect=10, read=300, write=30, pool=10),
-    ) as client:
-        if streaming:
-            return await _handle_stream(client, "/chat/completions", body, fwd, sid, extra, "oai")
-        else:
-            return await _handle_simple(client, "/chat/completions", body, fwd, sid, extra, "oai")
+    client = _client or httpx.AsyncClient(base_url=_GEMINI_OAI)
+    if streaming:
+        return await _handle_stream(client, _GEMINI_OAI + "/chat/completions", body, fwd, sid, extra, "oai")
+    else:
+        return await _handle_simple(client, _GEMINI_OAI + "/chat/completions", body, fwd, sid, extra, "oai")
 
 
 async def _handle_simple(client, path, body, headers, sid, extra, provider) -> Response:

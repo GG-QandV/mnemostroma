@@ -126,7 +126,7 @@ class Conductor:
             self.ctx.anchor_repo = None
             logger.info("SessionRepo mode: LEGACY (PersistenceLayer direct)")
 
-        # Provide ctx to db_manager for log_removed access
+        # Provide ctx to db_manager for log_event access
         persistence.wire_ctx(self.ctx)
         await persistence.start()
         

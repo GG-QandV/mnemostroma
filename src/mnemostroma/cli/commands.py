@@ -24,24 +24,29 @@ _CONFIG_PATH = _MNEMO_DIR / "config.json"
 def _open_watch_terminal() -> None:
     """Open mnemostroma watch in new terminal (platform-specific)."""
     import os
+    import sys
     import shlex
 
-    cmd = f"source ~/.mnemostroma/venv/bin/activate && mnemostroma watch"
+    # Construct command using current python interpreter to avoid PATH/venv issues
+    python_bin = sys.executable
+    cmd = f"{shlex.quote(python_bin)} -m mnemostroma watch"
 
     try:
         if sys.platform == "darwin":
-            # macOS: use open with AppleScript
             apple_script = f'tell app "Terminal" to do script "{cmd}"'
             subprocess.Popen(["osascript", "-e", apple_script])
         elif sys.platform == "win32":
-            # Windows: use PowerShell
-            ps_cmd = f"powershell -NoExit -Command \"&{{ . $PROFILE; {cmd} }}\""
-            subprocess.Popen(ps_cmd, shell=True)
+            # Use 'start' to open new console window
+            subprocess.Popen(f"start cmd /k {cmd}", shell=True)
         else:
-            # Linux: try gnome-terminal, xterm, or tilix
+            # Linux: try common terminal emulators
             for term in ["gnome-terminal", "tilix", "xfce4-terminal", "konsole", "xterm"]:
                 try:
-                    subprocess.Popen([term, "-e", f"bash -c '{cmd}'"])
+                    # Use -- to pass command to newer gnome-terminal/konsole
+                    if term in ["gnome-terminal", "konsole", "tilix"]:
+                        subprocess.Popen([term, "--", "bash", "-c", f"{cmd}; exec bash"])
+                    else:
+                        subprocess.Popen([term, "-e", f"bash -c '{cmd}; exec bash'"])
                     return
                 except FileNotFoundError:
                     continue
@@ -421,7 +426,7 @@ _BANNER = """
   ██║╚██╔╝██║██║╚████║██╔══╝  ██║╚██╔╝██║██║   ██║
   ██║ ╚═╝ ██║██║ ╚███║███████╗██║ ╚═╝ ██║╚██████╔╝
   ╚═╝     ╚═╝╚═╝  ╚══╝╚══════╝╚═╝     ╚═╝ ╚═════╝
-                    MNEMOSTROMA v1.7.x
+                    MNEMOSTROMA v1.8.1
 """
 
 def _cmd_cleanup(args: list) -> bool:

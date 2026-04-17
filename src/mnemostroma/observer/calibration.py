@@ -77,8 +77,19 @@ class CalibrationCollector:
             "Onboarding complete: continuation_threshold=%.3f (from %d samples)",
             threshold, len(self._distances),
         )
-# log_event call removed in public OSS version
-        pass
+        # Log calibration event for watch/dashboard observability
+        try:
+            import asyncio
+            asyncio.ensure_future(
+                log_event(self.ctx, "calibration.update", "finalize", {
+                    "threshold_old": old_threshold,
+                    "threshold_new": threshold,
+                    "samples": len(self._distances),
+                    "p25_distance": round(distances[max(0, int(len(distances)*0.25)-1)], 4),
+                })
+            )
+        except Exception:
+            pass
 
     def _write_config(self, threshold: float) -> None:
         """Persist calibrated threshold to config.json."""
