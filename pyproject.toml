@@ -55,7 +55,7 @@ sse = [
     "cryptography>=42.0",
 ]
 tray = [
-    "pystray>=0.19",
+    "PyQt6>=6.0",
     "pillow>=10.0",
 ]
 watch = []
@@ -64,7 +64,7 @@ all = [
     "uvicorn>=0.27",
     "httpx>=0.27",
     "cryptography>=42.0",
-    "pystray>=0.19",
+    "PyQt6>=6.0",
     "pillow>=10.0",
 ]
 dev = [

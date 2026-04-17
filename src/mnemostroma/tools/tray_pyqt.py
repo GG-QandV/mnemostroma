@@ -39,11 +39,11 @@ _COLOURS = {
 }
 
 _LABELS = {
-    _ST_PROCESSING: "Mnemostroma: processing",
-    _ST_CONNECTED: "Mnemostroma: connected",
-    _ST_IDLE: "Mnemostroma: idle",
-    _ST_WARNING: "Mnemostroma: warning",
-    _ST_ERROR: "Mnemostroma: error / not running",
+    _ST_PROCESSING: "Mnemostroma: Active / Processing [Активен]",
+    _ST_CONNECTED: "Mnemostroma: Recent Activity [Недавняя активность]",
+    _ST_IDLE: "Mnemostroma: Ready / Waiting [Ожидание]",
+    _ST_WARNING: "Mnemostroma: System Warning [Внимание]",
+    _ST_ERROR: "Mnemostroma: Offline or Error [Ошибка]",
 }
 
 _SIZE = 64   # icon canvas size in px
@@ -159,13 +159,19 @@ class DaemonTrayApp(QApplication):
 
     def _open_watch(self):
         """Open 'mnemostroma watch' in new terminal."""
+        import shlex
         try:
+            # Use current interpreter to be sure it's available and has mnemostroma
+            python_bin = sys.executable
+            cmd = f"{shlex.quote(python_bin)} -m mnemostroma watch"
+
             # Try common terminal emulators
             terminals = [
-                ["x-terminal-emulator", "-e", "bash", "-c", "mnemostroma watch; bash"],
-                ["gnome-terminal", "--", "bash", "-c", "mnemostroma watch; bash"],
-                ["konsole", "-e", "bash", "-c", "mnemostroma watch; bash"],
-                ["xterm", "-e", "bash", "-c", "mnemostroma watch; bash"],
+                ["gnome-terminal", "--", "bash", "-c", f"{cmd}; exec bash"],
+                ["tilix", "--", "bash", "-c", f"{cmd}; exec bash"],
+                ["konsole", "--", "bash", "-c", f"{cmd}; exec bash"],
+                ["xfce4-terminal", "-e", f"bash -c '{cmd}; exec bash'"],
+                ["xterm", "-e", f"bash -c '{cmd}; exec bash'"],
             ]
             for term_cmd in terminals:
                 try:
@@ -173,7 +179,7 @@ class DaemonTrayApp(QApplication):
                     return
                 except FileNotFoundError:
                     continue
-            print("No terminal found")
+            print(f"No terminal found. Run manually: {cmd}")
         except Exception as e:
             print(f"Error opening watch: {e}")
 
@@ -199,9 +205,14 @@ class DaemonTrayApp(QApplication):
                 print(f"Error restarting daemon: {e}")
 
     def _show_status(self):
-        """Show status in console."""
+        """Show status in tray balloon."""
         status = self.current_status
-        print(f"Mnemostroma Status: {_LABELS[status]}")
+        self.tray_icon.showMessage(
+            "Mnemostroma Status",
+            _LABELS[status],
+            QSystemTrayIcon.MessageIcon.Information,
+            5000
+        )
 
     def _init_tray(self):
         """Initialize system tray icon and menu."""
@@ -230,14 +241,21 @@ class DaemonTrayApp(QApplication):
         self._check_status()
 
 
-def run_tray(db_path: Path, interval: int = 3):
-    """Start the system tray icon. Blocks until user quits."""
+def check_pyqt6() -> bool:
+    """Check if PyQt6 is available, otherwise print helpful error."""
     try:
         from PyQt6.QtWidgets import QApplication
-        from PyQt6.QtGui import QIcon
-    except ImportError as e:
-        print(f"PyQt6 not installed. Run: pip install PyQt6")
+        return True
+    except ImportError:
+        print("\n[!] Mnemostroma Tray Error: PyQt6 is not installed.")
+        print("    To use the tray icon, install it via: pip install 'mnemostroma[tray]'\n")
+        return False
+
+def run_tray(db_path: Path, interval: int = 3):
+    """Start the system tray icon. Blocks until user quits."""
+    if not check_pyqt6():
         return
 
+    from PyQt6.QtWidgets import QApplication
     app = DaemonTrayApp(sys.argv, db_path)
     sys.exit(app.exec())

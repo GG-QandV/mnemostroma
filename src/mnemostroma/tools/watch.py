@@ -1,58 +1,19 @@
-# SPDX-License-Identifier: FSL-1.1-MIT
-"""mnemostroma watch — live terminal observer.
-
-Polls logs.db every N seconds and renders a live status dashboard.
-No daemon connection required — reads directly from the log database.
-"""
+import curses
 import json
-import os
 import sqlite3
 import time
 from collections import Counter, defaultdict
 from pathlib import Path
-from typing import Optional
-
-# ANSI colours
-_R  = "\033[0m"       # reset
-_B  = "\033[1m"       # bold
-_DIM = "\033[2m"
-_RED    = "\033[31m"
-_GRN    = "\033[32m"
-_YEL    = "\033[33m"
-_BLU    = "\033[34m"
-_CYN    = "\033[36m"
-_GRN2   = "\033[92m"  # bright green
-
-
-def _clear():
-    os.system("cls" if os.name == "nt" else "clear")
-
+from typing import Optional, List, Any
 
 def _fmt_ts(ts_ms: int) -> str:
     return time.strftime("%H:%M:%S", time.localtime(ts_ms / 1000))
-
 
 def _ago(ts_ms: int) -> str:
     secs = int(time.time() - ts_ms / 1000)
     if secs < 60:   return f"{secs}s ago"
     if secs < 3600: return f"{secs//60}m ago"
     return f"{secs//3600}h ago"
-
-
-def _status_dot(last_event_ts_ms: Optional[int], has_error: bool, has_warning: bool) -> str:
-    if has_error:
-        return f"{_RED}● ERROR{_R}"
-    if last_event_ts_ms is None:
-        return f"{_BLU}● IDLE{_R}"
-    secs = time.time() - last_event_ts_ms / 1000
-    if secs < 5:
-        return f"{_GRN2}● ACTIVE{_R}"
-    if secs < 30:
-        return f"{_GRN}● RECENT{_R}"
-    if has_warning:
-        return f"{_YEL}● WARNING{_R}"
-    return f"{_BLU}● IDLE{_R}"
-
 
 def _connect(db_path: Path) -> Optional[sqlite3.Connection]:
     if not db_path.exists():
@@ -63,7 +24,6 @@ def _connect(db_path: Path) -> Optional[sqlite3.Connection]:
         return conn
     except Exception:
         return None
-
 
 def _fetch(conn: sqlite3.Connection, since_ms: int) -> list:
     try:
@@ -87,9 +47,7 @@ def _fetch(conn: sqlite3.Connection, since_ms: int) -> list:
     except Exception:
         return []
 
-
 def _fetch_health(conn: sqlite3.Connection) -> Optional[dict]:
-    """Get latest health check entry."""
     try:
         row = conn.execute(
             "SELECT data FROM onnx_logs WHERE component='conductor.health' "
@@ -99,187 +57,209 @@ def _fetch_health(conn: sqlite3.Connection) -> Optional[dict]:
     except Exception:
         return None
 
+class WatchUI:
+    def __init__(self, stdscr):
+        self.stdscr = stdscr
+        curses.curs_set(0) # Hide cursor
+        self.stdscr.nodelay(True) # Non-blocking input
+        
+        # Initialize colors
+        curses.start_color()
+        curses.use_default_colors()
+        curses.init_pair(1, curses.COLOR_CYAN, -1)   # Title
+        curses.init_pair(2, curses.COLOR_GREEN, -1)  # OK / Active
+        curses.init_pair(3, curses.COLOR_YELLOW, -1) # Warning
+        curses.init_pair(4, curses.COLOR_RED, -1)    # Error
+        curses.init_pair(5, curses.COLOR_BLUE, -1)   # Idle
+        curses.init_pair(6, 8, -1)                   # Dim (if supported)
 
-def _render(logs: list, health: Optional[dict], db_path: Path, interval: int, window_sec: int):
-    now_str = time.strftime("%Y-%m-%d %H:%M:%S")
+    def draw(self, logs: list, health: Optional[dict], db_path: Path, interval: int, window_sec: int, is_history: bool = False):
+        self.stdscr.erase()
+        h, w = self.stdscr.getmaxyx()
+        
+        now_str = time.strftime("%H:%M:%S")
+        y = 0
 
-    # ── Aggregate ──────────────────────────────────────────────
-    by_component = defaultdict(list)
-    for l in logs:
-        by_component[l["component"]].append(l)
+        # Title bar
+        self.stdscr.addstr(y, 2, "─" * (w - 4), curses.A_DIM)
+        y += 1
+        self.stdscr.addstr(y, 2, "  MNEMOSTROMA WATCH  ", curses.A_BOLD | curses.color_pair(1))
+        self.stdscr.addstr(f"│  {now_str}  ", curses.A_DIM)
+        mode_str = f" { '[HISTORIC]' if is_history else '[LIVE]' } "
+        self.stdscr.addstr(mode_str, curses.A_REVERSE | curses.color_pair(3 if is_history else 2))
+        y += 1
+        self.stdscr.addstr(y, 2, f"  db: {db_path.name}  window: {window_sec}s", curses.A_DIM)
+        y += 1
+        self.stdscr.addstr(y, 2, "─" * (w - 4), curses.A_DIM)
+        y += 2
 
-    errors   = [l for l in logs if l["level"] == "ERROR"]
-    warnings = [l for l in logs if l["level"] == "WARNING"]
-    last_ts  = logs[0]["ts"] if logs else None
+        # Status & Health (Always show if available)
+        errors = [l for l in logs if l["level"] == "ERROR"]
+        warns = [l for l in logs if l["level"] == "WARNING"]
+        
+        if not logs and not health:
+            self.stdscr.addstr(y, 2, "● ", curses.color_pair(5))
+            self.stdscr.addstr("READY / STANDBY", curses.A_BOLD)
+            self.stdscr.addstr("  Waiting for daemon activity...")
+            y += 2
+        else:
+            status_pair = 2 if not errors else 4
+            status_text = "● ACTIVE " if not is_history else "● READY  "
+            
+            self.stdscr.addstr(y, 2, status_text, curses.color_pair(status_pair) | curses.A_BOLD)
+            if health:
+                ram_mb = health.get('ram_mb', 0)
+                ram_color = 2 if ram_mb < 500 else 3 if ram_mb < 1000 else 4
+                self.stdscr.addstr(" RAM: ", curses.A_DIM)
+                self.stdscr.addstr(f"{ram_mb:.0f}MB", curses.color_pair(ram_color) | curses.A_BOLD)
+            
+            self.stdscr.addstr(f"  events: {len(logs)}", curses.A_DIM)
+            if errors: self.stdscr.addstr(f"  err: {len(errors)}", curses.color_pair(4))
+            if warns: self.stdscr.addstr(f"  warn: {len(warns)}", curses.color_pair(3))
+            y += 2
 
-    # Observer filter stats
-    filter_logs = by_component.get("observer.filter", [])
-    importance_dist = Counter(l["data"].get("importance") for l in filter_logs)
+        if logs:
+            # Section: Observer
+            self.stdscr.addstr(y, 2, "OBSERVER", curses.color_pair(1) | curses.A_BOLD)
+            y += 1
+            self.stdscr.addstr(y, 2, "─" * 20, curses.A_DIM)
+            y += 1
+            
+            by_comp = defaultdict(list)
+            for l in logs: by_comp[l["component"]].append(l)
+            
+            filter_logs = by_comp.get("observer.filter", [])
+            if filter_logs:
+                dist = Counter(l["data"].get("importance") for l in filter_logs)
+                dist_str = " ".join([f"{k}x{v}" for k, v in dist.items()])
+                self.stdscr.addstr(y, 4, f"filter: {dist_str}")
+                y += 1
+            
+            score_logs = by_comp.get("observer.score", [])
+            if score_logs:
+                avg_s = sum(l["data"].get("score", 0) for l in score_logs) / len(score_logs)
+                self.stdscr.addstr(y, 4, f"score:  avg {avg_s:.3f}")
+                y += 1
 
-    # Score stats
-    score_logs = by_component.get("observer.score", [])
-    scores = [l["data"].get("score", 0) for l in score_logs if "score" in l["data"]]
+            # Section: Search & Memory
+            if y < h - 4:
+                y += 1
+                self.stdscr.addstr(y, 2, "SEARCH & MEMORY", curses.color_pair(1) | curses.A_BOLD)
+                y += 1
+                search_logs = by_comp.get("matrix.search", [])
+                if search_logs:
+                    lats = [l["latency_ms"] for l in search_logs if l["latency_ms"]]
+                    avg_lat = sum(lats)/len(lats) if lats else 0
+                    self.stdscr.addstr(y, 4, f"search: {len(search_logs)} q  avg {avg_lat:.1f}ms", curses.color_pair(2 if avg_lat < 25 else 3))
+                    y += 1
+                
+                conflict_logs = by_comp.get("tuner.conflict", [])
+                if conflict_logs:
+                    hits = sum(1 for l in conflict_logs if l["data"].get("conflict_detected"))
+                    self.stdscr.addstr(y, 4, f"conflicts: {hits} detected / {len(conflict_logs)} checked", curses.color_pair(4 if hits else 2))
+                    y += 1
 
-    # Matrix search latency
-    search_logs = by_component.get("matrix.search", [])
-    search_latencies = [l["latency_ms"] for l in search_logs if l["latency_ms"]]
+            # Section: Experience signals
+            exp_logs = by_comp.get("experience.signal", [])
+            if exp_logs and y < h - 4:
+                y += 1
+                self.stdscr.addstr(y, 2, "EXPERIENCE LAYER", curses.color_pair(1) | curses.A_BOLD)
+                y += 1
+                for l in exp_logs[:2]:
+                    if y >= h - 2: break
+                    tag = l["data"].get("tag", "?")
+                    type_str = l["data"].get("type", "?")
+                    self.stdscr.addstr(y, 4, f"▸ {tag} [{type_str}]", curses.color_pair(2 if type_str=="DO_THIS" else 3))
+                    y += 1
 
-    # Conflicts
-    conflict_logs = by_component.get("tuner.conflict", [])
-    conflicts_hit = sum(1 for l in conflict_logs if l["data"].get("conflict_detected"))
+            # Error log (last 2)
+            if errors and y < h - 4:
+                y += 1
+                self.stdscr.addstr(y, 2, "LATEST ERRORS", curses.color_pair(4) | curses.A_BOLD)
+                y += 1
+                for e in errors[:2]:
+                    if y >= h - 1: break
+                    err_msg = e["data"].get("error",'')[:w-30]
+                    self.stdscr.addstr(y, 4, f"✗ [{_fmt_ts(e['ts'])}] {err_msg}", curses.color_pair(4))
+                    y += 1
 
-    # Feedback
-    fb_logs = by_component.get("feedback.implicit", [])
-    fb_counts = Counter(l["data"].get("type") for l in fb_logs)
+        self.stdscr.addstr(h-1, 2, "Press 'q' or Ctrl+C to exit", curses.A_DIM)
+        self.stdscr.refresh()
 
-    # Experience signals
-    exp_logs = by_component.get("experience.signal", [])
-    exp_by_type = Counter(l["data"].get("type") for l in exp_logs)
-    exp_tags = {}
-    for l in exp_logs:
-        tag = l["data"].get("tag", "?")
-        exp_tags[tag] = {
-            "type": l["data"].get("type"),
-            "maturity": l["data"].get("maturity", "?"),
-            "avg_score": l["data"].get("avg_score", 0),
-            "ts": l["ts"],
-        }
-
-    # Calibration
-    cal_logs = by_component.get("calibration.update", [])
-    cal_last = cal_logs[0] if cal_logs else None
-
-    # Storage flush
-    flush_logs = by_component.get("storage.flush", [])
-    total_flushed = sum(l["data"].get("flushed_count", 0) for l in flush_logs)
-
-    # ── Render ──────────────────────────────────────────────────
-    lines = []
-    W = 62
-
-    def hr(char="─"):
-        lines.append(_DIM + char * W + _R)
-
-    def section(title):
-        lines.append(f"\n{_B}{_CYN}{title}{_R}")
-        hr()
-
-    # Header
-    lines.append(f"{_B}{'─'*W}{_R}")
-    lines.append(f"{_B}  MNEMOSTROMA WATCH  {_DIM}│{_R}  {now_str}  {_DIM}[{interval}s]{_R}")
-    lines.append(f"  db: {_DIM}{db_path}{_R}  window: {window_sec}s")
-    lines.append(f"{_B}{'─'*W}{_R}")
-
-    # Status line
-    status = _status_dot(last_ts, bool(errors), bool(warnings))
-    ram = f"  RAM: {_B}{health['ram_mb']:.0f}MB{_R}" if health and health.get("ram_mb", -1) >= 0 else ""
-    lines.append(f"\n  {status}{ram}  events: {_B}{len(logs)}{_R}  errors: {_RED if errors else _DIM}{len(errors)}{_R}  warns: {_YEL if warnings else _DIM}{len(warnings)}{_R}\n")
-
-    # Observer
-    section("OBSERVER")
-    if filter_logs:
-        dist_str = "  ".join(
-            f"{_GRN if k=='critical' else _YEL if k=='important' else _DIM}{k}×{v}{_R}"
-            for k, v in importance_dist.most_common()
-        )
-        lines.append(f"  filter    {dist_str or '—'}")
-    else:
-        lines.append(f"  filter    {_DIM}no events{_R}")
-
-    if scores:
-        avg_s = sum(scores)/len(scores)
-        color = _GRN if avg_s > 0.6 else _YEL if avg_s > 0.4 else _RED
-        lines.append(f"  score     avg {color}{avg_s:.3f}{_R}  min {min(scores):.3f}  max {max(scores):.3f}  ({len(scores)} sessions)")
-    else:
-        lines.append(f"  score     {_DIM}no events{_R}")
-
-    # Search
-    section("SEARCH & MEMORY")
-    if search_logs:
-        avg_lat = sum(search_latencies)/len(search_latencies) if search_latencies else 0
-        lat_color = _GRN if avg_lat < 25 else _YEL if avg_lat < 50 else _RED
-        lines.append(f"  search{len(search_logs)} queries  avg {lat_color}{avg_lat:.1f}ms{_R}")
-    else:
-        lines.append(f"  search{_DIM}no queries{_R}")
-
-    if conflict_logs:
-        c_color = _RED if conflicts_hit else _GRN
-        lines.append(f"  conflicts {c_color}{conflicts_hit} detected{_R} / {len(conflict_logs)} checked")
-    else:
-        lines.append(f"  conflicts {_DIM}no checks{_R}")
-
-    if flush_logs:
-        lines.append(f"  storage   {total_flushed} sessions flushed  ({len(flush_logs)} batches)")
-
-    # Feedback
-    if fb_logs:
-        section("FEEDBACK")
-        fb_str = "  ".join(f"{_GRN}{k}×{v}{_R}" for k, v in fb_counts.most_common())
-        lines.append(f"  signals   {fb_str}")
-
-    # Experience
-    section("EXPERIENCE LAYER")
-    if exp_logs:
-        type_str = "  ".join(
-            f"{''+_GRN2 if t=='DO_THIS' else _YEL if t=='TENSION' else _RED}{t}×{n}{_R}"
-            for t, n in exp_by_type.most_common()
-        )
-        lines.append(f"  fired     {type_str}")
-        for tag, info in list(exp_tags.items())[:5]:
-            t_color = _GRN2 if info["type"]=="DO_THIS" else _YEL if info["type"]=="TENSION" else _RED
-            lines.append(f"  {t_color}▸{_R} {_B}{tag}{_R} [{info['maturity']}]  score {info['avg_score']:.2f}  {_DIM}{_ago(info['ts'])}{_R}")
-    else:
-        lines.append(f"  {_DIM}no signals in this window{_R}")
-
-    # Calibration
-    if cal_last:
-        section("CALIBRATION")
-        d = cal_last["data"]
-        arrow = f"{d.get('threshold_old','?')} → {_GRN}{d.get('threshold_new','?')}{_R}"
-        lines.append(f"  threshold {arrow}  ({d.get('samples','?')} samples)")
-
-    # Errors / Warnings
-    if errors:
-        section(f"{_RED}ERRORS{_R}")
-        for e in errors[:3]:
-            lines.append(f"  {_RED}✗{_R} [{_fmt_ts(e['ts'])}] {e['component']}  {e['data'].get('error','')[:50]}")
-
-    if warnings:
-        section(f"{_YEL}WARNINGS{_R}")
-        for w in warnings[:3]:
-            lines.append(f"  {_YEL}⚠{_R} [{_fmt_ts(w['ts'])}] {w['component']}")
-
-    if not errors and not warnings and logs:
-        lines.append(f"\n  {_GRN}✓ No issues{_R}")
-
-    lines.append(f"\n{_DIM}{'─'*W}{_R}")
-    lines.append(f"{_DIM}  Ctrl+C to exit{_R}\n")
-
-    _clear()
-    print("\n".join(lines))
-
-
-def run_watch(db_path: Path, interval: int = 2, window_sec: int = 30):
-    """Main watch loop."""
-    print(f"Connecting to {db_path}...")
-
+def run_watch_curses(stdscr, db_path: Path, interval: int, window_sec: int):
+    ui = WatchUI(stdscr)
     conn = _connect(db_path)
-    if conn is None:
-        print(f"logs.db not found at {db_path}")
-        print("Start the daemon first: mnemostroma run")
+    if not conn:
         return
-
-    print("Connected. Starting live view (Ctrl+C to stop)...")
-    time.sleep(0.5)
 
     try:
         while True:
+            # Check for input
+            ch = stdscr.getch()
+            if ch == ord('q'): break
+            
             since_ms = int((time.time() - window_sec) * 1000)
             logs = _fetch(conn, since_ms)
+            is_history = False
+            
+            if not logs:
+                # Fallback to history
+                logs = _fetch(conn, 0) # Implicitly limited to 500 in _fetch, but good for overview
+                logs = logs[:50] # Just top 50 for dashboard
+                is_history = True
+            
             health = _fetch_health(conn)
-            _render(logs, health, db_path, interval, window_sec)
+            ui.draw(logs, health, db_path, interval, window_sec, is_history=is_history)
+            time.sleep(interval)
+    finally:
+        conn.close()
+
+def run_watch(db_path: Path, interval: int = 2, window_sec: int = 30):
+    """Main watch loop. Falls back to text mode if curses unavailable."""
+    try:
+        curses.wrapper(run_watch_curses, db_path, interval, window_sec)
+    except (KeyboardInterrupt, SystemExit):
+        pass
+    except Exception as e:
+        # Fallback to simple text mode
+        print(f"⚠️  Curses failed: {e.__class__.__name__}. Switching to text mode...")
+        _run_watch_text(db_path, interval, window_sec)
+
+def _run_watch_text(db_path: Path, interval: int, window_sec: int):
+    """Simple text-based watch output (no curses)."""
+    conn = _connect(db_path)
+    if not conn:
+        print(f"❌ Cannot connect to {db_path}")
+        return
+
+    try:
+        count = 0
+        while True:
+            count += 1
+            print(f"\n📊 Mnemostroma Watch — Refresh #{count} ({_fmt_ts(int(time.time() * 1000))})")
+            print("=" * 80)
+
+            since_ms = int((time.time() - window_sec) * 1000)
+            logs = _fetch(conn, since_ms)
+
+            if logs:
+                print(f"Last {len(logs)} events ({window_sec}s window):")
+                for i, log in enumerate(logs[:10], 1):
+                    level_icon = "✓" if log["level"] == "INFO" else "⚠️ " if log["level"] == "WARNING" else "✗"
+                    print(f"  {i}. [{_fmt_ts(log['ts'])}] {level_icon} {log['component']} — {log['event']}")
+            else:
+                print(f"No events in last {window_sec}s (showing history)")
+                logs = _fetch(conn, 0)[:10]
+                for i, log in enumerate(logs, 1):
+                    print(f"  {i}. [{_fmt_ts(log['ts'])}] {log['component']} — {log['event']}")
+
+            health = _fetch_health(conn)
+            if health:
+                print(f"\n💚 Health: Sessions={health.get('session_count')}, RAM={health.get('ram_mb'):.1f}MB")
+
+            print(f"\nPress Ctrl+C to exit | Next refresh in {interval}s...")
             time.sleep(interval)
     except KeyboardInterrupt:
-        print("\nWatch stopped.")
+        print("\n✓ Watch stopped")
     finally:
         conn.close()
