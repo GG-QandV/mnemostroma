@@ -295,11 +295,37 @@ class DaemonTrayApp:
 
 
 def run_tray(db_path: Path, interval: int = 3):
-    """Start the system tray icon. Blocks until user quits."""
-    if not HAS_APPINDICATOR:
-        print("AppIndicator3 and/or GTK3 not available.")
-        print("Install: sudo apt-get install gir1.2-appindicator3-0.1 python3-gi")
-        return
+    """Start the system tray icon. Blocks until user quits.
 
-    app = DaemonTrayApp(db_path)
-    app.run()
+    Tries implementations in order: AppIndicator3 → PyQt6 → pystray.
+    """
+    if HAS_APPINDICATOR:
+        try:
+            app = DaemonTrayApp(db_path)
+            app.run()
+            return
+        except Exception as e:
+            print(f"AppIndicator3 failed: {e}")
+
+    # Fallback to PyQt6
+    try:
+        from .tray_pyqt import run_tray as run_pyqt
+        run_pyqt(db_path, interval)
+        return
+    except (ImportError, Exception) as e:
+        print(f"PyQt6 fallback failed: {e}")
+
+    # Fallback to pystray
+    try:
+        from .tray_old_pystray import run_tray as run_pystray
+        run_pystray(db_path, interval)
+        return
+    except (ImportError, Exception) as e:
+        print(f"pystray fallback failed: {e}")
+
+    # All failed
+    print("\n❌ No tray implementation available.")
+    print("\nInstall one of:")
+    print("  1. AppIndicator3: sudo apt-get install gir1.2-appindicator3-0.1 python3-gi")
+    print("  2. PyQt6: pip install PyQt6")
+    print("  3. pystray: pip install pystray pillow")
