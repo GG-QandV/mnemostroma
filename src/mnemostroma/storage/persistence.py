@@ -51,7 +51,7 @@ class PersistenceLayer:
         await self._db.stop()
 
     def wire_ctx(self, ctx: Any) -> None:
-        """Wire SystemContext into the backend for log_event access.
+        """Wire SystemContext into the backend for log_removed access.
 
         Called by Conductor after ctx is fully initialised.
         """

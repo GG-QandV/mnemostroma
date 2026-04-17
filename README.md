@@ -39,7 +39,7 @@ Every time you work with an AI agent, Mnemostroma:
 
 ---
 
-A dual-stream async pipeline (Observer + Content) backed by 4 memory layers and
+A dual-stream async pipeline (Observer + Content) backed by 5 memory layers and
 a Formal Hexagonal Architecture — strictly decoupled via Ports and Repository Adapters
 (SessionRepo, PrecisionRepo) over SQLite WAL. All in ~420MB RAM (baseline) / ~650MB (zoo), ~20ms retrieval.
 

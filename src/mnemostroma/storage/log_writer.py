@@ -186,30 +186,5 @@ _SAFE_MODE_COMPONENTS = frozenset({
     "conductor.shutdown",
 })
 
-async def log_event(
-    ctx: Any,
-    component: str,
-    event: str,
-    data: dict,
-    latency_ms: float = 0.0,
-    session_id: Optional[str] = None,
-    level: str = "INFO",
-):
-    """Global helper for fire-and-forget structured logging.
-
-    Modes (config.logging.mode):
-      "safe"  — only bootstrap/health/shutdown events + all ERROR level
-      "debug" — all events (current behaviour, for alpha testers)
-    """
-    if not (hasattr(ctx, 'log_writer') and ctx.log_writer):
-        return
-
-    log_cfg = getattr(getattr(ctx, 'config', None), 'logging', None)
-    if log_cfg is not None:
-        if not log_cfg.enabled:
-            return
-        if log_cfg.mode == "safe":
-            if component not in _SAFE_MODE_COMPONENTS and level != "ERROR":
-                return
-
-    ctx.log_writer.log_nowait(component, event, data, latency_ms, session_id, level)
+# log_event helper removed in public OSS version to prevent telemetry leakage.
+# Use local LogWriter class directly for diagnostic logging.
