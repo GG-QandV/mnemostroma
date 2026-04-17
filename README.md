@@ -66,6 +66,67 @@ Your Agent
 
 **The agent never writes memory.** It only reads and acts. Observer handles everything else.
 
+---
+
+### Architecture Diagram
+
+```mermaid
+graph TD
+    %% Стилизация блоков (Dark Mode / Cyan Accents)
+    classDef core fill:#111116,stroke:#00f0ff,stroke-width:2px,color:#e2e8f0;
+    classDef agent fill:#1a1a24,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef shell fill:#1a1a24,stroke:#ff003c,stroke-width:1px,color:#ff003c,stroke-dasharray: 5 5;
+    classDef memory fill:#0a0a0c,stroke:#00c3d0,stroke-width:1px,color:#fff;
+    classDef fact fill:#111116,stroke:#eab308,stroke-width:2px,color:#eab308;
+
+    User((User / App)) <==> AI[AI Agent]
+    
+    subgraph Mnemostroma [Mnemostroma Cognitive Framework]
+        direction TB
+        
+        Observer[The Observer<br>RAM Hot Buffer / 20ms]
+        Dreamer[The Dreamer<br>Background Distillation]
+        
+        subgraph Hulling [The Hulling Process]
+            direction LR
+            Shell[The Shell<br>Noise & Syntax<br>DISCARDED]
+            Kernels[The Kernels<br>Entities & Context<br>EXTRACTED]
+        end
+        
+        subgraph Strata [Memory Strata / Fixed 600MB Limit]
+            direction TB
+            Ledger[The Ledger / Fact Vault<br>Exact Data: Dates, URLs, Names]
+            Exp[Experience Layer<br>Mid-term / Fading Context]
+            Subc[The Subconscious<br>Eternal Embedding / Core Rules]
+            
+            Exp == "Extracts Flags & Markers" ==> Subc
+            Subc -. "Applies Constraints" .-> Exp
+        end
+        
+        AI -- "Current Task Context" --> Observer
+        Observer -- "Raw Session Data" --> Dreamer
+        
+        Dreamer -- "Cracks the context" --> Hulling
+        Hulling -. "Drops conversational noise" .-> Shell
+        Hulling -- "Sorts extracted entities" --> Strata
+        
+        Kernels -- "Immutable Data" --> Ledger
+        Kernels -- "Working Context" --> Exp
+    end
+
+    Ledger -- "Injects Hard Facts" --> AI
+    Exp -- "Injects Recent Context" --> AI
+    Subc -- "Injects Eternal Rules" --> AI
+
+    class Observer,Dreamer core;
+    class AI agent;
+    class Shell shell;
+    class Exp,Subc memory;
+    class Ledger fact;
+```
+
+---
+
 **Example — memory retrieval in action:**
 
 ```
