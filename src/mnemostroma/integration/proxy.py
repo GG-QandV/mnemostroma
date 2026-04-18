@@ -91,6 +91,9 @@ class ConductorProxy:
         """
         start_time = time.time()
         
+        pure_mode = self.ctx.config.integration.pure_context
+        include_tools = include_tools and not pure_mode
+        
         # 1. Update static cache if necessary
         # We rebuild if more than N seconds have passed since last interaction 
         # (simulating the `cache_static_every_n_messages` concept).
@@ -139,7 +142,7 @@ class ConductorProxy:
             context_string += '</memory_context>'
             
         # 4. Tools payload
-        tools = self._get_tool_definitions() if include_tools else []
+        tools = self._get_tool_definitions() if (include_tools and self.ctx.config.tools.enabled) else []
         
         latency_ms = (time.time() - start_time) * 1000
         

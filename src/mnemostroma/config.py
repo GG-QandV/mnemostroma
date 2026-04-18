@@ -258,6 +258,22 @@ class SessionClosureConfig:
     cooldown_sec: float = 1800.0
 
 @dataclass(frozen=True)
+class IntegrationConfig:
+    pure_context: bool = False
+
+@dataclass(frozen=True)
+class ToolsConfig:
+    enabled: bool = True
+
+@dataclass(frozen=True)
+class ProxyConfig:
+    inject_tools: bool = True
+
+@dataclass(frozen=True)
+class PromptConfig:
+    tools_instruction: str = ""
+
+@dataclass(frozen=True)
 class Config:
     resources: ResourcesConfig
     score: ScoreConfig
@@ -284,7 +300,16 @@ class Config:
     open_loop: OpenLoopConfig = field(default_factory=OpenLoopConfig)
     urgency_pulse: UrgencyPulseConfig = field(default_factory=UrgencyPulseConfig)
     session_closure: SessionClosureConfig = field(default_factory=SessionClosureConfig)
+    integration: IntegrationConfig = field(default_factory=IntegrationConfig)
+    tools: ToolsConfig = field(default_factory=ToolsConfig)
+    proxy: ProxyConfig = field(default_factory=ProxyConfig)
+    prompt: PromptConfig = field(default_factory=PromptConfig)
     manifest: Optional[ModelManifest] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert config to dictionary for JSON serialization."""
+        import dataclasses
+        return dataclasses.asdict(self)
 
     @classmethod
     def load(cls, path: str | Path) -> 'Config':
@@ -332,5 +357,9 @@ class Config:
             open_loop=OpenLoopConfig(**filter_keys(OpenLoopConfig, data['open_loop'])) if 'open_loop' in data else OpenLoopConfig(),
             urgency_pulse=UrgencyPulseConfig(**filter_keys(UrgencyPulseConfig, data['urgency_pulse'])) if 'urgency_pulse' in data else UrgencyPulseConfig(),
             session_closure=SessionClosureConfig(**filter_keys(SessionClosureConfig, data['session_closure'])) if 'session_closure' in data else SessionClosureConfig(),
+            integration=IntegrationConfig(**filter_keys(IntegrationConfig, data['integration'])) if 'integration' in data else IntegrationConfig(),
+            tools=ToolsConfig(**filter_keys(ToolsConfig, data['tools'])) if 'tools' in data else ToolsConfig(),
+            proxy=ProxyConfig(**filter_keys(ProxyConfig, data['proxy'])) if 'proxy' in data else ProxyConfig(),
+            prompt=PromptConfig(**filter_keys(PromptConfig, data['prompt'])) if 'prompt' in data else PromptConfig(),
             manifest=ModelManifest.load(Path(path).parent / "models_manifest.json") if (Path(path).parent / "models_manifest.json").exists() else None
         )

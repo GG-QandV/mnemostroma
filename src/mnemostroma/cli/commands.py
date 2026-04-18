@@ -44,9 +44,9 @@ def _open_watch_terminal() -> None:
                 try:
                     # Use -- to pass command to newer gnome-terminal/konsole
                     if term in ["gnome-terminal", "konsole", "tilix"]:
-                        subprocess.Popen([term, "--", "bash", "-c", f"{cmd}; exec bash"])
+                        subprocess.Popen([term, "--", "bash", "-c", cmd])
                     else:
-                        subprocess.Popen([term, "-e", f"bash -c '{cmd}; exec bash'"])
+                        subprocess.Popen([term, "-e", f"bash -c '{cmd}'"])
                     return
                 except FileNotFoundError:
                     continue
@@ -415,9 +415,8 @@ def _cmd_setup() -> None:
     except Exception as e:
         print(f"  ⚠ Tray failed: {e}")
 
-    # Open watch in new terminal
-    print("  📊 Opening live dashboard...\n")
-    _open_watch_terminal()
+    # Tray and Watch are optional and should be started by user or via tray
+    print("  ✓ Setup finished. Use 'mnemostroma on' to start if not already running.")
 
 _BANNER = """
   ███╗   ███╗███╗  ██╗███████╗███╗   ███╗ ██████╗
@@ -594,11 +593,84 @@ _PARAM_DOCS = {"logging.enabled": "Enable/disable event logging"}
 
 def _handle_config(args: list) -> None:
     if not args:
-        print("Usage: mnemostroma config list")
+        print("Usage: mnemostroma config list | set <key> <value>")
         return
     if args[0] == "list":
         if _CONFIG_PATH.exists():
             print(_CONFIG_PATH.read_text())
+    elif args[0] == "set":
+        if len(args) < 3:
+            print("Usage: mnemostroma config set <key> <value>")
+            return
+        _cmd_config_set(args[1], args[2])
+
+def _cmd_config_set(key: str, value_str: str) -> None:
+    if not _CONFIG_PATH.exists():
+        print(f"Error: config not found at {_CONFIG_PATH}")
+        return
+
+    try:
+        with open(_CONFIG_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        
+        # Try to parse value as bool, int, float, otherwise keep as string
+        if value_str.lower() == "true":
+            value = True
+        elif value_str.lower() == "false":
+            value = False
+        else:
+            try:
+                if "." in value_str:
+                    value = float(value_str)
+                else:
+                    value = int(value_str)
+            except ValueError:
+                value = value_str
+        
+        # Support dot notation: "integration.pure_context" -> data["integration"]["pure_context"]
+        parts = key.split(".")
+        curr = data
+        for part in parts[:-1]:
+            if part not in curr or not isinstance(curr[part], dict):
+                curr[part] = {}
+            curr = curr[part]
+        
+        curr[parts[-1]] = value
+        
+        with open(_CONFIG_PATH, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+            
+        print(f"✓ Config updated: {key} = {value}")
+        
+        # Auto-restart daemon to apply changes
+        pid = _read_pid()
+        if pid:
+            print("  Restarting daemon to apply changes...")
+            
+            # Linux + systemd check
+            import shutil
+            is_linux = sys.platform == "linux"
+            has_systemctl = shutil.which("systemctl") is not None
+            
+            if is_linux and has_systemctl:
+                # Check if service is managed by systemd
+                result = subprocess.run(
+                    ["systemctl", "--user", "is-active", "mnemostroma-daemon"],
+                    capture_output=True, text=True
+                )
+                if result.returncode == 0:
+                    subprocess.run(["systemctl", "--user", "restart", "mnemostroma-daemon"])
+                    print("  ✓ Daemon restarted via systemctl")
+                    return
+
+            _cmd_off()
+            _time.sleep(1)
+            _cmd_on()
+        else:
+            print("  Note: Daemon is not running. Start it with 'mnemostroma on' to apply changes.")
+            
+    except Exception as e:
+        print(f"Error updating config: {e}")
 
 def _cmd_db_dump_time(args: list) -> None:
     """Set backup_interval_hours in config.json."""
