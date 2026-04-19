@@ -186,6 +186,17 @@ _SAFE_MODE_COMPONENTS = frozenset({
     "conductor.shutdown",
 })
 
+async def log_event(
+    ctx: Any,
+    component: str,
+    event: str,
+    data: dict,
+    latency_ms: float = 0.0,
+    session_id: Optional[str] = None,
+    level: str = "INFO",
+):
+    """Global helper for fire-and-forget structured logging.
+
     Modes (config.logging.mode):
       "safe"  — only bootstrap/health/shutdown events + all ERROR level
       "debug" — all events (current behaviour, for alpha testers)

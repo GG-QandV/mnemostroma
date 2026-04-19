@@ -81,6 +81,7 @@ class CalibrationCollector:
         try:
             import asyncio
             asyncio.ensure_future(
+                log_event(self.ctx, "calibration.update", "finalize", {
                     "threshold_old": old_threshold,
                     "threshold_new": threshold,
                     "samples": len(self._distances),

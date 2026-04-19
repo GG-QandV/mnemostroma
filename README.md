@@ -80,36 +80,36 @@ graph TD
     classDef fact fill:#111116,stroke:#eab308,stroke-width:2px,color:#eab308;
 
     User((User / App)) <==> AI[AI Agent]
-    
+
     subgraph Mnemostroma [Mnemostroma Cognitive Framework]
         direction TB
-        
+
         Observer[The Observer<br>RAM Hot Buffer / 20ms]
         Dreamer[The Dreamer<br>Background Distillation]
-        
+
         subgraph Hulling [The Hulling Process]
             direction LR
             Shell[The Shell<br>Noise & Syntax<br>DISCARDED]
             Kernels[The Kernels<br>Entities & Context<br>EXTRACTED]
         end
-        
+
         subgraph Strata [Memory Strata / Fixed 600MB Limit]
             direction TB
             Ledger[The Ledger / Fact Vault<br>Exact Data: Dates, URLs, Names]
             Exp[Experience Layer<br>Mid-term / Fading Context]
             Subc[The Subconscious<br>Eternal Embedding / Core Rules]
-            
+
             Exp == "Extracts Flags & Markers" ==> Subc
             Subc -. "Applies Constraints" .-> Exp
         end
-        
+
         AI -- "Current Task Context" --> Observer
         Observer -- "Raw Session Data" --> Dreamer
-        
+
         Dreamer -- "Cracks the context" --> Hulling
         Hulling -. "Drops conversational noise" .-> Shell
         Hulling -- "Sorts extracted entities" --> Strata
-        
+
         Kernels -- "Immutable Data" --> Ledger
         Kernels -- "Working Context" --> Exp
     end
@@ -164,21 +164,21 @@ This is not a database with TTL. This is how human memory works.
 
 **Current:** v1.8.1 | 2026-04-16
 
-| Component                                | Status                          |
-| ---------------------------------------- | ------------------------------- |
-| Core backend (Observer, Memory, Storage) | DONE Implemented, 411/411 tests   |
-| Anchor Layer / Emotional Patterns        | DONE Implemented                  |
-| Implicit Feedback (v1.5)                 | DONE Implemented                  |
-| PersistenceLayer Split (Phase 9.2)       | DONE Implemented (v1.7.1)         |
-| CLI User Mode (setup/on/off/status)      | DONE Implemented (v1.7.1)         |
-| MCP Server (stdio + SSE)                 | DONE Implemented                  |
-| Continuation Detection & Mention Type    | DONE Implemented                  |
-| Decay Engine & Dreamer                   | DONE Implemented (Stage C/D)      |
-| Passthrough HTTPS Proxy (:8767)          | DONE Implemented (v1.7.5)         |
-| `mnemo` launcher with proxy failsafe     | DONE Implemented (v1.7.5)         |
-| Model install CLI                        | DONE Implemented                  |
-| **Daemon auto-start scripts**            | DONE Linux (systemd), macOS, Win  |
-| **Hexagonal Storage Refactor**           | DONE Implemented (v1.8.0)         |
+| Component                                | Status                           |
+| ---------------------------------------- | -------------------------------- |
+| Core backend (Observer, Memory, Storage) | DONE Implemented, 411/411 tests  |
+| Anchor Layer / Emotional Patterns        | DONE Implemented                 |
+| Implicit Feedback (v1.5)                 | DONE Implemented                 |
+| PersistenceLayer Split (Phase 9.2)       | DONE Implemented (v1.7.1)        |
+| CLI User Mode (setup/on/off/status)      | DONE Implemented (v1.7.1)        |
+| MCP Server (stdio + SSE)                 | DONE Implemented                 |
+| Continuation Detection & Mention Type    | DONE Implemented                 |
+| Decay Engine & Dreamer                   | DONE Implemented (Stage C/D)     |
+| Passthrough HTTPS Proxy (:8767)          | DONE Implemented (v1.7.5)        |
+| `mnemo` launcher with proxy failsafe     | DONE Implemented (v1.7.5)        |
+| Model install CLI                        | DONE Implemented                 |
+| **Daemon auto-start scripts**            | DONE Linux (systemd), macOS, Win |
+| **Hexagonal Storage Refactor**           | DONE Implemented (v1.8.0)        |
 
 ---
 
@@ -189,6 +189,7 @@ This is not a database with TTL. This is how human memory works.
 > WARNING Not yet on PyPI. Install directly from GitHub:
 
 **Linux / macOS:**
+
 ```bash
 pip install "git+https://github.com/GG-QandV/mnemostroma.git"
 
@@ -201,18 +202,18 @@ pip install "git+https://github.com/GG-QandV/mnemostroma.git[all]"
 
 ### Installation Extras
 
-| Extra | Installs | Commands unlocked |
-|---|---|---|
-| *(base)* | Core daemon | `setup` `on` `off` `status` `watch` `logs` |
-| `[sse]` | SSE adapter + proxy | `sse` |
-| `[tray]` | System tray (pystray) | `tray` |
-| `[all]` | Everything above | All commands |
+| Extra    | Installs              | Commands unlocked                          |
+| -------- | --------------------- | ------------------------------------------ |
+| *(base)* | Core daemon           | `setup` `on` `off` `status` `watch` `logs` |
+| `[sse]`  | SSE adapter + proxy   | `sse`                                      |
+| `[tray]` | System tray (pystray) | `tray`                                     |
+| `[all]`  | Everything above      | All commands                               |
 
 > **Note:** On Linux, `[tray]` also requires system libraries:
 > `sudo apt install libgirepository1.0-dev gir1.2-appindicator3-0.1`
 
-
 **Windows (PowerShell):**
+
 ```powershell
 pip install "git+https://github.com/GG-QandV/mnemostroma.git"
 
@@ -221,6 +222,7 @@ pip install "git+https://github.com/GG-QandV/mnemostroma.git[sse]"
 ```
 
 > **Tip:** Use [pipx](https://pipx.pypa.io) for a cleaner global install that doesn't pollute your system Python:
+> 
 > ```bash
 > pipx install "git+https://github.com/GG-QandV/mnemostroma.git"
 > ```
@@ -237,6 +239,7 @@ mnemostroma off          # Stop daemon
 ```
 
 **With passthrough proxy (captures Claude Code sessions into memory):**
+
 ```bash
 mnemostroma sse          # Start SSE adapter + proxy on :8767
 mnemo                    # Launch Claude Code through the proxy (falls back to direct if proxy is down)
@@ -244,11 +247,11 @@ mnemo                    # Launch Claude Code through the proxy (falls back to d
 
 **Register as autostart service:**
 
-| OS | Command | Backend |
-|---|---|---|
-| Linux | `mnemostroma service install` | systemd user unit |
-| macOS | `mnemostroma service install` | launchd LaunchAgent |
-| Windows | `mnemostroma service install` | Task Scheduler |
+| OS      | Command                       | Backend             |
+| ------- | ----------------------------- | ------------------- |
+| Linux   | `mnemostroma service install` | systemd user unit   |
+| macOS   | `mnemostroma service install` | launchd LaunchAgent |
+| Windows | `mnemostroma service install` | Task Scheduler      |
 
 > **Windows note:** Signals `SIGUSR1/2` (flush/dump) are unavailable on Windows. Use `mnemostroma off` and `mnemostroma on` instead. For the best beta experience, WSL2 (Ubuntu) is recommended.
 
@@ -264,7 +267,6 @@ mnemostroma tray              # System tray indicator (requires [tray] extra)
 > **Note:** if `tray` command is missing or fails, ensure you installed the extra:
 > `pip install "mnemostroma[tray]"`
 
-
 > **Next step:** Set up daemon auto-start on your OS ([Linux](./scripts/linux/README.md) | [macOS](./scripts/macos/README.md) | [Windows](./scripts/windows/README.md)) — see [Daemon Installation Guide →](./scripts/README.md)
 
 ---
@@ -273,11 +275,11 @@ mnemostroma tray              # System tray indicator (requires [tray] extra)
 
 Downloaded automatically during `mnemostroma setup` (~300 MB total):
 
-| Model | Size | Role |
-|---|---|---|
-| `multilingual-e5-small` INT8 | ~117 MB | Session + content embedder (384d) |
-| `distilbert-ner` INT8 | ~60 MB | Named entity recognition |
-| `tinybert-l2-v2` INT8 | ~7 MB | Cross-encoder reranking (lazy load) |
+| Model                        | Size    | Role                                |
+| ---------------------------- | ------- | ----------------------------------- |
+| `multilingual-e5-small` INT8 | ~117 MB | Session + content embedder (384d)   |
+| `distilbert-ner` INT8        | ~60 MB  | Named entity recognition            |
+| `tinybert-l2-v2` INT8        | ~7 MB   | Cross-encoder reranking (lazy load) |
 
 ---
 
@@ -285,12 +287,12 @@ Downloaded automatically during `mnemostroma setup` (~300 MB total):
 
 No torch. No transformers. No LangChain. No Docker. No Redis. No cloud.
 
-| Component | Disk | Role |
-|---|---|---|
-| multilingual-e5-small INT8 | ~117 MB | Session & content embedder (384d) |
-| distilbert-ner INT8 | ~60 MB | HybridNER |
-| TinyBERT-L-2-v2 INT8 | ~7 MB | Reranker (lazy) |
-| **Total working set** | **~300 MB disk · ~420-750 MB RAM** | |
+| Component                  | Disk                               | Role                              |
+| -------------------------- | ---------------------------------- | --------------------------------- |
+| multilingual-e5-small INT8 | ~117 MB                            | Session & content embedder (384d) |
+| distilbert-ner INT8        | ~60 MB                             | HybridNER                         |
+| TinyBERT-L-2-v2 INT8       | ~7 MB                              | Reranker (lazy)                   |
+| **Total working set**      | **~300 MB disk · ~420-750 MB RAM** |                                   |
 
 Core dependencies: `onnxruntime, tokenizers, numpy, lz4, aiosqlite`
 
@@ -327,6 +329,7 @@ Core dependencies: `onnxruntime, tokenizers, numpy, lz4, aiosqlite`
 The daemon must be running before any client connects.
 
 **Choose your OS for installation details:**
+
 - [Linux (systemd)](./scripts/linux/README.md)
 - [macOS (launchd)](./scripts/macos/README.md)
 - [Windows (Task Scheduler)](./scripts/windows/README.md)
@@ -348,11 +351,13 @@ bash scripts/install-daemon.sh
 → **[Full Linux installation guide →](./scripts/linux/README.md)**
 
 This installs three systemd user units from `scripts/`:
+
 - `mnemostroma-daemon.service` — Main daemon (Observer + Memory + Storage)
 - `mnemostroma-proxy.service` — HTTPS passthrough proxy (optional, for Claude Code)
 - `mnemostroma-watchdog.service` — Health monitor
 
 Quick commands:
+
 ```bash
 systemctl --user status mnemostroma-daemon
 systemctl --user start mnemostroma-daemon
@@ -371,11 +376,13 @@ bash scripts/install-daemon.sh
 → **[Full macOS installation guide →](./scripts/macos/README.md)**
 
 Or run directly:
+
 ```bash
 bash scripts/macos/install.sh
 ```
 
 Quick commands:
+
 ```bash
 launchctl start com.mnemostroma.daemon
 launchctl stop com.mnemostroma.daemon
@@ -394,6 +401,7 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 → **[Full Windows installation guide →](./scripts/windows/README.md)**
 
 Quick commands:
+
 ```powershell
 Start-ScheduledTask -TaskName "Mnemostroma Daemon"
 Stop-ScheduledTask -TaskName "Mnemostroma Daemon"
@@ -423,6 +431,7 @@ taskschd.msc
 > `C:\Users\<YourName>\AppData\Local\Programs\Python\Python312\Scripts\mnemostroma.exe`
 
 Config file locations:
+
 - **Linux/macOS:** `~/.config/Claude/claude_desktop_config.json`
 - **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
 
@@ -435,6 +444,7 @@ Claude Code uses the stdio adapter. Run `mnemostroma setup` first — it prints 
 **`~/.claude.json`** — `mcpServers` block:
 
 **Linux / macOS:**
+
 ```json
 {
   "mcpServers": {
@@ -447,6 +457,7 @@ Claude Code uses the stdio adapter. Run `mnemostroma setup` first — it prints 
 ```
 
 **Windows (PowerShell):**
+
 ```json
 {
   "mcpServers": {
@@ -468,12 +479,14 @@ To capture Claude Code conversations into memory, run the SSE adapter with the p
 Requires `mnemostroma[sse]` and `mnemostroma setup` (generates TLS cert + wrapper script).
 
 **Step 1 — Setup (once):**
+
 ```bash
 pip install "mnemostroma[sse]"
 mnemostroma setup   # generates TLS cert + ~/.local/bin/mnemo wrapper
 ```
 
 **Step 2 — Start SSE adapter (includes proxy on :8767):**
+
 ```bash
 mnemostroma sse
 ```
@@ -481,6 +494,7 @@ mnemostroma sse
 **Step 3 — Launch Claude Code via wrapper:**
 
 **Linux / macOS:**
+
 ```bash
 mnemo           # instead of 'claude' — sets proxy env vars automatically
 ```
@@ -490,6 +504,7 @@ mnemo           # instead of 'claude' — sets proxy env vars automatically
 > If the proxy is not running, Claude Code works normally (direct API, no capture).
 
 **Windows (PowerShell) — no wrapper, set manually:**
+
 ```powershell
 $env:ANTHROPIC_BASE_URL = "https://localhost:8767"
 $env:NODE_EXTRA_CA_CERTS = "$env:USERPROFILE\.mnemostroma\certs\passthrough-ca.pem"
@@ -504,16 +519,17 @@ claude
 
 All IDEs use the stdio adapter. Multiple IDEs can connect simultaneously — each spawns a ~5 MB adapter process sharing one daemon.
 
-| IDE | Config file | Status |
-|-----|-------------|--------|
-| **VS Code Copilot** | `~/.config/Code/User/mcp.json` | DONE |
-| **Claude Code** | `~/.claude/mcp.json` | DONE |
-| **Antigravity** | `mcp.json` (project root) | DONE |
-| **Continue** | `~/.continue/config.yaml` | FAILED `env` blocks not supported in v1.2.22 (limitation) |
+| IDE                 | Config file                    | Status                                                    |
+| ------------------- | ------------------------------ | --------------------------------------------------------- |
+| **VS Code Copilot** | `~/.config/Code/User/mcp.json` | DONE                                                      |
+| **Claude Code**     | `~/.claude/mcp.json`           | DONE                                                      |
+| **Antigravity**     | `mcp.json` (project root)      | DONE                                                      |
+| **Continue**        | `~/.continue/config.yaml`      | FAILED `env` blocks not supported in v1.2.22 (limitation) |
 
 > **Note on Continue (IDE):** As of v1.2.22, Continue does not support `env` blocks in MCP configurations. This prevents it from correctly using the `NODE_EXTRA_CA_CERTS` variable required for the Mnemostroma passthrough proxy. Use Claude Code or VS Code with standard stdio adapters for the full experience.
 
 **Linux / macOS** — add to your IDE's MCP config:
+
 ```json
 {
   "mcpServers": {
@@ -526,6 +542,7 @@ All IDEs use the stdio adapter. Multiple IDEs can connect simultaneously — eac
 ```
 
 **Windows** — add to your IDE's MCP config:
+
 ```json
 {
   "mcpServers": {
@@ -555,6 +572,7 @@ Mnemostroma writes local diagnostic logs to `logs.db` during beta.
 **Logs never leave your machine.**
 
 `~/.mnemostroma/config.json`:
+
 ```json
 "logging": {
   "enabled": true,
@@ -630,23 +648,10 @@ Cloud Sync, Subconscious Layer (personalized models), Shared Experience, and Tea
 *offline · ~420MB RAM (baseline) · ~20ms · 411 tests · v1.8.0*
 
 # [mnemostroma-protocol]
+
 ## Memory Protocol (Mnemostroma)
 
-You have persistent memory tools. This is not optional guidance —
-this is how you operate.
+Tools available via MCP. Agent decides usage. Continuity via injected <memorycontext>.
+Agent may call ctx.semantic if needed — or reason from context alone.
 
-REQUIRED at session start (before your first response):
-  → call ctx_active()
-
-REQUIRED when user references past work, decisions, or prior context:
-  → call ctx_semantic(query) or ctx_search(tags)
-
-REQUIRED before session ends (if any decisions made or work continues):
-  → call ctx_bridge()
-
-Rules:
-- Never say "I don't have context from previous sessions"
-  without first calling ctx_active()
-- Not using memory tools when they are available is an error
-- The user expects continuity across sessions
 # [mnemostroma-protocol]-end
