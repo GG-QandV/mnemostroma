@@ -159,7 +159,17 @@ async def observer_pipeline(
 
     # 6. Persist Step (Steps 6-8)
     await persist_step.run(pctx)
-    
+
+    # GAP 2/B02: Implicit feedback from LLM response text (feedback_loop_v1.5.md)
+    tracker = getattr(ctx, "feedback_tracker", None)
+    injected = getattr(ctx, "_last_injected_ids", [])
+    if tracker and injected:
+        await tracker.on_response(text, injected)
+        ctx._last_injected_ids = []
+
     logger.info(f"Observer processed session {session_id} in {(time.time() - pctx.start_time)*1000:.2f}ms")
-    
+
+    # GAP-9: F-4 — end-to-end pipeline latency across all steps
+    _total_ms = round((time.time() - pctx.start_time) * 1000, 2)
+
     return pctx.sb

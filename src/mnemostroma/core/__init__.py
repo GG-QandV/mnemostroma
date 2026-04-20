@@ -193,6 +193,9 @@ class SystemContext:
     # Last user message text (Phase 11.A/G)
     last_message_text: str = ""
 
+    # GAP 2: Session IDs injected into last LLM prompt — consumed by ImplicitFeedbackTracker
+    _last_injected_ids: List[str] = field(default_factory=list)
+
     # Phase 11.A/C: Associative Surfacing + Anchor Guardian queues
     surfaced_queue: List[Any] = field(default_factory=list)
     conflict_warnings: List[Any] = field(default_factory=list)

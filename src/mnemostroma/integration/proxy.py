@@ -109,8 +109,12 @@ class ConductorProxy:
         # We ask for a small list to not flood the context
         relevant_sessions = await ctx_semantic(user_message, self.ctx, k=10, top_n=3)
         if relevant_sessions:
+            # GAP 2: record which session IDs were injected for implicit feedback analysis
+            self.ctx._last_injected_ids = [sb.session_id for sb in relevant_sessions]
             lines = [f"- {sb.session_id}: {sb.brief}" for sb in relevant_sessions]
             relevant_xml = "<relevant>\n" + "\n".join(lines) + "\n</relevant>"
+        else:
+            self.ctx._last_injected_ids = []
             
         # 2b. Intuition Signals from Experience Layer
         intuition_xml = ""

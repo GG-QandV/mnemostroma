@@ -208,6 +208,10 @@ class FeedbackConfig:
     ema_alpha: float
     ignore_window_sec: float
     revisit_threshold: int
+    # S-1: Auto-recalibration of score weights via Pearson correlation
+    recalibration_enabled: bool = True
+    recalibration_threshold: float = 0.4   # pearson_r must exceed this to trigger
+    recalibrate_every_hours: float = 24.0  # how often ConsolidationWorker calls recalibrator
 
 @dataclass(frozen=True)
 class LoggingConfig:

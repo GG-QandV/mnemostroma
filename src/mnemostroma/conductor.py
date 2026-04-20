@@ -336,7 +336,26 @@ class Conductor:
     async def stop(self):
         """Shutdown the system and save state."""
         self._stopping = True
+        # F-1: conductor.shutdown telemetry — fired before teardown sequence
+        import time as _t_stop
+        try:
+            import psutil as _ps, os as _ps_os
+            _ram_mb_stop = round(
+                _ps.Process(_ps_os.getpid()).memory_info().rss / 1024 / 1024, 2
+            )
+        except Exception:
+            _ram_mb_stop = -1.0
+        if self.ctx and self.ctx.log_writer:
+            await _le_stop(self.ctx, "conductor.shutdown", "stop", {
+                "reason": "api_call",
+                "ram_mb": _ram_mb_stop,
+                "sessions_in_ram": len(self.ctx.ram_index),
+                "flush_queue_depth": self.ctx.log_writer.queue.qsize(),
+                "uptime_seconds": int(_t_stop.time() - getattr(self.ctx, "_started_at", _t_stop.time())),
+            }, level="WARNING")
+            await asyncio.sleep(0.1)
         await asyncio.sleep(1)  # last pass for outbox_worker
+
         if self.ctx:
             logger.info("Stopping Mnemostroma...")
             if self._pulse_writer:

@@ -24,12 +24,14 @@ class ConsolidationWorker:
     2. Update age_signal (fresh -> actual -> stale -> archive).
     3. Check expired deadlines (v1.3).
     4. Trigger Dissolver eviction.
+    5. Run Pearson auto-recalibration of score weights (S-1).
     """
     def __init__(self, ctx: Any):
         self.ctx = ctx
         self._running = False
         self._task = None
         self._last_anchor_decay: float = 0.0
+        self._last_recalibration: float = 0.0  # S-1: track last recalibration time
 
     async def start(self):
         self._running = True
@@ -138,6 +140,16 @@ class ConsolidationWorker:
                 decayed = await self._run_anchor_decay(now)
                 self._last_anchor_decay = now
                 if decayed:
+
+        # 5. S-1: Pearson Auto-Recalibration of score weights
+        cfg_fb = getattr(self.ctx.config, "feedback", None)
+        recalib_enabled = getattr(cfg_fb, "recalibration_enabled", True)
+        recalib_every_h = getattr(cfg_fb, "recalibrate_every_hours", 24.0)
+        if recalib_enabled:
+            if now - self._last_recalibration >= recalib_every_h * 3600:
+                from ..feedback.recalibrator import run_recalibration
+                await run_recalibration(self.ctx)
+                self._last_recalibration = now
 
         # Release fragmented Python heap pages back to OS
         gc.collect()

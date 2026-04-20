@@ -149,6 +149,29 @@ class ImplicitFeedbackTracker:
         else:
             await signal_use(session_id, self.ctx)
 
+    async def on_response(self, text: str, injected_ids: list) -> None:
+        """Detect implicit USE signals from LLM response text.
+
+        Called after the LLM reply is collected by the Observer pipeline.
+        If the response text contains a session_id that was previously injected
+        into the system prompt, we emit a USE signal for that session.
+
+        Remaining injected sessions that are not mentioned do NOT generate an
+        IGNORE signal — response brevity is not evidence of non-use.
+
+        Expected latency: <1ms (pure string search, no ONNX).
+
+        Args:
+            text: Full LLM response text collected by the proxy.
+            injected_ids: Session IDs that were included in the last inject() call.
+        """
+        if not injected_ids or not text:
+            return
+        text_lower = text.lower()
+        for sid in injected_ids:
+            if sid.lower() in text_lower:
+                await signal_use(sid, self.ctx)
+
     def reset_session(self) -> None:
         """Reset per-working-session state (call at start of each new agent turn)."""
         self._retrieval_history.clear()

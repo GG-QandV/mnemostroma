@@ -204,11 +204,28 @@ class PersistStep:
 
         # 7c. Experience Layer update
         if ctx.experience_index is not None and pctx.sb.tags:
+            # S-3: snapshot maturity levels BEFORE update to detect transitions
+            _old_maturities: dict = {}
+            for _tag in pctx.sb.tags:
+                _cl = ctx.experience_index.get(_tag)
+                if _cl is not None:
+                    _old_maturities[_tag] = _cl.maturity
+
             ctx.experience_index.update(
                 tags=pctx.sb.tags,
                 is_continuation=not is_new_entity,
                 is_conflict=bool(pctx.sb.conflict_flag),
             )
+
+            # S-3: log maturity transitions (novice→apprentice→practitioner→expert→master)
+            for _tag in pctx.sb.tags:
+                _cl = ctx.experience_index.get(_tag)
+                if _cl is None:
+                    continue
+                _new_mat = _cl.maturity
+                _old_mat = _old_maturities.get(_tag)
+                if _old_mat is not None and _old_mat != _new_mat:
+
             resolved_emotions = pctx.metadata.get("resolved_emotions", [])
             for emo in resolved_emotions:
                 charge_val = emo.charge.value if hasattr(emo.charge, 'value') else str(emo.charge)

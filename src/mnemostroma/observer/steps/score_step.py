@@ -46,6 +46,10 @@ class ScoreStep:
             profile="write"
         )
 
-        # Log Score (v1.0 Point #4)
+        # Log Score (v1.0 Point #4) — only anomalies in safe mode, all in debug
+        _log_cfg = getattr(getattr(pctx.ctx, "config", None), "logging", None)
+        _log_mode = getattr(_log_cfg, "mode", "safe")
+        _is_anomaly = pctx.score < 0.25 or pctx.score > 0.95
+        if _log_mode == "debug" or _is_anomaly:
         
         return pctx

@@ -50,6 +50,7 @@ class Dissolver:
         sessions.sort(key=_eviction_priority)
 
         evicted_count = 0
+        evicted_sessions: list = []          # F-2: collect for telemetry
         for sb in sessions:
             if evicted_count >= n:
                 break
@@ -60,6 +61,7 @@ class Dissolver:
             label = self.ctx.sid_to_id.pop(sb.session_id, None)
             if label is not None:
                 self.ctx.id_to_sid.pop(label, None)
+            evicted_sessions.append(sb)      # F-2: track before count increment
             evicted_count += 1
 
         # P0: rebuild MatrixSearch to remove stale vectors
@@ -69,6 +71,7 @@ class Dissolver:
         # Log eviction (v1.0 spec — Point #9)
 
         logger.info(f"Dissolver evicted {evicted_count} sessions from RAM.")
+
 
     async def start(self):
         """Start the background eviction loop."""

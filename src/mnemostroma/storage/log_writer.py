@@ -41,7 +41,21 @@ class LogWriter:
         await self._db.execute("CREATE INDEX IF NOT EXISTS idx_logs_ts ON onnx_logs(ts);")
         await self._db.execute("CREATE INDEX IF NOT EXISTS idx_logs_component ON onnx_logs(component);")
         await self._db.execute("CREATE INDEX IF NOT EXISTS idx_logs_session ON onnx_logs(session_id);")
-        
+
+        # GAP 3: dissolution_log — eviction telemetry (P1 DDL, logging_checklist.md)
+        await self._db.execute("""
+        CREATE TABLE IF NOT EXISTS dissolution_log (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts            INTEGER NOT NULL,       -- unix ms
+            session_id    TEXT,                   -- evicted session or NULL for batch
+            evicted_count INTEGER NOT NULL DEFAULT 0,
+            ram_after     INTEGER NOT NULL DEFAULT 0
+        )
+        """)
+        await self._db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_dissolution_ts ON dissolution_log(ts)"
+        )
+
         await self._db.commit()
         self._running = True
         self._task = asyncio.create_task(self._flush_loop())
@@ -180,10 +194,15 @@ class LogWriter:
         logger.info("LogWriter stopped.")
 
 # Components always logged in "safe" mode (bootstrap, health, errors)
+# GAP 1: tools.inject, experience.signal, dissolver.evict promoted to safe-mode
+# so token telemetry and eviction events reach the DB regardless of log mode.
 _SAFE_MODE_COMPONENTS = frozenset({
     "conductor.bootstrap",
     "conductor.health",
     "conductor.shutdown",
+    "tools.inject",
+    "experience.signal",
+    "dissolver.evict",
 })
 
 async def log_event(
