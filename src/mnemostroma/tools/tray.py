@@ -239,6 +239,15 @@ class DaemonTrayApp:
             self._update_animation()
             time.sleep(0.05)  # 50ms update rate for smooth animation
 
+    def _clean_zombies(self, widget=None):
+        """Hard reset memory and zombies via clean-zombies.py."""
+        script = Path(__file__).parent.parent.parent.parent.parent / "scripts" / "clean-zombies.py"
+        if script.exists():
+            subprocess.Popen([sys.executable, str(script)])
+            print("Cleanup script executed.")
+        else:
+            print("Cleanup script not found.")
+
     def _init_indicator(self):
         """Initialize AppIndicator."""
         # Use custom icon from ~/.local/share/mnemostroma/icons/
@@ -264,6 +273,10 @@ class DaemonTrayApp:
         item_restart = Gtk.MenuItem(label="Restart Daemon")
         item_restart.connect("activate", self._restart_daemon)
         menu.append(item_restart)
+
+        item_clean = Gtk.MenuItem(label="Hard RAM Reset (Emergency)")
+        item_clean.connect("activate", self._clean_zombies)
+        menu.append(item_clean)
 
         menu.append(Gtk.SeparatorMenuItem())
 

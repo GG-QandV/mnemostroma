@@ -214,6 +214,15 @@ class DaemonTrayApp(QApplication):
             5000
         )
 
+    def _clean_zombies(self):
+        """Hard reset memory and zombies via clean-zombies.py."""
+        script = Path(__file__).parent.parent.parent.parent.parent / "scripts" / "clean-zombies.py"
+        if script.exists():
+            subprocess.Popen([sys.executable, str(script)])
+            print("Cleanup script executed.")
+        else:
+            print("Cleanup script not found.")
+
     def _init_tray(self):
         """Initialize system tray icon and menu."""
         # Create initial icon
@@ -226,6 +235,7 @@ class DaemonTrayApp(QApplication):
         menu.addAction("Status", self._show_status)
         menu.addAction("Open Watch", self._open_watch)
         menu.addAction("Restart Daemon", self._restart_daemon)
+        menu.addAction("Hard RAM Reset (Emergency)", self._clean_zombies)
         menu.addSeparator()
         menu.addAction("Quit", self.quit)
 

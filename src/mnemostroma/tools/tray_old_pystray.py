@@ -167,8 +167,17 @@ def run_tray(db_path: Path, interval: int = 3):
         except Exception:
             pass  # notifications not supported on all platforms
 
+    def _clean_zombies(icon, item):
+        """Hard reset memory and zombies via clean-zombies.py."""
+        import sys, subprocess
+        script = Path(__file__).parent.parent.parent.parent.parent / "scripts" / "clean-zombies.py"
+        if script.exists():
+            subprocess.Popen([sys.executable, str(script)])
+            print("Cleanup script executed.")
+
     menu = pystray.Menu(
         pystray.MenuItem("Status", _on_status),
+        pystray.MenuItem("Hard RAM Reset (Emergency)", _clean_zombies),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Quit", _on_quit),
     )

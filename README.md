@@ -264,6 +264,11 @@ mnemostroma watch             # Live terminal dashboard
 mnemostroma tray              # System tray indicator (requires [tray] extra)
 ```
 
+**Emergency Operations (Crash/Zombie cleanup):**
+If Mnemostroma terminals hang, multiple daemon instances collide, or RAM refuses to release after a bad upgrade/crash:
+- **Via CLI:** Run `python3 scripts/clean-zombies.py` in the project root. It auto-locates your `venv`, gracefully stops systemd services, and aggressively hunts and kills all lingering processes from RAM without affecting your databases.
+- **Via Tray:** Select **"Hard RAM Reset (Emergency)"** from the Mnemostroma Tray menu to execute this silently.
+  
 > **Note:** if `tray` command is missing or fails, ensure you installed the extra:
 > `pip install "mnemostroma[tray]"`
 
