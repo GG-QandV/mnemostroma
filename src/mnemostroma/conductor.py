@@ -6,8 +6,9 @@ import threading
 import time
 import time as _time
 import numpy as np
+import sys
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any
 
 _SESS_DIAG_KEY_ = ""  # watermark anchor — injected per-tester by issue_build.py
 
@@ -65,6 +66,7 @@ class Conductor:
             SystemContext: Fully initialized global context.
         """
         logger.info("Starting Mnemostroma Conductor...")
+        self._start_heartbeat_thread()
         
         # 1. Config
         config = Config.load(Path(config_path))
@@ -126,6 +128,7 @@ class Conductor:
             self.ctx.anchor_repo = None
             logger.info("SessionRepo mode: LEGACY (PersistenceLayer direct)")
 
+        # Provide ctx to db_manager for log_event access
         persistence.wire_ctx(self.ctx)
         await persistence.start()
         
@@ -232,10 +235,13 @@ class Conductor:
         
         # Heartbeat + loop monitor + outbox worker
         self._stopping = False
-        self._start_heartbeat_thread()
         asyncio.create_task(self._loop_monitor(),  name="loop_monitor")
         asyncio.create_task(self._outbox_worker(), name="outbox_worker")
         asyncio.create_task(self._cleanup_loop(),  name="outbox_cleanup")
+
+        # UI Auto-start
+        if config.ui.tray_enabled:
+            self._start_tray_detached()
 
         logger.info("Mnemostroma system bootstrap complete.")
         return self.ctx
@@ -596,3 +602,20 @@ class Conductor:
             return await ctx_bridge(ctx)
 
         raise ValueError(f"Unknown tool: {name!r}")
+
+    def _start_tray_detached(self) -> None:
+        """Manage the tray icon via systemd user service."""
+        import subprocess
+        async def _delayed_start():
+            await asyncio.sleep(5)
+            try:
+                logger.info("Ensuring Mnemostroma Tray UI is running via systemd...")
+                subprocess.Popen(
+                    ["systemctl", "--user", "start", "mnemostroma-ui"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+            except Exception as e:
+                logger.warning(f"Failed to trigger tray service: {e}")
+
+        asyncio.create_task(_delayed_start())

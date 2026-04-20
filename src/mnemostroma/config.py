@@ -278,6 +278,18 @@ class PromptConfig:
     tools_instruction: str = ""
 
 @dataclass(frozen=True)
+class UiConfig:
+    tray_enabled: bool = True
+    tray_theme: str = "dark"
+
+@dataclass(frozen=True)
+class WatchdogConfig:
+    enabled: bool = True
+    check_interval_sec: int = 15
+    heartbeat_timeout_sec: int = 120
+    startup_failsafe_sec: int = 100
+
+@dataclass(frozen=True)
 class Config:
     resources: ResourcesConfig
     score: ScoreConfig
@@ -308,6 +320,8 @@ class Config:
     tools: ToolsConfig = field(default_factory=ToolsConfig)
     proxy: ProxyConfig = field(default_factory=ProxyConfig)
     prompt: PromptConfig = field(default_factory=PromptConfig)
+    watchdog: WatchdogConfig = field(default_factory=WatchdogConfig)
+    ui: UiConfig = field(default_factory=UiConfig)
     manifest: Optional[ModelManifest] = None
 
     def to_dict(self) -> Dict[str, Any]:
@@ -365,5 +379,7 @@ class Config:
             tools=ToolsConfig(**filter_keys(ToolsConfig, data['tools'])) if 'tools' in data else ToolsConfig(),
             proxy=ProxyConfig(**filter_keys(ProxyConfig, data['proxy'])) if 'proxy' in data else ProxyConfig(),
             prompt=PromptConfig(**filter_keys(PromptConfig, data['prompt'])) if 'prompt' in data else PromptConfig(),
+            watchdog=WatchdogConfig(**filter_keys(WatchdogConfig, data['watchdog'])) if 'watchdog' in data else WatchdogConfig(),
+            ui=UiConfig(**filter_keys(UiConfig, data['ui'])) if 'ui' in data else UiConfig(),
             manifest=ModelManifest.load(Path(path).parent / "models_manifest.json") if (Path(path).parent / "models_manifest.json").exists() else None
         )

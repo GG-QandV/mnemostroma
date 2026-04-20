@@ -249,6 +249,16 @@ mnemostroma sse          # Start SSE adapter + proxy on :8767
 mnemo                    # Launch Claude Code through the proxy (falls back to direct if proxy is down)
 ```
 
+## Updating
+
+To update Mnemostroma to the latest version (including dependencies and services):
+```bash
+bash scripts/update.sh
+```
+This script handles git pulling, dependency synchronization via `uv`, and service restoration.
+
+---
+
 **Register as autostart service:**
 
 | OS      | Command                       | Backend             |

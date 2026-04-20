@@ -3,6 +3,7 @@
 MCP tool implementations exposed to agents. All tools are read-only from the agent's perspective — Observer handles all writes.
 
 ## Components
+
 - `read.py`: Semantic search, anchor retrieval, precision data, urgent tasks (`ctx_active`, `ctx_semantic`, `ctx_search`, `ctx_anchors`, `ctx_precision`, `ctx_urgent`, `ctx_expire`).
 - `bridge.py`: Session handoff packet generation (`ctx_bridge`, `ctx_full`, `ctx_get`, `ctx_load`).
 - `content.py`: Content branch tools — versioned artifact storage and search (`save_content`, `content_search`, `content_get`, `content_raw`, `content_history`).

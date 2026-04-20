@@ -1,0 +1,27 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../mnemostroma-public"
+		},
+		{
+			"path": ".."
+		},
+		{
+			"path": "../../orchestrator/docker-stacks/context-manager"
+		},
+		{
+			"path": "../mnemostroma-com-landing-deploy"
+		}
+	],
+	"settings": {
+		"chat.tools.terminal.autoApprove": {
+			"/^docker inspect context-manager --format='\\{\\{json \\.State\\}\\}' \\| python3 -m json\\.tool$/": {
+				"approve": true,
+				"matchCommandLine": true
+			}
+		}
+	}
+}

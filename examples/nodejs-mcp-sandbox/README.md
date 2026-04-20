@@ -2,8 +2,12 @@
 
 Interactive simulation of Mnemostroma's memory architecture — no installation required.
 
-## Architecture Flow
+> [!NOTE]
+> **This is a conceptual simulation.** It does not require Mnemostroma to be running.
+> For a real production integration example, see [examples/nodejs](../nodejs/README.md).
 
+
+## Architecture Flow
 ```text
 LLM Response → [Observer Proxy :8767] → observer_pipeline()
                     ↓                        ↓
@@ -15,26 +19,22 @@ LLM Response → [Observer Proxy :8767] → observer_pipeline()
 ```
 
 ## How to run
-
 1. Start the simulation environment:
-   
    ```bash
    node sandbox_simulator.js
    ```
 2. In a new terminal, run the agent test:
-   
    ```bash
    node client_test.js
    ```
 
 ## Simulated vs Real
-
-| This sandbox      | Real Mnemostroma                      |
-|:----------------- |:------------------------------------- |
+| This sandbox | Real Mnemostroma |
+| :--- | :--- |
 | console.log proxy | proxy_passthrough.py (Starlette ASGI) |
-| mock NER entities | GLiNER ONNX INT8, ~12ms, ~60MB        |
-| mock embedding    | multilingual-e5-small INT8, fp16[384] |
-| mock SQLite flush | aiosqlite WAL2, async batch writer    |
-| mock MCP response | mcp_server.py stdio JSON-RPC          |
+| mock NER entities | GLiNER ONNX INT8, ~12ms, ~60MB |
+| mock embedding | multilingual-e5-small INT8, fp16[384] |
+| mock SQLite flush | aiosqlite WAL2, async batch writer |
+| mock MCP response | mcp_server.py stdio JSON-RPC |
 
 Full architecture: https://github.com/GG-QandV/mnemostroma

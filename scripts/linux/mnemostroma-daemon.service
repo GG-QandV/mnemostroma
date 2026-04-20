@@ -11,10 +11,11 @@ ExecStart=%h/.mnemostroma/venv/bin/python3 -m mnemostroma run
 ExecReload=/bin/kill -HUP $MAINPID
 
 Restart=always
-RestartSec=1
+RestartSec=5
+Environment="DISPLAY=:0"
+Environment="XAUTHORITY=%h/.Xauthority"
 MemoryMax=750M
 
-WatchdogSec=6
 TimeoutStartSec=60
 TimeoutStopSec=10
 

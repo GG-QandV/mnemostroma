@@ -1,12 +1,14 @@
 # Databases & Storage
 *.db
+*.db-wal
+*.db-shm
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm
 
-# Models & Weights (downloaded binaries, not source code)
+# Models (Weights)
 /models/
-weights/
+/weights/
 *.onnx
 *.safetensors
 *.bin
@@ -20,14 +22,30 @@ weights/
 credentials.json
 secret*
 
+# Private Agent Configuration
+.agents/
+
+# Backup directories
+_backup_refactor_*/
+_backup_*/
+
+# Diagnostic / dev scripts
+check_paths.py
+send.py
+nohup.out
+
+# Stale files
+*.old
+
 # Commercial Specs & Private Workspace
 subconscious_layer_specification.md
 список_цен_по_доменам.md
 test_touch.txt
 *.md.bak
 instructions/
-docs/
-archive of documents/
+"archive of documents"/
+archive\ of\ documents/
+.agents/rules/
 config_tuner*.md
 mnestroma_*.md
 tuner_specification*.md
@@ -38,9 +56,21 @@ __pycache__/
 .venv/
 env/
 .pytest_cache/
-*.egg-info/
-scripts/issue_build.py
-scripts/identify_leak.py
-scripts/audit.sh
-scripts/audit_version_check.py
+
+# Private encrypted archives
+private/
+
+# Tester build artifacts (never commit)
+dist/
 scripts/.watermarks_registry.csv
+
+# Audit output (generated, not committed)
+audit_results.json
+*.egg-info/
+mnemostroma_whitepaper_spec.md
+
+# Mnemostroma Analytics & Telemetry
+analytics/*.db
+analytics/*.sqlite
+analytics/raw_dumps/
+analytics/ram_snapshots/

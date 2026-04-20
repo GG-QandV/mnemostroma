@@ -17,7 +17,7 @@ echo "Unit dir: ${UNIT_DIR}"
 mkdir -p "${UNIT_DIR}"
 
 # 2. Скопировать .service файлы и подставить реальный username
-for svc in mnemostroma-daemon mnemostroma-proxy mnemostroma-watchdog; do
+for svc in mnemostroma-daemon mnemostroma-proxy mnemostroma-watchdog mnemostroma-ui; do
     sed \
         -e "s|%i|${TARGET_USER}|g" \
         -e "s|%h|/home/${TARGET_USER}|g" \
@@ -41,6 +41,7 @@ if [ "$(whoami)" = "${TARGET_USER}" ]; then
     systemctl --user enable mnemostroma-daemon
     systemctl --user enable mnemostroma-proxy
     systemctl --user enable mnemostroma-watchdog
+    systemctl --user enable mnemostroma-ui
     echo "  Enabled all units"
 fi
 

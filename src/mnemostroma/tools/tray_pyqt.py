@@ -216,7 +216,7 @@ class DaemonTrayApp(QApplication):
 
     def _clean_zombies(self):
         """Hard reset memory and zombies via clean-zombies.py."""
-        script = Path(__file__).parent.parent.parent.parent.parent / "scripts" / "clean-zombies.py"
+        script = Path(__file__).parent.parent.parent.parent / "scripts" / "clean-zombies.py"
         if script.exists():
             subprocess.Popen([sys.executable, str(script)])
             print("Cleanup script executed.")
@@ -269,3 +269,7 @@ def run_tray(db_path: Path, interval: int = 3):
     from PyQt6.QtWidgets import QApplication
     app = DaemonTrayApp(sys.argv, db_path)
     sys.exit(app.exec())
+
+if __name__ == "__main__":
+    db = Path.home() / ".mnemostroma" / "logs.db"
+    run_tray(db)

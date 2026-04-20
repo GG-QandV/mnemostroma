@@ -1,0 +1,247 @@
+[
+    {
+        "name": "ctx_semantic",
+        "description": "Семантический поиск по памяти. Возвращает релевантные сессии.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Тема для поиска в памяти"
+                },
+                "top_k": {
+                    "type": "integer",
+                    "default": 20,
+                    "description": "Кандидаты для ранжирования"
+                },
+                "top_n": {
+                    "type": "integer",
+                    "default": 5,
+                    "description": "Финальных результатов после rerank"
+                }
+            },
+            "required": [
+                "query"
+            ]
+        }
+    },
+    {
+        "name": "ctx_get",
+        "description": "Получить сессию по ID. Загружает из RAM или SQLite.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "session_id": {
+                    "type": "string",
+                    "description": "ID сессии"
+                }
+            },
+            "required": [
+                "session_id"
+            ]
+        }
+    },
+    {
+        "name": "ctx_search",
+        "description": "Поиск сессий по тегам. Быстрее семантического, требует точного совпадения тегов.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "description": "Теги для фильтрации"
+                },
+                "importance": {
+                    "type": "string",
+                    "description": "critical | important | background | principle"
+                },
+                "age": {
+                    "type": "string",
+                    "description": "Фильтр по age_signal"
+                },
+                "limit": {
+                    "type": "integer",
+                    "default": 10
+                }
+            },
+            "required": [
+                "tags"
+            ]
+        }
+    },
+    {
+        "name": "ctx_full",
+        "description": "Полный текст сессии из SQLite включая content_full. Использовать только когда нужна точная цитата.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "session_id": {
+                    "type": "string",
+                    "description": "ID сессии"
+                }
+            },
+            "required": [
+                "session_id"
+            ]
+        }
+    },
+    {
+        "name": "ctx_anchors",
+        "description": "Якоря субсознательного слоя: решения, факты, персоны, события, дедлайны. Быстрый RAM-доступ. type=deadline заменяет ctx_urgent.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "anchor_type": {
+                    "type": "string",
+                    "description": "decision | constraint | milestone | event | observation | deadline"
+                },
+                "session_id": {
+                    "type": "string",
+                    "description": "Фильтр по сессии"
+                },
+                "limit": {
+                    "type": "integer",
+                    "default": 20
+                }
+            }
+        }
+    },
+    {
+        "name": "ctx_precision",
+        "description": "Прецизионные артефакты: ссылки, формулы, цитаты, данные. Хранятся дословно.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "precision_type": {
+                    "type": "string",
+                    "description": "link | concept | quote | formula | data"
+                },
+                "importance": {
+                    "type": "string",
+                    "description": "Фильтр по важности"
+                },
+                "limit": {
+                    "type": "integer",
+                    "default": 20
+                }
+            }
+        }
+    },
+    {
+        "name": "content_search",
+        "description": "Семантический поиск по контентной ветке (код, конфиги, тексты). Возвращает метаданные блоков.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Описание искомого контента"
+                },
+                "project_id": {
+                    "type": "string",
+                    "description": "Фильтр по проекту"
+                },
+                "status": {
+                    "type": "string",
+                    "default": "active",
+                    "description": "active | archived | all"
+                },
+                "top_k": {
+                    "type": "integer",
+                    "default": 5
+                }
+            },
+            "required": [
+                "query"
+            ]
+        }
+    },
+    {
+        "name": "content_get",
+        "description": "Метаданные блока контента по ID. version=null → последняя активная версия.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "content_id": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "integer",
+                    "description": "Конкретная версия (опционально)"
+                }
+            },
+            "required": [
+                "content_id"
+            ]
+        }
+    },
+    {
+        "name": "content_raw",
+        "description": "Полный текст версии контента. Дорогой вызов — только когда нужен точный текст.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "content_id": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "content_id"
+            ]
+        }
+    },
+    {
+        "name": "content_history",
+        "description": "История всех версий контентного блока включая отклонённые. Только метаданные.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "content_id": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "content_id"
+            ]
+        }
+    },
+    {
+        "name": "ctx_bridge",
+        "description": "Структурированный пакет передачи контекста следующему агенту: intent, решения, конфликты, дедлайны.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {}
+        }
+    },
+    {
+        "name": "ctx_recent",
+        "description": "Вернуть сессии за последние N дней. by='created' — по дате создания, by='accessed' — по последнему обращению.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "days": {
+                    "type": "number",
+                    "default": 7.0
+                },
+                "by": {
+                    "type": "string",
+                    "enum": [
+                        "created",
+                        "accessed"
+                    ],
+                    "default": "created"
+                },
+                "limit": {
+                    "type": "integer",
+                    "default": 20
+                }
+            }
+        }
+    }
+]

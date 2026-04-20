@@ -1,0 +1,21 @@
+[Unit]
+Description=Mnemostroma Tray Icon (UI)
+After=mnemostroma-daemon.service
+BindsTo=mnemostroma-daemon.service
+
+[Service]
+Type=simple
+WorkingDirectory=%h/.mnemostroma
+ExecStart=%h/.mnemostroma/venv/bin/python3 -m mnemostroma.tools.tray_pyqt
+Restart=on-failure
+RestartSec=5
+
+Environment="DISPLAY=:0"
+Environment="XAUTHORITY=%h/.Xauthority"
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mnemostroma-ui
+
+[Install]
+WantedBy=default.target

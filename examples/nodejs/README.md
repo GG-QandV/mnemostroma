@@ -2,6 +2,11 @@
 
 This example demonstrates how to integrate the **Mnemostroma Memory Sidecar** into a Node.js application using standard HTTP/HTTPS modules (zero external dependencies).
 
+> [!IMPORTANT]
+> **Production-Ready Template.** This script is designed for real integration with a running Mnemostroma instance.
+> To understand the internal architecture via simulation, see [examples/nodejs-mcp-sandbox](../nodejs-mcp-sandbox/README.md).
+
+
 ## Architectural Concept: The Observer Pattern
 
 Unlike traditional RAG systems where you manually manage database writes, Mnemostroma uses an **Observer-only write path**. 
