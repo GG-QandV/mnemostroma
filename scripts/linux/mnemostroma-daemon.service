@@ -4,15 +4,15 @@ After=network.target
 Wants=mnemostroma-proxy.service mnemostroma-watchdog.service
 
 [Service]
-Type=notify
-NotifyAccess=main
+Type=simple
 
 WorkingDirectory=%h/.mnemostroma
-ExecStart=%h/.mnemostroma/venv/bin/python3 -m mnemostroma.conductor
+ExecStart=%h/.mnemostroma/venv/bin/python3 -m mnemostroma run
 ExecReload=/bin/kill -HUP $MAINPID
 
 Restart=always
 RestartSec=1
+MemoryMax=750M
 
 WatchdogSec=6
 TimeoutStartSec=60

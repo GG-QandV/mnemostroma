@@ -713,8 +713,33 @@ def _cmd_db_dump_time(args: list) -> None:
 # ---------------------------------------------------------------------------
 
 def _cmd_service(args: list) -> None:
-    subcmd = args[0] if args else "help"
-    print(f"Service command {subcmd} (logic moved to cli/commands.py)")
+    import platform
+    import subprocess
+    subcmd = args[0] if args else "install"
+    
+    if subcmd != "install":
+        print(f"Service command {subcmd} not supported via python CLI. Use OS commands.")
+        return
+        
+    script_dir = Path(__file__).parent.parent.parent.parent / "scripts"
+    os_name = platform.system()
+    
+    if os_name in ("Linux", "Darwin"):
+        sh_script = script_dir / "install-daemon.sh"
+        if not sh_script.exists():
+            print(f"Error: installation script not found at {sh_script}")
+            return
+        print(f"Running automated service installer for {os_name}...")
+        subprocess.run(["bash", str(sh_script)], check=False)
+    elif os_name == "Windows":
+        ps_script = script_dir / "windows" / "install-daemon.ps1"
+        if not ps_script.exists():
+            print(f"Error: installation script not found at {ps_script}")
+            return
+        print(f"Running automated service installer for Windows...")
+        subprocess.run(["powershell", "-ExecutionPolicy", "Bypass", "-File", str(ps_script)], check=False)
+    else:
+        print(f"Unsupported OS: {os_name}")
 
 # ---------------------------------------------------------------------------
 # CLI Core
