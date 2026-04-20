@@ -525,7 +525,7 @@ def _cmd_on() -> None:
     with open(log_path, "w") as log_f:
         proc = subprocess.Popen(
             [sys.executable, "-m", "mnemostroma", "run"],
-            start_new_session=True, stdout=log_f, stderr=log_f, cwd=str(_MNEMO_DIR),
+            start_new_session=True, stdin=subprocess.DEVNULL, stdout=log_f, stderr=log_f, cwd=str(_MNEMO_DIR),
         )
 
     print(_BANNER)
