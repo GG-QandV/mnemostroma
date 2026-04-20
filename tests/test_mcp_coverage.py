@@ -12,11 +12,16 @@ EXPECTED_TOOLS = {
     # 🧠 Воспоминание (8)
     "ctx_full", "ctx_anchors", "ctx_precision", "ctx_bridge",
     "content_search", "content_get", "content_raw", "content_history",
-    # 🔍 Навигация (5)
-    "ctx_semantic", "ctx_get", "ctx_search", "ctx_load", "ctx_recent",
-    # ⚙️ Сервисный агентский (4)
-    "ctx_active", "ctx_expire", "ctx_urgent", "save_content",
+    # 🔍 Навигация (4)
+    "ctx_semantic", "ctx_get", "ctx_search", "ctx_recent",
 }
+
+# DISABLED (восстановить если архитектура изменится):
+# "ctx_load"    — проверить нужен ли
+# "ctx_active"  — заменён XML-инъекцией ConductorProxy
+# "ctx_urgent"  — merged в ctx_anchors(type="deadline")
+# "ctx_expire"  — убран 10.04 (API minimization)
+# "save_content"— убран 10.04 (API minimization)
 
 DAEMON_ONLY = {
     "ctx_inject", "ctx_status", "ctx_growth", "ctx_pulse",

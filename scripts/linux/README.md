@@ -4,8 +4,9 @@ Self-hosted systemd user units for Mnemostroma daemon.
 
 ## Files
 
-- **mnemostroma-daemon.service** — Main daemon process
-- **mnemostroma-proxy.service** — HTTPS passthrough proxy (optional, for Claude Code)
+- **mnemostroma-daemon.service** — Main daemon process (Observer + Memory + Storage)
+- **mnemostroma-sse.service** — SSE Adapter (MCP + Observe + Passthrough Proxy ports 8765-8767)
+- **mnemostroma-proxy.service** — HTTP Proxy (legacy, deprecated in favor of sse)
 - **mnemostroma-watchdog.service** — Health monitor
 - **install.sh** — Setup script (copies units and enables them)
 
@@ -36,9 +37,19 @@ systemctl --user disable mnemostroma-daemon
 
 # Logs
 journalctl --user -u mnemostroma-daemon -f
-journalctl --user -u mnemostroma-proxy -f
+journalctl --user -u mnemostroma-sse -f
 journalctl --user -u mnemostroma-watchdog -f
 ```
+
+## Architecture
+
+| Component | Port | Purpose |
+|-----------|------|---------|
+| **daemon** | socket | Core memory system (Observer, Consolidation, Dissolver) |
+| **sse** | 8765 | MCP Server (SSE transport for claude.ai) |
+| **sse** | 8766 | Observe receiver (localhost, browser extension) |
+| **sse** | 8767 | Passthrough proxy (HTTPS, routes Claude Code API traffic) |
+| **watchdog** | — | Health checks, heartbeat monitoring |
 
 ## Details
 

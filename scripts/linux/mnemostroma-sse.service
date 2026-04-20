@@ -7,7 +7,7 @@ Wants=mnemostroma-watchdog.service
 [Service]
 Type=simple
 WorkingDirectory=%MNEMOSTROMA_DIR%
-ExecStart=%VENV_BIN%/python3 -m mnemostroma sse
+ExecStart=%VENV_BIN%/python3 -m mnemostroma.integration.mcp_sse_adapter
 
 Restart=always
 RestartSec=3

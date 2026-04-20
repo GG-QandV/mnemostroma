@@ -8,7 +8,6 @@ set -euo pipefail
 
 TARGET_USER=${1:-$(whoami)}
 UNIT_DIR="/home/${TARGET_USER}/.config/systemd/user"
-VENV_DIR="/home/${TARGET_USER}/.venv"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "Installing systemd units for user: ${TARGET_USER}"
@@ -22,6 +21,8 @@ for svc in mnemostroma-daemon mnemostroma-proxy mnemostroma-watchdog; do
     sed \
         -e "s|%i|${TARGET_USER}|g" \
         -e "s|%h|/home/${TARGET_USER}|g" \
+        -e "s|%VENV_BIN%|/home/${TARGET_USER}/.mnemostroma/venv/bin|g" \
+        -e "s|%MNEMOSTROMA_DIR%|/home/${TARGET_USER}/.mnemostroma|g" \
         "${SCRIPT_DIR}/${svc}.service" \
         > "${UNIT_DIR}/${svc}.service"
     echo "  Installed: ${UNIT_DIR}/${svc}.service"

@@ -1,11 +1,32 @@
-Functional Source License, Version 1.1, MIT Future License (FSL-1.1-MIT)
+Functional Source License, Version 1.1, MIT Future License
 
 Copyright (c) 2026 Mnemostroma
 
-This software is licensed under the Functional Source License (FSL).
+Licensor: GG-QandV (Mnemostroma)
+Software: Mnemostroma
+Change Date: 2028-03-28
+Change License: MIT License
 
-The FSL grants you the right to copy, modify, and use this software for any purpose, EXCEPT for providing the software as a competing Commercial SaaS (Software-as-a-Service) product.
+Purpose
 
-After 2 years from the date of this release, the license will automatically transition to the standard MIT License.
+This license gives you governed permission to use the Software, but restricts you from using it to compete with the Licensor. After the Change Date, this license transitions to the Change License.
 
-For full FSL terms, see: https://fsl.software/
+Agreement
+
+In order to receive this license, you must agree to its rules. The rules of this license are both obligations under that agreement and conditions to your license. You must not do anything with the Software that triggers a rule you cannot or will not follow.
+
+Notices
+
+You must ensure that everyone who gets a copy of any part of the Software from you, with or without changes, also gets the license and the above copyright notice.
+
+Competing Use
+
+You must not use the Software to provide a product or service that competes with the Licensor's product or service.
+
+Change License
+
+On the Change Date, the terms of the Change License will replace the terms of this license.
+
+Disclaimer
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
