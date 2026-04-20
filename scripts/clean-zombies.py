@@ -4,11 +4,24 @@ Mnemostroma Absolute Cleanup Utility
 Kills all rogue, duplicate, or zombie processes left over in RAM after crashes 
 or incorrect updates, without touching the local databases.
 """
-import psutil
 import os
-import signal
 import sys
 import subprocess
+import signal
+
+try:
+    import psutil
+except ImportError:
+    # Auto-relaunch inside Mnemostroma's venv where psutil is guaranteed to exist
+    venv_python = os.path.expanduser("~/.mnemostroma/venv/bin/python3")
+    if os.name == 'nt':
+        venv_python = os.path.expanduser("~\\.mnemostroma\\venv\\Scripts\\python.exe")
+    if os.path.exists(venv_python) and sys.executable != venv_python:
+        os.execv(venv_python, [venv_python] + sys.argv)
+    else:
+        print("Error: 'psutil' module not found and Mnemostroma venv is missing.")
+        print("Please run inside the venv or install psutil: pip install psutil")
+        sys.exit(1)
 
 def stop_systemd_services():
     """Attempt to gracefully stop systemd user services first"""
