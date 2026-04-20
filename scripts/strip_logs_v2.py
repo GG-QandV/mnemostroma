@@ -40,7 +40,7 @@ def strip_log_events(source: str) -> tuple[str, int]:
     removed = 0
     i = 0
 
-    LOG_EVENT_RE = re.compile(r'^\s*await\s+(?:_?)log_event\s*\(')
+    LOG_EVENT_RE = re.compile(r'^\s*(?:await\s+)?(?:_?)log_event\s*\(')
     IMPORT_LOG_EVENT_RE = re.compile(
         r'^\s*(from\s+\S+\s+import\s+.*\blog_event\b|import\s+.*\blog_event\b)'
     )

@@ -205,7 +205,6 @@ _SAFE_MODE_COMPONENTS = frozenset({
     "dissolver.evict",
 })
 
-async def log_event(
     ctx: Any,
     component: str,
     event: str,
