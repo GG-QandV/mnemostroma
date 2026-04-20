@@ -2,7 +2,7 @@
 
 ### The memory layer for AI agents
 
-![Version](https://img.shields.io/badge/version-v1.8.1-orange)
+![Version](https://img.shields.io/badge/version-v1.8.2-orange)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue)
 ![Tests](https://img.shields.io/badge/tests-411%20passing-brightgreen)
 ![License](https://img.shields.io/badge/license-FSL--1.1--MIT-lightgrey)
@@ -162,7 +162,7 @@ This is not a database with TTL. This is how human memory works.
 
 ## Status
 
-**Current:** v1.8.1 | 2026-04-16
+**Current:** v1.8.2 | 2026-04-20
 
 | Component                                | Status                           |
 | ---------------------------------------- | -------------------------------- |
