@@ -2,12 +2,16 @@
 
 ### The memory layer for AI agents
 
-![Version](https://img.shields.io/badge/version-v1.8.2-orange)
+![Version](https://img.shields.io/badge/version-v1.8.3-orange)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue)
 ![Tests](https://img.shields.io/badge/tests-411%20passing-brightgreen)
 ![License](https://img.shields.io/badge/license-FSL--1.1--MIT-lightgrey)
 
 > *μνήμη (mnḗmē, memory) + στρῶμα (strôma, layer) — the substrate everything rests on.*
+
+> [!WARNING]
+> **CRITICAL UPDATE NOTICE (v1.8.2 / v1.8.3)**
+> Important patches have been released resolving severe daemon crash loops and zombie process accumulation. **All users must fully reinstall Mnemostroma and systemd services** via `pip install -e "."` and `mnemostroma service install` for system stability. Existing SQLite databases will act correctly. If your system crashed previously, execute `python3 scripts/clean-zombies.py` to fix memory state before starting.
 
 ---
 
