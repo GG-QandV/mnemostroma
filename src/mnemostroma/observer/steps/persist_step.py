@@ -9,6 +9,7 @@ import numpy as np
 from typing import TYPE_CHECKING
 from .base import PipelineContext
 from ...memory.session_index import SessionBrief
+from ...storage.log_writer import log_event
 from ..utils import compress_text
 from ...subconscious.anchor import Anchor
 from ...subconscious.anchor_index import AnchorIndex
@@ -98,6 +99,8 @@ class PersistStep:
                     return await tuner_check(pctx.sb, ctx)
                 except Exception as e:
                     logger.error(f"Tuner failed, skipping conflict check: {e}")
+                    await log_event(ctx, "tuner.conflict", "error", {"error": str(e)},
+                                    session_id=session_id, level="ERROR")
                     return pctx.sb
 
             cont, pctx.sb = await asyncio.gather(_run_continuation(), _run_conflict())
@@ -120,6 +123,8 @@ class PersistStep:
                     pctx.sb = await tuner_check(pctx.sb, ctx)
                 except Exception as e:
                     logger.error(f"Tuner failed, skipping conflict check: {e}")
+                    await log_event(ctx, "tuner.conflict", "error", {"error": str(e)},
+                                    session_id=session_id, level="ERROR")
                 if ctx.session_index:
                     label = ctx.get_session_label(session_id)
                     ctx.session_index.add_items([vec_f32], [label])
@@ -185,6 +190,12 @@ class PersistStep:
         if ctx.persistence is not None:
             await ctx.persistence.save_anchor(pctx.anchor)
 
+        await log_event(ctx, "observer.anchor", "create", {
+            "anchor_type": anchor_type,
+            "is_new_entity": is_new_entity,
+            "continuation_of": continuation_of,
+            "continuation_depth": continuation_depth,
+        }, session_id=session_id)
 
         # 7b. RAM indices
         ctx.ram_index[session_id] = pctx.sb
@@ -225,6 +236,16 @@ class PersistStep:
                 _new_mat = _cl.maturity
                 _old_mat = _old_maturities.get(_tag)
                 if _old_mat is not None and _old_mat != _new_mat:
+                    await log_event(ctx, "experience.cluster", "maturity_change", {
+                        "cluster_id":    _tag,
+                        "from_maturity": _old_mat,
+                        "to_maturity":   _new_mat,
+                        "pos_count":     _cl.emotion_positive,
+                        "neg_count":     _cl.emotion_negative,
+                        "pos_neg_ratio": round(_cl.emotion_valence, 3),
+                        "dominant_tags": [_tag],
+                        "session_count": _cl.session_count,
+                    }, level="INFO")
 
             resolved_emotions = pctx.metadata.get("resolved_emotions", [])
             for emo in resolved_emotions:
@@ -276,6 +297,12 @@ class PersistStep:
             ctx.persistence.enqueue_session(pctx.sb)
 
         # Log Save
+        await log_event(ctx, "observer.save", "persist", {
+            "layer": "RAM_HOT",
+            "tags": pctx.sb.tags,
+            "brief": pctx.sb.brief,
+            "bare_entity": pctx.sb.bare_entity
+        }, session_id=session_id)
         
         return pctx
 

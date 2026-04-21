@@ -137,6 +137,8 @@ class Dreamer:
 
         stats["duration_ms"] = round((time.time() - start) * 1000, 1)
 
+        from ..storage.log_writer import log_event
+        await log_event(self._ctx, "dreamer.cycle", "complete", stats)
 
         logger.info(
             "Dreamer cycle: checked=%d outcomes_updated=%d resurfaced=%d",

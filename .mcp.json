@@ -1,9 +1,0 @@
-{
-  "mcpServers": {
-    "mnemostroma": {
-      "type": "stdio",
-      "command": "/home/gg/.mnemostroma/venv/bin/python3",
-      "args": ["-m", "mnemostroma.integration.mcp_stdio_adapter"]
-    }
-  }
-}

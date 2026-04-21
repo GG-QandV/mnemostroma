@@ -106,6 +106,11 @@ class ConsolidationWorker:
             sb.score = await calculate_score(0.5, sb.created_at, sb.importance, self.ctx)
 
         # 2.5 Log Recalc (v1.0 spec — Point #8)
+        from ..storage.log_writer import log_event
+        await log_event(self.ctx, "consolidation.recalc", "batch", {
+            "sessions_checked": len(self.ctx.ram_index),
+            "duration_ms": int((time.time() - now) * 1000)
+        })
 
         # 3. Trigger Dissolver
         if hasattr(self.ctx, 'dissolver') and self.ctx.dissolver:
@@ -140,6 +145,10 @@ class ConsolidationWorker:
                 decayed = await self._run_anchor_decay(now)
                 self._last_anchor_decay = now
                 if decayed:
+                    await log_event(self.ctx, "anchor.decay", "batch", {
+                        "anchors_decayed": decayed,
+                        "threshold_days": cfg_ad.threshold_days,
+                    })
 
         # 5. S-1: Pearson Auto-Recalibration of score weights
         cfg_fb = getattr(self.ctx.config, "feedback", None)

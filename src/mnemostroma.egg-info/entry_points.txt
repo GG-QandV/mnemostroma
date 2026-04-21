@@ -1,0 +1,2 @@
+[console_scripts]
+mnemostroma = mnemostroma.__main__:cli

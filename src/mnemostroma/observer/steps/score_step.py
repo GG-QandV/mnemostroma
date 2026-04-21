@@ -8,6 +8,7 @@ import numpy as np
 from typing import TYPE_CHECKING
 from .base import PipelineContext
 from ...memory.scoring import calculate_score, get_importance_weight
+from ...storage.log_writer import log_event
 
 if TYPE_CHECKING:
     pass
@@ -51,5 +52,15 @@ class ScoreStep:
         _log_mode = getattr(_log_cfg, "mode", "safe")
         _is_anomaly = pctx.score < 0.25 or pctx.score > 0.95
         if _log_mode == "debug" or _is_anomaly:
+            await log_event(pctx.ctx, "observer.score", "calculate", {
+                "R": round(relevance, 3),
+                "T": round(T, 3),
+                "I": round(I, 3),
+                "score": round(pctx.score, 3),
+                "profile": "write",
+                "alpha": 0.5, "beta": 0.3, "gamma": 0.2,
+            }, latency_ms=(time.time() - score_start) * 1000,
+               session_id=pctx.event.session_id,
+               level="DEBUG" if not _is_anomaly else "WARNING")
         
         return pctx

@@ -1,6 +1,0 @@
-section,metric_name,value,unit,status
-infra,logs_total_rows,202,count,OK
-infra,bootstrap_count,79,count,OK
-memory,sessions_total,317,count,OK
-memory,anchors_total,311,count,OK
-telemetry,new_evict_rows,44,count,ACTIVE

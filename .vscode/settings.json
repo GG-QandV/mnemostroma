@@ -1,8 +1,0 @@
-{
-    "chat.tools.terminal.autoApprove": {
-        "/^docker inspect context-manager --format='\\{\\{json \\.State\\}\\}' \\| python3 -m json\\.tool$/": {
-            "approve": true,
-            "matchCommandLine": true
-        }
-    }
-}
