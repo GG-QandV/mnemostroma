@@ -14,6 +14,17 @@ class MemoryBlock:
     tools: List[Dict[str, Any]] = field(default_factory=list)
     stats: Dict[str, Any] = field(default_factory=dict)
 
+PROTOCOL_BLOCK = (
+    "<agent_protocol>\n"
+    "MANDATORY — past work / decisions referenced: "
+    "ctx_semantic(q) · ctx_anchors(type) · ctx_search(tags)\n"
+    "MANDATORY — session end with decision or open task: ctx_bridge()\n"
+    "FORBIDDEN: claim no context without ctx_semantic() first.\n"
+    "You do not write memory. You only read. Reading is not optional.\n"
+    "</agent_protocol>"
+)
+
+
 class ConductorProxy:
     """Middleware proxy that guarantees continuous memory context injection.
     
@@ -64,7 +75,7 @@ class ConductorProxy:
                 deadlines.append(f"- {title}")
                 
         # XML Assembly
-        xml = []
+        xml = [PROTOCOL_BLOCK]
         if decisions:
             xml.append("<decisions>\n" + "\n".join(decisions) + "\n</decisions>")
         if principles:
