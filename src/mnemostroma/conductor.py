@@ -70,6 +70,7 @@ class Conductor:
         
         # 1. Config
         config = Config.load(Path(config_path))
+        self._validate_resource_config(config)
         
         # 2. Storage
         db = await init_db(Path(db_path), config=config)
@@ -602,6 +603,37 @@ class Conductor:
             return await ctx_bridge(ctx)
 
         raise ValueError(f"Unknown tool: {name!r}")
+
+        asyncio.create_task(_delayed_start())
+
+    def _validate_resource_config(self, config: Config):
+        """Validate resource parameters against hardware/budget constraints.
+        
+        Logs WARNING if session_window_size is likely to exceed or underutilize 
+        the allocated ram_budget_mb.
+        """
+        try:
+            res = config.resources
+            window = res.session_window_size
+            budget = getattr(res, 'ram_budget_mb', 650)
+            
+            # Heuristic: ~1.5 MB per hot session (embedding + overhead)
+            max_rec = int(budget / 1.5)
+            # Heuristic: minimum 30% utilization
+            min_rec = int(budget / 3.0)
+            
+            if window > max_rec:
+                logger.warning(
+                    f"config: session_window_size={window} exceeds estimated capacity "
+                    f"for {budget}MB budget (recommended ≤{max_rec})"
+                )
+            elif window < min_rec:
+                logger.warning(
+                    f"config: session_window_size={window} underutilizes estimated capacity "
+                    f"for {budget}MB budget (recommended ≥{min_rec})"
+                )
+        except Exception as e:
+            logger.debug(f"Config validation skipped: {e}")
 
     def _start_tray_detached(self) -> None:
         """Manage the tray icon via systemd user service."""
