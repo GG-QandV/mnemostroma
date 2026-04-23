@@ -4,7 +4,7 @@
 
 ![Version](https://img.shields.io/badge/version-v1.8.4-orange)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue)
-![Tests](https://img.shields.io/badge/tests-411%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-440%20passing-brightgreen)
 ![License](https://img.shields.io/badge/license-FSL--1.1--MIT-lightgrey)
 
 > *μνήμη (mnḗmē, memory) + στρῶμα (strôma, layer) — the substrate everything rests on.*
