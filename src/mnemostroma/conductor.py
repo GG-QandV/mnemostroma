@@ -21,7 +21,6 @@ from .core import SystemContext, ModelRegistry
 from .storage.sqlite import init_db, DatabaseManager, check_anchor_schema
 from .storage.persistence import PersistenceLayer
 from .storage.content_manager import ContentManager
-from .storage.log_writer import LogWriter
 from .memory.hnsw import init_session_index, init_content_index
 from .memory.dissolver import Dissolver
 from .memory.consolidation import ConsolidationWorker
@@ -129,7 +128,7 @@ class Conductor:
             self.ctx.anchor_repo = None
             logger.info("SessionRepo mode: LEGACY (PersistenceLayer direct)")
 
-        # Provide ctx to db_manager for log_event access
+        # Provide ctx to db_manager for internal instrumentation access
         persistence.wire_ctx(self.ctx)
         await persistence.start()
         
@@ -225,11 +224,6 @@ class Conductor:
             self._dreamer_task = dreamer
         
         # Initial Bootstrap Log
-        from .storage.log_writer import log_event
-        await log_event(self.ctx, "conductor.bootstrap", "start", {
-            "db_path": str(db_path),
-            "logs_path": str(logs_path)
-        })
 
         # B03: Health Check Log (v1.0 spec — Point #17)
         try:
@@ -238,11 +232,6 @@ class Conductor:
             _ram_mb = round(_rss / 1024 / 1024, 2)
         except Exception:
             _ram_mb = -1.0
-        await log_event(self.ctx, "conductor.health", "check", {
-            "ram_mb": _ram_mb,
-            "observer_alive": True,
-            "issues": []
-        })
         
         # Heartbeat + loop monitor + outbox worker
         self._stopping = False
@@ -362,7 +351,6 @@ class Conductor:
         except Exception:
             _ram_mb_stop = -1.0
         if self.ctx and self.ctx.log_writer:
-            from .storage.log_writer import log_event as _le_stop
             await _le_stop(self.ctx, "conductor.shutdown", "stop", {
                 "reason": "api_call",
                 "ram_mb": _ram_mb_stop,

@@ -114,7 +114,7 @@ class DatabaseManager:
     Args:
         db: Active aiosqlite connection.
         config: Full system Config (not config.storage, full Config).
-        ctx: SystemContext passed for log_event instrumentation.
+        ctx: SystemContext passed for internal telemetry instrumentation.
     """
 
     def __init__(self, db: aiosqlite.Connection, config: Any, ctx: Optional[Any] = None):
@@ -1096,11 +1096,6 @@ class DatabaseManager:
 
         # Log storage flush (v1.0 spec — Point #15)
         if self.ctx is not None:
-            from .log_writer import log_event
-            await log_event(self.ctx, "storage.flush", "batch", {
-                "flushed_count": len(batch),
-                "queue_depth": self.queue.qsize()
-            })
 
         logger.debug(f"Flushed {len(batch)} sessions to SQLite")
 

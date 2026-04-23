@@ -19,7 +19,6 @@ from ..memory.scoring import calculate_score
 from .utils import compress_text
 from ..memory.session_index import SessionBrief
 from ..core import SystemContext
-from ..storage.log_writer import log_event
 
 logger = logging.getLogger("mnemostroma.observer")
 
@@ -84,9 +83,6 @@ async def observer_pipeline(
     # Also merge f32 embedding for downstream components
     pctx.metadata["embedding_f32"] = embed_pctx.metadata.get("embedding_f32")
 
-    await log_event(ctx, "observer.pipe", "ner+embed", {
-        "entities_count": len(pctx.entities),
-    }, latency_ms=(time.time() - pipe_start) * 1000, session_id=session_id)
 
     # Fallback embedding if pre-embed failed
     embedding_f32 = pctx.metadata.get("embedding_f32")
@@ -175,10 +171,5 @@ async def observer_pipeline(
 
     # GAP-9: F-4 — end-to-end pipeline latency across all steps
     _total_ms = round((time.time() - pctx.start_time) * 1000, 2)
-    await log_event(ctx, "observer.pipe", "pipeline_total", {
-        "total_ms":       _total_ms,
-        "importance":     pctx.importance,
-        "entities_count": len(pctx.entities) if pctx.entities else 0,
-    }, latency_ms=_total_ms, session_id=session_id)
 
     return pctx.sb

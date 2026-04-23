@@ -12,7 +12,6 @@ import logging
 from typing import Any, Dict, Optional
 
 from ..core import SystemContext
-from ..storage.log_writer import log_event
 
 logger = logging.getLogger("mnemostroma.feedback")
 
@@ -53,14 +52,6 @@ async def record_signal(
     if signal in ("USE", "DEEP_USE", "REVISIT"):
         sb.use_count = getattr(sb, "use_count", 0) + 1
 
-    await log_event(ctx, "feedback.implicit", "signal", {
-        "session_id": session_id,
-        "signal": signal,
-        "weight": weight,
-        "old_score": round(old_score, 4),
-        "new_score": round(sb.implicit_score, 4),
-        "use_count": getattr(sb, "use_count", 0),
-    }, session_id=session_id)
 
     logger.debug(
         f"Feedback {signal} for {session_id}: "

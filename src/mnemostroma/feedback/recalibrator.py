@@ -16,7 +16,6 @@ import time
 import logging
 import numpy as np
 from typing import Any, Dict, List, Optional, Tuple
-from ..storage.log_writer import log_event
 
 logger = logging.getLogger("mnemostroma.feedback.recalibrator")
 
@@ -123,13 +122,3 @@ async def run_recalibration(ctx: Any) -> None:
             logger.warning("recalibrator: weight mutation failed — %s", e)
             optimize_success = False
 
-    await log_event(ctx, "feedback.recalibration", "pearson", {
-        "pearson_r":     round(pearson_r, 4),
-        "threshold":     threshold,
-        "triggered":     triggered,
-        "alpha_old":     alpha_old,   "alpha_new":  alpha_new,
-        "beta_old":      beta_old,    "beta_new":   beta_new,
-        "gamma_old":     gamma_old,   "gamma_new":  gamma_new,
-        "samples_used":  len(sessions),
-        "optimize_success": optimize_success,
-    }, level="INFO" if triggered else "DEBUG")

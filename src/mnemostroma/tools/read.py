@@ -4,7 +4,6 @@ import re
 from typing import List, Dict, Any, Optional
 from ..core import SystemContext
 from ..memory.search import semantic_search
-from ..storage.log_writer import log_event
 from ..feedback.implicit import signal_use
 from .admin import ctx_bridge as _ctx_bridge
 
@@ -144,11 +143,6 @@ async def ctx_semantic(
         await tracker.on_semantic_query(returned_ids)
 
     # Log tool call (v1.0 spec Point #13)
-    await log_event(ctx, "tools.semantic", "call", {
-        "query": query,
-        "results_count": len(results),
-        "total_latency_ms": round(latency, 2)
-    }, latency_ms=latency)
 
     return results
 
@@ -175,11 +169,6 @@ async def ctx_search(
         and (age is None or sb.age_signal == age)
     ]
     results.sort(key=lambda x: x.score, reverse=True)
-    await log_event(ctx, "tools.search", "call", {
-        "tags": tags,
-        "importance": importance,
-        "results_count": len(results[:limit]),
-    })
     return results[:limit]
 
 
@@ -193,7 +182,6 @@ async def ctx_full(session_id: str, ctx: SystemContext) -> Optional[Dict[str, An
         return None
 
     await signal_use(session_id, ctx)
-    await log_event(ctx, "tools.full", "call", {"session_id": session_id})
     return data
 
 
@@ -237,10 +225,6 @@ async def ctx_anchors(
             "created_at": a.created_at,
         })
 
-    await log_event(ctx, "tools.anchors", "call", {
-        "anchor_type": anchor_type,
-        "results_count": len(result),
-    })
     return result
 
 
@@ -262,10 +246,6 @@ async def ctx_precision(
     if error is not None:
         return []
 
-    await log_event(ctx, "tools.precision", "call", {
-        "precision_type": precision_type,
-        "results_count": len(result),
-    })
     return result
 
 
@@ -281,11 +261,6 @@ async def ctx_recent(
     if ctx.session_repo:
         results, error = await ctx.session_repo.load_recent(days, by, limit)
         if error is None:
-            await log_event(ctx, "tools.recent", "call", {
-                "days": days,
-                "by": by,
-                "results_count": len(results),
-            })
             return results
 
     # LEGACY mode fallback: scan ram_index directly
@@ -298,12 +273,6 @@ async def ctx_recent(
     candidates.sort(key=lambda x: x.created_at, reverse=True)
     results = candidates[:limit]
 
-    await log_event(ctx, "tools.recent", "call", {
-        "days": days,
-        "by": by,
-        "results_count": len(results),
-        "source": "ram_fallback",
-    })
     return results
 
 
@@ -423,9 +392,5 @@ async def ctx_active(ctx: SystemContext) -> Dict[str, Any]:
     ctx.last_message_text = ""
 
     # Log tool call (v1.0 spec)
-    await log_event(ctx, "tools.active", "call", {
-        "returned_count": len(res["active_variables"]),
-        "urgency_count": len(urgency_active)
-    })
 
     return res
