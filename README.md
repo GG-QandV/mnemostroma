@@ -667,10 +667,27 @@ Cloud Sync, Subconscious Layer (personalized models), Shared Experience, and Tea
 *offline · ~650MB RAM (baseline) · ~20ms · 440 tests · v1.8.4*
 
 # [mnemostroma-protocol]
-
 ## Memory Protocol (Mnemostroma)
 
-Tools available via MCP. Agent decides usage. Continuity via injected <memorycontext>.
-Agent may call ctx.semantic if needed — or reason from context alone.
+Persistent memory is active. Tools are available via MCP.
+Context from previous sessions is injected automatically via <memory_context>.
 
+MANDATORY — session start:
+  Read <memory_context> before your first response.
+  If empty or stale → call ctx_semantic("current task context")
+
+MANDATORY — when user references any past work, decision, or blocker:
+  → ctx_semantic(query)          // meaning-based, ~20ms
+  → ctx_anchors(type="decision") // exact decisions, <0.1ms
+  → ctx_search(tags)             // tag-based, precise
+
+MANDATORY — session end (any of these: decision made / work continues / blocker found):
+  → ctx_bridge()
+
+FORBIDDEN:
+  "I don't have context from previous sessions" — without calling ctx_semantic() first
+  Skipping ctx_bridge() when a decision or unresolved task exists
+
+You do not write memory. Observer does it silently.
+You only read. Reading is not optional.
 # [mnemostroma-protocol]-end
