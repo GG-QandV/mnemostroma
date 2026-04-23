@@ -1,4 +1,45 @@
-# Changelog
+## [1.8.4] — 2026-04-23
+### Fixed
+- **Urgency Bug**: Expired sessions now correctly persist `urgency_active=False` to SQLite. Resolved 51 "frozen" sessions.
+- **Dissolver Loop**: Implemented Rule 2 (RSS-based eviction) in `dissolver.py`. Eviction now considers actual RAM usage via `psutil`.
+- **Memory Scaling**: Increased `session_window_size` to 400 (from 200) to better utilize the 650MB RAM budget.
+### Added
+- **Critical Guard**: Important and critical sessions are now protected from eviction unless RAM usage exceeds 90% of the hard limit.
+- **Anchor Stoplist**: Observer now filters parasitic phrases using a configurable stop-list to prevent noisy anchor creation.
+- **Regressions**: Added `tests/test_v184_regressions.py` covering memory and persistence invariants.
+
+## [1.8.3] — 2026-04-20
+
+### Fixed
+
+- **Watchdog & UI Stabilization**: Finalized 2-phase watchdog and UI systemd integration for reliable background operation.
+- **Daemon Detachment**: Fixed CLI stdin redirection to allow proper daemon detachment without terminal tethering.
+- **Log Stripping**: Improved regex in `strip_logs_v2.py` for more reliable removal of sensitive diagnostic markers.
+
+## [1.8.2] — 2026-04-20
+
+### Added
+
+- **Emergency RAM Reset**: Added "Hard RAM Reset (Emergency)" option to tray menu and `clean-zombies.py` script for aggressive process hunting.
+- **Installation Pipeline**: Overhauled daemon installation logic for Linux (systemd), macOS (launchd), and Windows (Task Scheduler).
+
+## [1.8.1] — 2026-04-17
+
+### Fixed
+
+- **Proxy Lifecycle**: Resolved runtime errors in the passthrough proxy lifecycle and unified versioning.
+
+## [1.8.0] — 2026-04-14
+
+### Changed
+
+- **Hexagonal Architecture**: Completed full transition to Ports & Adapters; decoupled toolset from direct SQLite dependencies.
+- **API Minimization**: Streamlined MCP API to 12 core tools (8 Recollection / 4 Navigation).
+- **Tool Removal**: Formally removed legacy tools (`ctx_active`, `ctx_urgent`, `ctx_expire`, `save_content`).
+
+### Tests
+
+- 100% test pass rate with updated architecture (435/435 tests).
 
 ## [1.7.5] — 2026-04-10
 

@@ -2,7 +2,7 @@
 
 ### The memory layer for AI agents
 
-![Version](https://img.shields.io/badge/version-v1.8.3-orange)
+![Version](https://img.shields.io/badge/version-v1.8.4-orange)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue)
 ![Tests](https://img.shields.io/badge/tests-411%20passing-brightgreen)
 ![License](https://img.shields.io/badge/license-FSL--1.1--MIT-lightgrey)
@@ -10,7 +10,7 @@
 > *μνήμη (mnḗmē, memory) + στρῶμα (strôma, layer) — the substrate everything rests on.*
 
 > [!WARNING]
-> **CRITICAL UPDATE NOTICE (v1.8.2 / v1.8.3)**
+> **CRITICAL UPDATE NOTICE (v1.8.3 / v1.8.4)**
 > Important patches have been released resolving severe daemon crash loops and zombie process accumulation. **All users must fully reinstall Mnemostroma and systemd services** via `pip install -e "."` and `mnemostroma service install` for system stability. Existing SQLite databases will act correctly. If your system crashed previously, execute `python3 scripts/clean-zombies.py` to fix memory state before starting.
 
 ---
@@ -166,7 +166,7 @@ This is not a database with TTL. This is how human memory works.
 
 ## Status
 
-**Current:** v1.8.2 | 2026-04-20
+**Current:** v1.8.4 | 2026-04-23
 
 | Component                                | Status                           |
 | ---------------------------------------- | -------------------------------- |
@@ -267,7 +267,7 @@ This script handles git pulling, dependency synchronization via `uv`, and servic
 | macOS   | `mnemostroma service install` | launchd LaunchAgent |
 | Windows | `mnemostroma service install` | Task Scheduler      |
 
-> **Windows note:** Signals `SIGUSR1/2` (flush/dump) are unavailable on Windows. Use `mnemostroma off` and `mnemostroma on` instead. For the best beta experience, WSL2 (Ubuntu) is recommended.
+> **Windows note:** Signals `SIGUSR1/2` (flush/dump) are unavailable on Windows. Use `mnemostroma off` and `mnemostroma on` instead. For the best experience, WSL2 (Ubuntu) is recommended.
 
 **Management commands:**
 
@@ -311,7 +311,7 @@ No torch. No transformers. No LangChain. No Docker. No Redis. No cloud.
 | multilingual-e5-small INT8 | ~117 MB                            | Session & content embedder (384d) |
 | distilbert-ner INT8        | ~60 MB                             | HybridNER                         |
 | TinyBERT-L-2-v2 INT8       | ~7 MB                              | Reranker (lazy)                   |
-| **Total working set**      | **~300 MB disk · ~420-750 MB RAM** |                                   |
+| **Total working set**      | **~300 MB disk · ~420-650 MB RAM** |                                   |
 
 Core dependencies: `onnxruntime, tokenizers, numpy, lz4, aiosqlite`
 
@@ -587,7 +587,7 @@ Connect Mnemostroma to claude.ai web chat — tools available to Claude, convers
 
 ## Logging
 
-Mnemostroma writes local diagnostic logs to `logs.db` during beta.
+Mnemostroma writes local diagnostic logs to `logs.db`.
 **Logs never leave your machine.**
 
 `~/.mnemostroma/config.json`:
@@ -664,7 +664,7 @@ Cloud Sync, Subconscious Layer (personalized models), Shared Experience, and Tea
 ---
 
 *Mnemostroma — the memory layer for AI agents*
-*offline · ~420MB RAM (baseline) · ~20ms · 411 tests · v1.8.0*
+*offline · ~650MB RAM (baseline) · ~20ms · 440 tests · v1.8.4*
 
 # [mnemostroma-protocol]
 

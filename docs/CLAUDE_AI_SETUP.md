@@ -2,7 +2,7 @@
 
 Connects Mnemostroma to claude.ai in two ways:
 
-- **Tools**: Claude in claude.ai can call all 16 Mnemostroma MCP tools (ctx_semantic, ctx_search, etc.)
+- **Tools**: Claude in claude.ai can call all 12 Mnemostroma MCP tools (ctx_semantic, ctx_search, etc.)
 - **Context capture**: Mnemostroma observes the chat in real time — conversations are stored in memory automatically
 
 Both require the daemon to be running. The connection module is independent — if it stops, the daemon continues.
