@@ -151,6 +151,7 @@ class ConsolidationWorker:
                 decayed = await self._run_anchor_decay(now)
                 self._last_anchor_decay = now
                 if decayed:
+                    pass
 
         # 5. S-1: Pearson Auto-Recalibration of score weights
         cfg_fb = getattr(self.ctx.config, "feedback", None)

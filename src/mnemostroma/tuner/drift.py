@@ -19,6 +19,7 @@ async def check_drift(tag: str, drift_score: float, threshold: float, ctx: Any):
 
     # Log START
     if hasattr(ctx, "log_writer") and ctx.log_writer:
+        pass
 
     flagged = drift_score > threshold
 

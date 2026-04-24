@@ -225,6 +225,7 @@ class PersistStep:
                 _new_mat = _cl.maturity
                 _old_mat = _old_maturities.get(_tag)
                 if _old_mat is not None and _old_mat != _new_mat:
+                    pass
 
             resolved_emotions = pctx.metadata.get("resolved_emotions", [])
             for emo in resolved_emotions:

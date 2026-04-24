@@ -183,6 +183,7 @@ async def tuner_check(entity: SessionBrief, ctx: SystemContext) -> SessionBrief:
 
     # Log START of check
     if hasattr(ctx, "log_writer") and ctx.log_writer:
+        pass
 
     # 1. Conflict check (blocks dissolution if flagged)
     conflict_details = {}

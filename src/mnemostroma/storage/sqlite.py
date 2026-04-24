@@ -1096,6 +1096,7 @@ class DatabaseManager:
 
         # Log storage flush (v1.0 spec — Point #15)
         if self.ctx is not None:
+            pass
 
         logger.debug(f"Flushed {len(batch)} sessions to SQLite")
 

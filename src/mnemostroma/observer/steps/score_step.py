@@ -51,5 +51,6 @@ class ScoreStep:
         _log_mode = getattr(_log_cfg, "mode", "safe")
         _is_anomaly = pctx.score < 0.25 or pctx.score > 0.95
         if _log_mode == "debug" or _is_anomaly:
+            pass
         
         return pctx
