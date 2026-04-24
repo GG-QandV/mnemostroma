@@ -228,12 +228,14 @@ mnemostroma setup
 ### Option C — macOS / Windows
 
 **macOS:**
+
 ```bash
 pip install "git+https://github.com/GG-QandV/mnemostroma.git[all]"
 mnemostroma setup
 ```
 
 **Windows (PowerShell):**
+
 ```powershell
 pip install "git+https://github.com/GG-QandV/mnemostroma.git[all]"
 mnemostroma setup
@@ -243,11 +245,11 @@ mnemostroma setup
 
 ### Installation Extras
 
-| Extra | Installs | Requirement |
-|---|---|---|
-| `[all]` | **Everything** | Recommended for full UX |
-| `[tray]` | System tray icon | Requires `PyQt6` + system libs |
-| `[sse]` | HTTPS/SSE proxy | Requires `uvicorn` + `starlette` |
+| Extra    | Installs         | Requirement                      |
+| -------- | ---------------- | -------------------------------- |
+| `[all]`  | **Everything**   | Recommended for full UX          |
+| `[tray]` | System tray icon | Requires `PyQt6` + system libs   |
+| `[sse]`  | HTTPS/SSE proxy  | Requires `uvicorn` + `starlette` |
 
 > [!IMPORTANT]
 > **Linux Tray Dependencies:**
@@ -297,9 +299,11 @@ mnemo                    # Launch Claude Code through the proxy (falls back to d
 ## Updating
 
 To update Mnemostroma to the latest version (including dependencies and services):
+
 ```bash
 bash scripts/update.sh
 ```
+
 This script handles git pulling, dependency synchronization via `uv`, and service restoration.
 
 ---
@@ -325,9 +329,10 @@ mnemostroma tray              # System tray indicator (requires [tray] extra)
 
 **Emergency Operations (Crash/Zombie cleanup):**
 If Mnemostroma terminals hang, multiple daemon instances collide, or RAM refuses to release after a bad upgrade/crash:
+
 - **Via CLI:** Run `python3 scripts/clean-zombies.py` in the project root. It auto-locates your `venv`, gracefully stops systemd services, and aggressively hunts and kills all lingering processes from RAM without affecting your databases.
 - **Via Tray:** Select **"Hard RAM Reset (Emergency)"** from the Mnemostroma Tray menu to execute this silently.
-  
+
 > **Note:** if `tray` command is missing or fails, ensure you installed the extra:
 > `pip install "mnemostroma[tray]"`
 
@@ -712,6 +717,7 @@ Cloud Sync, Subconscious Layer (personalized models), Shared Experience, and Tea
 *offline · ~650MB RAM (baseline) · ~20ms · 457 tests · v1.8.4*
 
 # [mnemostroma-protocol]
+
 ## Memory Protocol (Mnemostroma)
 
 Persistent memory is active. Tools are available via MCP.
@@ -735,4 +741,5 @@ FORBIDDEN:
 
 You do not write memory. Observer does it silently.
 You only read. Reading is not optional.
+
 # [mnemostroma-protocol]-end

@@ -129,7 +129,7 @@ class Conductor:
             self.ctx.anchor_repo = None
             logger.info("SessionRepo mode: LEGACY (PersistenceLayer direct)")
 
-        # Provide ctx to db_manager for log_event access
+
         persistence.wire_ctx(self.ctx)
         await persistence.start()
         
@@ -169,6 +169,10 @@ class Conductor:
                 logger.info(f"Precision RAM preloaded: {len(self.ctx.precision_ram)} entries")
             except Exception as e:
                 logger.warning(f"Precision RAM preload failed: {e}")
+
+        # B01.7: Force-load NER + Reranker, then snapshot ONNX baseline for Dissolver
+        await self._warmup_models(self.ctx)
+        self.ctx.set_onnx_baseline()
 
         # B02: Wire ImplicitFeedbackTracker (feedback_loop_v1.5.md § 4)
         self.ctx.feedback_tracker = ImplicitFeedbackTracker(self.ctx)
@@ -339,6 +343,17 @@ class Conductor:
         ctx.anchor_vectors = vectors
         logger.info(f"Anchor warmup complete: {len(vectors)}/{len(ANCHORS)} vectors ready.")
 
+    async def _warmup_models(self, ctx: SystemContext) -> None:
+        """Force-load NER and Reranker so ONNX baseline reflects full model footprint."""
+        try:
+            _ = ctx.models.ner
+        except Exception as e:
+            logger.warning(f"NER warmup failed: {e}")
+        try:
+            _ = ctx.models.reranker
+        except Exception as e:
+            logger.warning(f"Reranker warmup failed: {e}")
+
     async def stop(self):
         """Shutdown the system and save state."""
         self._stopping = True
@@ -351,15 +366,7 @@ class Conductor:
             )
         except Exception:
             _ram_mb_stop = -1.0
-        if self.ctx and self.ctx.log_writer:
-            await _le_stop(self.ctx, "conductor.shutdown", "stop", {
-                "reason": "api_call",
-                "ram_mb": _ram_mb_stop,
-                "sessions_in_ram": len(self.ctx.ram_index),
-                "flush_queue_depth": self.ctx.log_writer.queue.qsize(),
-                "uptime_seconds": int(_t_stop.time() - getattr(self.ctx, "_started_at", _t_stop.time())),
-            }, level="WARNING")
-            await asyncio.sleep(0.1)
+            pass
         await asyncio.sleep(1)  # last pass for outbox_worker
 
         if self.ctx:

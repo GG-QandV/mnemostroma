@@ -187,6 +187,10 @@ class SystemContext:
     # Urgency Pulse cache (session_id -> last known level)
     urgency_level_cache: Dict[str, str] = field(default_factory=dict)
 
+    # ONNX model memory baseline — set once after all models are loaded
+    onnx_baseline_mb: float = 0.0
+    onnx_baseline_ready: bool = False
+
     # Session Closure Trigger cooldown
     closure_cooldown_until: float = 0.0
 
@@ -212,6 +216,21 @@ class SystemContext:
 
     # subconscious anchors
     anchor_index: Optional['AnchorIndex'] = field(default_factory=lambda: AnchorIndex(max_capacity=1000))
+
+    def set_onnx_baseline(self) -> None:
+        """Measure current RSS as ONNX model overhead. Call after all models are loaded."""
+        try:
+            import os, psutil
+            rss = psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024
+            self.onnx_baseline_mb = rss
+            self.onnx_baseline_ready = True
+            logging.getLogger("mnemostroma.ctx").info(
+                f"ONNX baseline set: {rss:.1f} MB"
+            )
+        except Exception as e:
+            logging.getLogger("mnemostroma.ctx").warning(
+                f"Failed to set ONNX baseline: {e} — RAM-based eviction disabled"
+            )
 
     def get_session_label(self, session_id: str) -> int:
         """Get existing or assign new deterministic label for session vector."""

@@ -91,6 +91,32 @@ def _kill(pid_file: Path, sig: signal.Signals = signal.SIGKILL) -> None:
         pass
 
 
+def _kill_all_daemon_instances(known_pid: int | None = None) -> None:
+    """Kill all 'mnemostroma run' processes except this watchdog.
+
+    Catches orphan daemons that overwrote daemon.pid and became invisible
+    to the normal _kill() mechanism.
+    """
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["pgrep", "-f", r"mnemostroma run"],
+            capture_output=True, text=True
+        )
+        my_pid = os.getpid()
+        for pid_str in result.stdout.strip().splitlines():
+            try:
+                pid = int(pid_str)
+                if pid == my_pid or pid == known_pid:
+                    continue
+                os.kill(pid, signal.SIGKILL)
+                logger.warning(f"Killed orphan daemon PID {pid}")
+            except (ProcessLookupError, ValueError):
+                pass
+    except Exception as e:
+        logger.error(f"_kill_all_daemon_instances failed: {e}")
+
+
 def _clean_socket() -> None:
     _SOCKET_PATH.unlink(missing_ok=True)
     logger.info("Removed stale socket")
@@ -104,6 +130,7 @@ async def _check_daemon(hb_timeout: int) -> None:
     if _HEARTBEAT_FILE.exists() and not hb_ok:
         logger.error(f"Daemon HANG (no heartbeat for {hb_timeout}s) → SIGKILL")
         _kill(_PID_DAEMON, signal.SIGKILL)
+        _kill_all_daemon_instances()
         _clean_socket()
         return
 
@@ -112,6 +139,7 @@ async def _check_daemon(hb_timeout: int) -> None:
         logger.error("Socket stale (no response) → clean + SIGTERM")
         _clean_socket()
         _kill(_PID_DAEMON, signal.SIGTERM)
+        _kill_all_daemon_instances()
 
 
 async def _check_proxy(timeout: int) -> None:

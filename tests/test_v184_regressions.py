@@ -45,6 +45,8 @@ class _MockCtx:
         self.conflict_warnings = []
         self.surfaced_queue = []
         self.open_loops_queue = []
+        self.onnx_baseline_ready = False
+        self.onnx_baseline_mb = 0.0
 
 @pytest.mark.asyncio
 async def test_urgency_expiry_persists_to_db():
@@ -96,6 +98,8 @@ async def test_rule2_triggers_on_ram_overflow():
     ctx = _MockCtx()
     ctx.config.resources.session_window_size = 1000
     ctx.config.resources.ram_soft_limit_mb = 500
+    ctx.onnx_baseline_ready = True
+    ctx.onnx_baseline_mb = 0.0
     # Add 100 sessions
     for i in range(100):
         ctx.ram_index[f"s{i}"] = _make_sb(f"s{i}")

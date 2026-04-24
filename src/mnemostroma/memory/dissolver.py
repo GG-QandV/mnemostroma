@@ -34,15 +34,16 @@ class Dissolver:
             await self.evict_n_oldest(n_to_evict)
             return  # after count-based eviction, RAM is likely reduced enough for now
 
-        # Rule 2: RAM-based
-        soft_limit = self.ctx.config.resources.ram_soft_limit_mb
-        process = psutil.Process(os.getpid())
-        ram_used_mb = process.memory_info().rss / 1024 / 1024
+        # Rule 2: RAM-based (evictable memory only — excludes ONNX model weights)
+        if self.ctx.onnx_baseline_ready:
+            soft_limit = self.ctx.config.resources.ram_soft_limit_mb
+            process = psutil.Process(os.getpid())
+            ram_used_mb = process.memory_info().rss / 1024 / 1024
+            evictable_mb = ram_used_mb - self.ctx.onnx_baseline_mb
 
-        if ram_used_mb > soft_limit:
-            # Evict ~10% of sessions non-aggressively
-            n_to_evict = max(1, int(current_count * 0.10))
-            await self.evict_n_oldest(n_to_evict)
+            if evictable_mb > soft_limit:
+                n_to_evict = max(1, int(current_count * 0.10))
+                await self.evict_n_oldest(n_to_evict)
 
     async def evict_n_oldest(self, n: int):
         """Evict N sessions with the lowest eviction priority.
@@ -81,6 +82,13 @@ class Dissolver:
         # P0: rebuild MatrixSearch to remove stale vectors
         if evicted_count > 0:
             _rebuild_session_index(self.ctx)
+
+        # Rate-limit: when all sessions are protected, log at most once per 10 min
+        if evicted_count == 0 and n > 0:
+            now = time.time()
+            if now - getattr(self, '_last_blocked_log', 0) < 600:
+                return
+            self._last_blocked_log = now
 
         # Log eviction (v1.0 spec — Point #9)
 
