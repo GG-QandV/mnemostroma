@@ -4,7 +4,7 @@
 
 ![Version](https://img.shields.io/badge/version-v1.8.4-orange)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue)
-![Tests](https://img.shields.io/badge/tests-450%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-457%20passing-brightgreen)
 ![License](https://img.shields.io/badge/license-FSL--1.1--MIT-lightgrey)
 
 > *μνήμη (mnḗmē, memory) + στρῶμα (strôma, layer) — the substrate everything rests on.*
@@ -166,11 +166,12 @@ This is not a database with TTL. This is how human memory works.
 
 ## Status
 
-**Current:** v1.8.4 | 2026-04-23
+**Current:** v1.8.4 | 2026-04-24
 
 | Component                                | Status                           |
 | ---------------------------------------- | -------------------------------- |
-| Core backend (Observer, Memory, Storage) | DONE Implemented, 411/411 tests  |
+| Core backend (Observer, Memory, Storage) | DONE Implemented, 457/457 tests  |
+| Golden Standard Launch (Shell Guards)    | DONE Implemented (v1.8.4)        |
 | Anchor Layer / Emotional Patterns        | DONE Implemented                 |
 | Implicit Feedback (v1.5)                 | DONE Implemented                 |
 | PersistenceLayer Split (Phase 9.2)       | DONE Implemented (v1.7.1)        |
@@ -190,46 +191,90 @@ This is not a database with TTL. This is how human memory works.
 
 **Requires Python 3.12+**
 
-> WARNING Not yet on PyPI. Install directly from GitHub:
+> [!WARNING]
+> **CRITICAL UPDATE (v1.8.4)**
+> This release stabilizes the single-daemon architecture and adds native AppIndicator tray support for Linux. **A full re-install with `[all]` is highly recommended.**
 
-**Linux / macOS:**
+---
+
+### Option A — Automatic (Recommended for Linux)
+
+One command to rule them all. Creates venv, installs everything (including tray/sse), and configures systemd:
 
 ```bash
-pip install "git+https://github.com/GG-QandV/mnemostroma.git"
-
-# With SSE extras (claude.ai + Claude Code passthrough proxy):
-pip install "git+https://github.com/GG-QandV/mnemostroma.git[sse]"
-
-# With system tray:
-pip install "git+https://github.com/GG-QandV/mnemostroma.git[all]"
+bash <(curl -fsSL https://raw.githubusercontent.com/GG-QandV/mnemostroma/main/scripts/install-daemon.sh)
 ```
+
+---
+
+### Option B — pipx (Ubuntu / Debian / Fedora)
+
+Isolated install for PEP 668 systems. Recommended for most users:
+
+```bash
+# Install pipx if missing
+sudo apt update && sudo apt install -y pipx python3-gi gir1.2-appindicator3-0.1
+pipx ensurepath
+
+# Install Mnemostroma with ALL features (tray, sse, watch)
+pipx install "git+https://github.com/GG-QandV/mnemostroma.git[all]"
+
+# Setup environment (models, certs)
+mnemostroma setup
+```
+
+---
+
+### Option C — macOS / Windows
+
+**macOS:**
+```bash
+pip install "git+https://github.com/GG-QandV/mnemostroma.git[all]"
+mnemostroma setup
+```
+
+**Windows (PowerShell):**
+```powershell
+pip install "git+https://github.com/GG-QandV/mnemostroma.git[all]"
+mnemostroma setup
+```
+
+---
 
 ### Installation Extras
 
-| Extra    | Installs              | Commands unlocked                          |
-| -------- | --------------------- | ------------------------------------------ |
-| *(base)* | Core daemon           | `setup` `on` `off` `status` `watch` `logs` |
-| `[sse]`  | SSE adapter + proxy   | `sse`                                      |
-| `[tray]` | System tray (pystray) | `tray`                                     |
-| `[all]`  | Everything above      | All commands                               |
+| Extra | Installs | Requirement |
+|---|---|---|
+| `[all]` | **Everything** | Recommended for full UX |
+| `[tray]` | System tray icon | Requires `PyQt6` + system libs |
+| `[sse]` | HTTPS/SSE proxy | Requires `uvicorn` + `starlette` |
 
-> **Note:** On Linux, `[tray]` also requires system libraries:
-> `sudo apt install libgirepository1.0-dev gir1.2-appindicator3-0.1`
+> [!IMPORTANT]
+> **Linux Tray Dependencies:**
+> Native tray support requires: `sudo apt install python3-gi gir1.2-appindicator3-0.1`.
+> Without these, the `tray` command will fall back to PyQt6 or provide an error message.
 
-**Windows (PowerShell):**
+---
 
-```powershell
-pip install "git+https://github.com/GG-QandV/mnemostroma.git"
+### Quick Start
 
-# With SSE extras:
-pip install "git+https://github.com/GG-QandV/mnemostroma.git[sse]"
-```
+1. **Install** via one of the options above.
+2. **Setup**: Run `mnemostroma setup`. This downloads ~600MB of models.
+3. **Start**: `mnemostroma on`
+4. **Dashboard**: `mnemostroma tray` (or `mnemostroma watch` for terminal)
 
-> **Tip:** Use [pipx](https://pipx.pypa.io) for a cleaner global install that doesn't pollute your system Python:
-> 
-> ```bash
-> pipx install "git+https://github.com/GG-QandV/mnemostroma.git"
-> ```
+---
+
+### Troubleshooting
+
+**`error: externally-managed-environment`**
+Use **Option A** or **Option B**. Do not use `pip install` on modern Ubuntu/Debian.
+
+**`tray` command fails**
+Ensure you installed with `[all]` or `[tray]`. On Linux, verify `python3-gi` is installed.
+
+**`mnemostroma: command not found`**
+Ensure your PATH is updated (run `pipx ensurepath` or `source ~/.bashrc`).
 
 ---
 
@@ -664,7 +709,7 @@ Cloud Sync, Subconscious Layer (personalized models), Shared Experience, and Tea
 ---
 
 *Mnemostroma — the memory layer for AI agents*
-*offline · ~650MB RAM (baseline) · ~20ms · 450 tests · v1.8.4*
+*offline · ~650MB RAM (baseline) · ~20ms · 457 tests · v1.8.4*
 
 # [mnemostroma-protocol]
 ## Memory Protocol (Mnemostroma)

@@ -97,8 +97,19 @@ class ConsolidationWorker:
             
             # Check deadlines (v1.3)
             if sb.deadline_ts and sb.deadline_ts < now and not sb.urgency_expired:
+                sb.urgency_active = False
                 sb.urgency_expired = True
                 logger.warning(f"Deadline expired for session {sid}")
+
+            # P0: persist changes (age_signal, urgency) to SQLite
+            if self.ctx.persistence:
+                self.ctx.persistence.enqueue_session(sb)
+                # For critical state changes like urgency expiry, we flush immediately
+                if sb.urgency_expired:
+                    await self.ctx.persistence.flush()
+                    # Guard: verify write persistence (v1.8.4)
+                    db_sb = await self.ctx.persistence.get_session_by_id(sid)
+                    assert db_sb and db_sb.urgency_expired, f"Urgency flush failed for {sid}"
 
         # 2. Recalculate Scores
         # We use background relevance (0.5) if not currently searching

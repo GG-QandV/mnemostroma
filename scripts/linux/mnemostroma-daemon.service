@@ -6,17 +6,24 @@ Wants=mnemostroma-proxy.service mnemostroma-watchdog.service
 [Service]
 Type=simple
 
+# Golden Standard: guarantee a single instance
+ExecStartPre=/bin/bash -c 'COUNT=$(pgrep -c -f "mnemostroma run" || true); if [ "$COUNT" -gt 0 ]; then echo "ERROR: mnemostroma process already running"; exit 1; fi'
+
 WorkingDirectory=%h/.mnemostroma
-ExecStart=%h/.mnemostroma/venv/bin/python3 -m mnemostroma run
+ExecStart=%VENV_BIN%/python3 -m mnemostroma run
 ExecReload=/bin/kill -HUP $MAINPID
 
-Restart=always
-RestartSec=5
+# Restart only on failure, not on clean stop (exit 0)
+Restart=on-failure
+RestartSec=10s
+RestartPreventExitStatus=0
+
 Environment="DISPLAY=:0"
 Environment="XAUTHORITY=%h/.Xauthority"
 MemoryMax=750M
 
-TimeoutStartSec=60
+# Startup timeout (v1.8.4)
+TimeoutStartSec=30
 TimeoutStopSec=10
 
 

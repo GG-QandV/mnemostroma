@@ -7,7 +7,7 @@ Wants=mnemostroma-daemon.service mnemostroma-proxy.service
 Type=simple
 
 WorkingDirectory=%h/.mnemostroma
-ExecStart=%h/.mnemostroma/venv/bin/python3 -m mnemostroma.watchdog
+ExecStart=%VENV_BIN%/python3 -m mnemostroma.watchdog
 
 Restart=on-failure
 RestartSec=3

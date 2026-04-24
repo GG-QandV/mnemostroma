@@ -267,6 +267,12 @@ async def marker(
     if len(stripped) < 5:
         return MarkerResult.discard()
 
+    # Anchor Stoplist (v1.8.4 guard) — prevent noisy/parasitic phrases
+    stoplist = getattr(ctx.config.observer, 'anchor_stoplist', [])
+    if any(stop_phrase.lower() in stripped.lower() for stop_phrase in stoplist):
+        logger.debug(f"marker: discarding text in stoplist: {stripped[:50]}...")
+        return MarkerResult.discard()
+
     # ── User path: structural only, nearly always creates an Entity ───────
     if role == SourceType.USER:
         temp = infer_temporal(text, chain)

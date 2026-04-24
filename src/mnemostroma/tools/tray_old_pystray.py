@@ -139,8 +139,7 @@ def run_tray(db_path: Path, interval: int = 3):
         from PIL import Image, ImageDraw  # noqa: F401 — verify pillow available
     except ImportError as e:
         missing = "pystray" if "pystray" in str(e) else "Pillow"
-        print(f"{missing} not installed. Run: pip install mnemostroma[tray]")
-        return
+        raise ImportError(f"{missing} not installed. Run: pip install 'mnemostroma[tray]'")
 
     current_status = [_ST_IDLE]
     icon_ref = [None]

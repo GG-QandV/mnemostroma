@@ -39,11 +39,11 @@ def test_extract_no_artifacts():
     assert artifacts == []
 
 
-def test_extract_skips_email_and_hash():
+def test_extract_skips_email_but_finds_hash():
     artifacts = precision_extract("contact user@example.com or commit abc1234def")
     types = {a["type"] for a in artifacts}
     assert "email" not in types
-    assert "hash" not in types
+    assert "hash" in types  # Hashes are now valid precision artifacts (Phase 11.D)
 
 
 # ── _derive_context_tag ───────────────────────────────────────────────────────

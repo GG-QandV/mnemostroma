@@ -257,14 +257,11 @@ def check_pyqt6() -> bool:
         from PyQt6.QtWidgets import QApplication
         return True
     except ImportError:
-        print("\n[!] Mnemostroma Tray Error: PyQt6 is not installed.")
-        print("    To use the tray icon, install it via: pip install 'mnemostroma[tray]'\n")
-        return False
+        raise ImportError("PyQt6 not installed. Run: pip install 'mnemostroma[tray]'")
 
 def run_tray(db_path: Path, interval: int = 3):
     """Start the system tray icon. Blocks until user quits."""
-    if not check_pyqt6():
-        return
+    check_pyqt6()
 
     from PyQt6.QtWidgets import QApplication
     app = DaemonTrayApp(sys.argv, db_path)

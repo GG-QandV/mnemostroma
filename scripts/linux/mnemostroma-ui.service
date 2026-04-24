@@ -6,7 +6,7 @@ BindsTo=mnemostroma-daemon.service
 [Service]
 Type=simple
 WorkingDirectory=%h/.mnemostroma
-ExecStart=%h/.mnemostroma/venv/bin/python3 -m mnemostroma.tools.tray_pyqt
+ExecStart=%VENV_BIN%/python3 -m mnemostroma.tools.tray_pyqt
 Restart=on-failure
 RestartSec=5
 

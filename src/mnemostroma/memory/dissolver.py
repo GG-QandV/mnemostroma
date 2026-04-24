@@ -2,6 +2,8 @@
 import asyncio
 import logging
 import time
+import os
+import psutil
 from typing import Dict, Any, List, Optional
 from ..core import SystemContext
 
@@ -21,13 +23,25 @@ class Dissolver:
         
         Rules:
         1. If session count > window_size * 0.8 -> evict N.
-        2. If RAM usage (estimated) > soft_limit -> evict N.
+        2. If RAM usage (RSS) > soft_limit_mb -> evict N.
         """
+        # Rule 1: count-based
         current_count = len(self.ctx.ram_index)
         limit = self.ctx.config.resources.session_window_size
         
         if current_count > limit * 0.8:
             n_to_evict = int(current_count - limit * 0.7)
+            await self.evict_n_oldest(n_to_evict)
+            return  # after count-based eviction, RAM is likely reduced enough for now
+
+        # Rule 2: RAM-based
+        soft_limit = self.ctx.config.resources.ram_soft_limit_mb
+        process = psutil.Process(os.getpid())
+        ram_used_mb = process.memory_info().rss / 1024 / 1024
+
+        if ram_used_mb > soft_limit:
+            # Evict ~10% of sessions non-aggressively
+            n_to_evict = max(1, int(current_count * 0.10))
             await self.evict_n_oldest(n_to_evict)
 
     async def evict_n_oldest(self, n: int):
@@ -54,7 +68,7 @@ class Dissolver:
         for sb in sessions:
             if evicted_count >= n:
                 break
-            if not can_evict(sb, self.config):
+            if not can_evict(sb, self.ctx):
                 continue
             del self.ctx.ram_index[sb.session_id]
             # P0: clean label mappings
@@ -127,17 +141,22 @@ def _eviction_priority(sb: Any) -> float:
     return imp_w * (1.0 + intensity) * recency
 
 
-def can_evict(sb: Any, config: Any) -> bool:
+def can_evict(sb: Any, ctx: Any) -> bool:
     """Check if a specific session can be evicted according to spec rules.
 
     Rules (in priority order):
     - Principle: NEVER evict (resolution floor = 0.80, always RAM Hot/Warm).
     - Active urgency (live deadline): protect from eviction.
     - Conflict flag: keep in RAM for resolution.
+    - Critical: protect unless RAM > 90% of hard limit.
     """
     import time
+    import os
+    import psutil
+
     if sb.importance == "principle":
         return False
+    
     # Urgency active = deadline exists, in the future, and not expired
     has_live_deadline = (
         getattr(sb, 'deadline_ts', None) is not None and
@@ -146,8 +165,19 @@ def can_evict(sb: Any, config: Any) -> bool:
     )
     if has_live_deadline:
         return False
+    
     if sb.conflict_flag:
         return False
+
+    # Protection for critical sessions (v1.8.4 guard)
+    if sb.importance == "critical":
+        process = psutil.Process(os.getpid())
+        ram_mb = process.memory_info().rss / 1024 / 1024
+        hard_limit = ctx.config.resources.ram_hard_limit_mb
+        # Evict critical only if we are above 90% of hard limit
+        if ram_mb < hard_limit * 0.90:
+            return False
+
     return True
 
 

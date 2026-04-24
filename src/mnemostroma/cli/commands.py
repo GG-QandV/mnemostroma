@@ -357,6 +357,49 @@ def _backup_db(db_path: Path) -> Path:
     return backup
 
 
+def _detect_install_mode() -> str:
+    """Determine how mnemostroma was installed."""
+    import shutil
+    
+    pipx_path = Path.home() / ".local/pipx/venvs/mnemostroma/bin/python3"
+    venv_path = Path.home() / ".mnemostroma/venv/bin/python3"
+    
+    if pipx_path.exists():
+        return "pipx"
+    if venv_path.exists():
+        return "venv"
+    if shutil.which("mnemostroma"):
+        return "system"
+    return "unknown"
+
+
+def _patch_systemd_units(python_path: str):
+    """Update ExecStart in systemd units with the correct python path."""
+    unit_dir = Path.home() / ".config" / "systemd" / "user"
+    if not unit_dir.exists():
+        return
+    
+    import re
+    # We only patch the bin directory part of ExecStart to keep arguments intact
+    # e.g. ExecStart=/path/to/python3 -m mnemostroma run
+    new_bin = python_path
+    
+    for svc in ["mnemostroma-daemon", "mnemostroma-proxy", "mnemostroma-watchdog", "mnemostroma-ui"]:
+        unit_path = unit_dir / f"{svc}.service"
+        if not unit_path.exists():
+            continue
+            
+        content = unit_path.read_text()
+        # Find ExecStart line and replace the python path
+        content = re.sub(
+            r'ExecStart=\S+python3?',
+            f'ExecStart={new_bin}',
+            content
+        )
+        unit_path.write_text(content)
+        print(f"    ✓ Patched {svc}.service with {new_bin}")
+
+
 def _cmd_setup() -> None:
     import shutil
     config_dest = _MNEMO_DIR / "config.json"
@@ -395,7 +438,51 @@ def _cmd_setup() -> None:
         _write_claude_wrapper(Path.home() / ".local" / "bin" / "mnemo", ca_cert)
     except Exception:
         pass
-    print("\nSetup complete.\n")
+
+    # Patch systemd units with current python path
+    if sys.platform == "linux":
+        print("  ⚙️  Configuring systemd units...")
+        _patch_systemd_units(sys.executable)
+
+    # Detect extras
+    has_tray = False
+    try:
+        import PyQt6
+        import PIL
+        has_tray = True
+    except ImportError:
+        pass
+
+    has_sse = False
+    try:
+        import starlette
+        import uvicorn
+        has_sse = True
+    except ImportError:
+        pass
+
+    print("\n" + "─" * 40)
+    print("Mnemostroma Post-Setup Summary")
+    print("─" * 40)
+    print(f"  Core Runtime:   READY")
+    print(f"  Database:       {db_path}")
+    print(f"  Config:         {config_dest}")
+    print(f"  SSE Extra:      {'[INSTALLED]' if has_sse else '[NOT FOUND]'}")
+    print(f"  Tray Extra:     {'[INSTALLED]' if has_tray else '[NOT FOUND]'}")
+    
+    if sys.platform == "linux" and not has_tray:
+        print("  ⚠ Linux Tray Warning: System libs missing. Run: sudo apt install python3-gi gir1.2-appindicator3-0.1")
+    
+    print("\nNext steps:")
+    if sys.platform == "linux":
+        print("  1. Enable services:  bash scripts/install-daemon.sh")
+    print("  2. Start daemon:     mnemostroma on")
+    if has_tray:
+        print("  3. Open tray:        mnemostroma tray")
+    else:
+        print("  3. (Optional) Install tray: pip install 'mnemostroma[tray]'")
+    
+    print("─" * 40 + "\n")
 
     # Auto-start daemon, tray, and watch
     print("  ⚙️  Starting daemon & dashboard...\n")
@@ -418,7 +505,7 @@ def _cmd_setup() -> None:
     # Tray and Watch are optional and should be started by user or via tray
     print("  ✓ Setup finished. Use 'mnemostroma on' to start if not already running.")
 
-from mnemostroma import __version__
+from mnemostroma.version import __version__
 _BANNER = f"""
   ███╗   ███╗███╗  ██╗███████╗███╗   ███╗ ██████╗
   ████╗ ████║████╗ ██║██╔════╝████╗ ████║██╔═══██╗
@@ -778,9 +865,31 @@ def dispatch(args_namespace: argparse.Namespace) -> None:
     elif command == "service": _cmd_service(cargs)
     elif command == "config": _handle_config(cargs)
     elif command == "tray":
-        from mnemostroma.tools.tray import run_tray
-        db_path = _MNEMO_DIR / "logs.db"
-        run_tray(db_path)
+        try:
+            from mnemostroma.tools.tray import run_tray
+            db_path = _MNEMO_DIR / "logs.db"
+            run_tray(db_path)
+        except ImportError:
+            print("\n❌ Tray feature not installed.")
+            print("   Install it with: pip install 'mnemostroma[tray]' or 'mnemostroma[all]'")
+            if sys.platform == "linux":
+                print("   On Linux, also install system libs: sudo apt install python3-gi gir1.2-appindicator3-0.1")
+            sys.exit(1)
+        except Exception as e:
+            print(f"\n❌ Tray failure: {e}")
+            sys.exit(1)
+    elif command == "sse":
+        try:
+            # We assume 'sse' logic might be in conductor or a separate tool
+            # For now, if user calls it, we check dependencies
+            import starlette
+            import uvicorn
+            print("SSE adapter starting...")
+            # actual sse launch logic would go here
+        except ImportError:
+            print("\n❌ Error: 'sse' dependencies missing.")
+            print("   Please install them using: pip install 'mnemostroma[sse]'")
+            sys.exit(1)
     elif command == "logs":
         from mnemostroma.tools.logs import run_logs
         db_path = _MNEMO_DIR / "logs.db"

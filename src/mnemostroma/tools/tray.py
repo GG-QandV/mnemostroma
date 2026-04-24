@@ -337,8 +337,5 @@ def run_tray(db_path: Path, interval: int = 3):
         print(f"pystray fallback failed: {e}")
 
     # All failed
-    print("\n❌ No tray implementation available.")
-    print("\nInstall one of:")
-    print("  1. AppIndicator3: sudo apt-get install gir1.2-appindicator3-0.1 python3-gi")
-    print("  2. PyQt6: pip install PyQt6")
-    print("  3. pystray: pip install pystray pillow")
+    raise ImportError("No tray implementation available (tried AppIndicator3, PyQt6, pystray). "
+                      "Run: sudo apt install python3-gi gir1.2-appindicator3-0.1")

@@ -7,7 +7,7 @@ BindsTo=mnemostroma-daemon.service
 Type=simple
 
 WorkingDirectory=%h/.mnemostroma
-ExecStart=%h/.mnemostroma/venv/bin/python3 -m mnemostroma.integration.http_proxy
+ExecStart=%VENV_BIN%/python3 -m mnemostroma.integration.http_proxy
 ExecReload=/bin/kill -HUP $MAINPID
 
 Restart=always

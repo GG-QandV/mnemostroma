@@ -17,6 +17,13 @@ def mock_ctx():
     ctx.log_writer.log = AsyncMock()
     # experience_index=None short-circuits Experience Layer check in proxy
     ctx.experience_index = None
+    
+    # Mock config for pure_context check
+    ctx.config = MagicMock()
+    ctx.config.integration.pure_context = False
+    ctx.config.experience.layer_enabled = False
+    ctx.config.tools.enabled = True
+    
     return ctx
 from unittest.mock import patch, MagicMock, AsyncMock
 
@@ -28,7 +35,7 @@ async def test_proxy_inject_first_session(mock_ctx):
     with patch("mnemostroma.integration.proxy.ctx_semantic", new_callable=AsyncMock, return_value=[]) as mock_sem:
         block = await proxy.inject("Hello there")
         
-        assert "First session. Memory is empty" in block.context
+        assert "<agent_protocol>" in block.context
         assert "<memory_context updated=" in block.context
         assert len(block.tools) == 9
         assert block.stats["cached"] is False
