@@ -8,6 +8,14 @@ from .bert_ner import BertNER
 
 logger = logging.getLogger(__name__)
 
+ENTITY_PRIORITY = {
+    "decision": 1, "prohibition": 1,      # критичные
+    "outcome": 1,                         # from recent commit
+    "technology": 2,                      # важные
+    "PER": 3, "ORG": 3, "LOC": 3,         # справочники
+    "DATE": 4, "MONEY": 4,                # факты
+}
+
 # Technology names (language-independent)
 TECH_PATTERN = re.compile(
     r'\b(Python|Rust|Go|Java|JavaScript|TypeScript|C\+\+|Ruby|PHP|Swift|Kotlin|'
@@ -20,10 +28,19 @@ TECH_PATTERN = re.compile(
     re.IGNORECASE
 )
 
+OUTCOME_PATTERNS = [
+    # RU: success/failure outcomes (captures standalone or with context)
+    re.compile(r'\b(?:успешно|успешным|успешен|работает|заработал|сработало|помогло|решило)\b(?:\s+[а-яё]{1,30})?', re.IGNORECASE),  # success (flexible)
+    re.compile(r'\b(?:не сработало|провал|неудачно|ошибка|крах|потерпел неудачу|не помогло)\b(?:\s+[а-яё]{1,30})?', re.IGNORECASE),  # failure (flexible)
+    # EN: success/failure (flexible)
+    re.compile(r'\b(?:successfully|works|worked|fixed|solved)\b(?:\s+[a-z]{1,30})?', re.IGNORECASE),  # success
+    re.compile(r'\b(?:failed|broken|crashes|doesn\'t work)\b(?:\s+[a-z]{1,30})?', re.IGNORECASE),  # failure
+]
+
 DECISION_PATTERNS = [
     # RU
     re.compile(r'(?:решили|решил|решено|выбрали|выбрал|будем использовать|переходим на|'
-               r'принято решение|договорились|утвердили|одобрили)[:\s]+(.{3,60}?)(?=[.,;!\n]|$)', re.IGNORECASE),
+               r'принято решение|приняли решение|приняли|договорились|утвердили|одобрили)[:\s]+(.{3,60}?)(?=[.,;!\n]|$)', re.IGNORECASE),
     # EN
     re.compile(r'(?:decided to|chose|will use|switching to|agreed on|approved|'
                r'going with|selected|picked)[:\s]+(.{3,60}?)(?=[.,;!\n]|$)', re.IGNORECASE),
@@ -50,7 +67,7 @@ class HybridNER:
     """Combines DistilBERT token classification with regex patterns.
 
     DistilBERT handles: PER, ORG, LOC, DATE
-    Regex handles: technology, decision, prohibition
+    Regex handles: technology, decision, prohibition, outcome
 
     Why: DistilBERT-NER is weak on multilingual subword splits.
     Regex reliably catches structured patterns that models miss.
@@ -91,7 +108,7 @@ class HybridNER:
 
         # 2. Regex: technologies
         for m in TECH_PATTERN.finditer(text):
-            if not self._overlaps(entities, m.start(), m.end()):
+            if not self._overlaps(entities, m.start(), m.end(), "technology"):
                 entities.append({
                     "type": "technology",
                     "value": m.group(0),
@@ -100,12 +117,12 @@ class HybridNER:
                     "end": m.end()
                 })
 
-        # 3. Regex: decisions
+        # 3. Regex: decisions (HIGH priority - can coexist with technology)
         for pattern in DECISION_PATTERNS:
             for m in pattern.finditer(text):
                 val = m.group(1).strip()
                 full_start = m.start(1)
-                if not self._overlaps(entities, full_start, full_start + len(val)):
+                if not self._overlaps(entities, full_start, full_start + len(val), "decision"):
                     entities.append({
                         "type": "decision",
                         "value": val,
@@ -114,12 +131,12 @@ class HybridNER:
                         "end": full_start + len(val)
                     })
 
-        # 4. Regex: prohibitions
+        # 4. Regex: prohibitions (HIGH priority - can coexist with technology)
         for pattern in PROHIBITION_PATTERNS:
             for m in pattern.finditer(text):
                 val = m.group(1).strip()
                 full_start = m.start(1)
-                if not self._overlaps(entities, full_start, full_start + len(val)):
+                if not self._overlaps(entities, full_start, full_start + len(val), "prohibition"):
                     entities.append({
                         "type": "prohibition",
                         "value": val,
@@ -128,14 +145,33 @@ class HybridNER:
                         "end": full_start + len(val)
                     })
 
+        # 5. Regex: outcomes (HIGH priority - success/failure/in_progress)
+        for pattern in OUTCOME_PATTERNS:
+            for m in pattern.finditer(text):
+                val = m.group(0).strip()
+                full_start = m.start()
+                if not self._overlaps(entities, full_start, full_start + len(val), "outcome"):
+                    entities.append({
+                        "type": "outcome",
+                        "value": val,
+                        "score": 0.85,
+                        "start": full_start,
+                        "end": full_start + len(val)
+                    })
+
         # Sort by position
         entities.sort(key=lambda e: e["start"])
         return entities
 
-    def _overlaps(self, entities: List[Dict[str, Any]], start: int, end: int) -> bool:
-        """Check if span overlaps with existing entities."""
+    def _overlaps(self, entities: List[Dict[str, Any]], start: int, end: int, candidate_type: str) -> bool:
+        """Check if span overlaps with existing entities considering priority."""
         for e in entities:
             if start < e["end"] and end > e["start"]:
+                prio_candidate = ENTITY_PRIORITY.get(candidate_type, 99)
+                prio_existing = ENTITY_PRIORITY.get(e.get("type", ""), 99)
+                if prio_candidate < prio_existing:
+                    # Более высокий приоритет — разрешить сосуществование
+                    return False
                 return True
         return False
 

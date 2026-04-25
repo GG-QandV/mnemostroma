@@ -125,8 +125,9 @@ async def observer_pipeline(
             elif i == 2 and ctx.config.open_loop.enabled: ctx.open_loops_queue.extend(res)
 
     # 4. Marker (Step 2)
+    source_type = getattr(pctx, 'source_type', SourceType.USER) or SourceType.AGENT
     pctx.mark_result = await _marker(
-        text, SourceType.AGENT, session_id, ctx,
+        text, source_type, session_id, ctx,
         pending_emotions=ctx.pending_emotions,
         embedding=embedding_f32,
     )
@@ -172,4 +173,6 @@ async def observer_pipeline(
     # GAP-9: F-4 — end-to-end pipeline latency across all steps
     _total_ms = round((time.time() - pctx.start_time) * 1000, 2)
 
+    if pctx.sb:
+        pctx.sb.entities = pctx.entities
     return pctx.sb
