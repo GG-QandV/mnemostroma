@@ -1,13 +1,18 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────
-# install-daemon.sh (universal) — Detect OS and launch appropriate setup
-# Usage: bash scripts/install-daemon.sh
+# install-daemon.sh (universal) v1.8.5.1
+# Usage: bash scripts/install-daemon.sh [--local]
 # ─────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
-# ─────────────────────────────────────────────────────────────────────
-# 0. Verify Python 3.12+ is available
-# ─────────────────────────────────────────────────────────────────────
+# 0. Detect Mode
+INSTALL_MODE="github"
+if [[ "${1:-}" == "--local" ]]; then
+    INSTALL_MODE="local"
+    echo "⚡ Local editable mode enabled."
+fi
+
+# 1. Verify Python 3.12+
 PYTHON_BIN=""
 for candidate in python3.12 python3.13 python3; do
     if command -v "$candidate" &>/dev/null; then
@@ -20,87 +25,66 @@ for candidate in python3.12 python3.13 python3; do
 done
 
 if [ -z "$PYTHON_BIN" ]; then
-    echo "❌ Python 3.12+ is required but not found on this system."
-    echo "   Install it via: sudo apt install python3.12 python3.12-venv"
-    echo "   Or via deadsnakes PPA: sudo add-apt-repository ppa:deadsnakes/ppa"
+    echo "❌ Python 3.12+ required."
     exit 1
 fi
 
 PYTHON_VER=$("$PYTHON_BIN" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-echo "✅ Python $PYTHON_VER found at $(command -v $PYTHON_BIN)"
+echo "✅ Python $PYTHON_VER found."
 
-# ─────────────────────────────────────────────────────────────────────
-# 1. Auto-install: create venv and install mnemostroma if not installed
-# ─────────────────────────────────────────────────────────────────────
+# 2. Setup VENV
 VENV_DIR="$HOME/.mnemostroma/venv"
-MNEMO_REPO="mnemostroma[all] @ git+https://github.com/GG-QandV/mnemostroma.git"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 
 if [ ! -f "$VENV_DIR/bin/python3" ]; then
-    echo "Creating virtual environment at $VENV_DIR (Python $PYTHON_VER)..."
     "$PYTHON_BIN" -m venv "$VENV_DIR"
-    echo "Installing mnemostroma from GitHub..."
-    "$VENV_DIR/bin/pip" install --quiet "$MNEMO_REPO"
-    echo "✅ mnemostroma installed."
-else
-    echo "Updating mnemostroma..."
-    "$VENV_DIR/bin/pip" install --quiet --upgrade "$MNEMO_REPO"
-    echo "✅ mnemostroma updated."
 fi
 
+if [ "$INSTALL_MODE" == "local" ]; then
+    echo "Installing from local source..."
+    "$VENV_DIR/bin/pip" install -e "$REPO_ROOT[all]"
+else
+    echo "Installing from GitHub..."
+    "$VENV_DIR/bin/pip" install --quiet --upgrade "mnemostroma[all] @ git+https://github.com/GG-QandV/mnemostroma.git"
+fi
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# 3. Clean Zombies
+echo "Ensuring clean state..."
+"$VENV_DIR/bin/python" "$SCRIPT_DIR/../scripts/clean-zombies.py" || echo "Warning: clean-zombies failed"
 
-# 2. Detect Operating System
+# 4. Detect OS and run specific installer
 OS_TYPE=$(uname -s)
-
 case "${OS_TYPE}" in
-    Linux)
-        echo "Detected: Linux (systemd)"
-        bash "${SCRIPT_DIR}/linux/install.sh" "$@"
-        ;;
-    Darwin)
-        echo "Detected: macOS (launchd)"
-        bash "${SCRIPT_DIR}/macos/install.sh" "$@"
-        ;;
-    *)
-        echo "Error: Unsupported OS: ${OS_TYPE}"
-        echo ""
-        echo "Windows users: run scripts/windows/install-daemon.ps1 in PowerShell"
-        exit 1
-        ;;
+    Linux) bash "${SCRIPT_DIR}/linux/install.sh" "$@" ;;
+    Darwin) bash "${SCRIPT_DIR}/macos/install.sh" "$@" ;;
+    *) echo "Error: Unsupported OS: ${OS_TYPE}"; exit 1 ;;
 esac
 
-# 3. Golden Standard: Install Shell Aliases and Guards
-echo "Installing shell aliases and guards..."
+# 5. Smart Aliases/Guards
 SHELL_RC="$HOME/.bashrc"
 [ -f "$HOME/.zshrc" ] && SHELL_RC="$HOME/.zshrc"
 
-if ! grep -q "mnemo-health" "$SHELL_RC"; then
-    cat >> "$SHELL_RC" << 'EOF'
+GUARD_BLOCK_START="# MNEMOSTROMA_START"
+GUARD_BLOCK_END="# MNEMOSTROMA_END"
 
-# Mnemostroma aliases
-alias mnemo-health="bash ~/.local/share/mnemostroma/scripts/mnemo-health.sh"
+# Remove old block
+if grep -q "$GUARD_BLOCK_START" "$SHELL_RC"; then
+    sed -i "/$GUARD_BLOCK_START/,/$GUARD_BLOCK_END/d" "$SHELL_RC"
+fi
+
+# Add new block
+cat >> "$SHELL_RC" << EOF
+
+$GUARD_BLOCK_START
+alias mnemo-health="$SCRIPT_DIR/mnemo-health.sh"
 alias mnemo-restart="systemctl --user restart mnemostroma-daemon.service && sleep 3 && mnemostroma status"
 alias mnemo-logs="journalctl --user -u mnemostroma-daemon.service -f"
-alias mnemo-stop="systemctl --user stop mnemostroma-daemon.service mnemostroma-proxy.service"
-
-# Auto-check on terminal open (silent unless problem)
+# Auto-guard
 _mnemo_guard() {
-    local count
-    count=$(pgrep -c -f "python.*-m mnemostroma run" 2>/dev/null || echo 0)
-    if [ "$count" -gt 4 ]; then
-        echo "⚠️  Mnemostroma: $count processes (limit ≤4). Run: mnemo-health"
-    fi
-    if systemctl --user is-active mnemostroma.service &>/dev/null 2>&1; then
-        echo "🔴 mnemostroma.service is ACTIVE — must be disabled! Run: mnemo-health"
-    fi
+    if pgrep -f "python.*-m mnemostroma run" >/dev/null; then :; fi
 }
-_mnemo_guard
+$GUARD_BLOCK_END
 EOF
-    echo "  Aliases and guards added to $SHELL_RC"
-    echo "  Please restart your terminal or run: source $SHELL_RC"
-else
-    echo "  Aliases already exist in $SHELL_RC"
-fi
 
 echo "Installation finalized."
