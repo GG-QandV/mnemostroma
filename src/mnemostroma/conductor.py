@@ -129,7 +129,7 @@ class Conductor:
             self.ctx.anchor_repo = None
             logger.info("SessionRepo mode: LEGACY (PersistenceLayer direct)")
 
-
+        # Provide ctx to db_manager for log_event access
         persistence.wire_ctx(self.ctx)
         await persistence.start()
         
@@ -366,7 +366,15 @@ class Conductor:
             )
         except Exception:
             _ram_mb_stop = -1.0
-            pass
+        if self.ctx and self.ctx.log_writer:
+            await _le_stop(self.ctx, "conductor.shutdown", "stop", {
+                "reason": "api_call",
+                "ram_mb": _ram_mb_stop,
+                "sessions_in_ram": len(self.ctx.ram_index),
+                "flush_queue_depth": self.ctx.log_writer.queue.qsize(),
+                "uptime_seconds": int(_t_stop.time() - getattr(self.ctx, "_started_at", _t_stop.time())),
+            }, level="WARNING")
+            await asyncio.sleep(0.1)
         await asyncio.sleep(1)  # last pass for outbox_worker
 
         if self.ctx:
