@@ -74,3 +74,4 @@ analytics/*.db
 analytics/*.sqlite
 analytics/raw_dumps/
 analytics/ram_snapshots/
+integrations/
