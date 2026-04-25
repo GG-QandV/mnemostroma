@@ -9,9 +9,7 @@
 
 > *μνήμη (mnḗmē, memory) + στρῶμα (strôma, layer) — the substrate everything rests on.*
 
-> [!WARNING]
-> **CRITICAL UPDATE NOTICE (v1.8.3 / v1.8.5)**
-> Important patches have been released resolving severe daemon crash loops and zombie process accumulation. **All users must fully reinstall Mnemostroma and systemd services** via `pip install -e "."` and `mnemostroma service install` for system stability. Existing SQLite databases will act correctly. If your system crashed previously, execute `python3 scripts/clean-zombies.py` to fix memory state before starting.
+> **v1.8.5 is stable.** Upgrading from v1.8.3 or earlier? → [See UPGRADE.md](./UPGRADE.md)
 
 ---
 
@@ -191,9 +189,7 @@ This is not a database with TTL. This is how human memory works.
 
 **Requires Python 3.12+**
 
-> [!WARNING]
-> **CRITICAL UPDATE (v1.8.5)**
-> This release stabilizes the single-daemon architecture and adds native AppIndicator tray support for Linux. **A full re-install with `[all]` is highly recommended.**
+> **v1.8.5 is stable.** Upgrading from v1.8.3 or earlier? → [See UPGRADE.md](./UPGRADE.md)
 
 ---
 
