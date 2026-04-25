@@ -2,7 +2,7 @@
 
 ### The memory layer for AI agents
 
-![Version](https://img.shields.io/badge/version-v1.8.4-orange)
+![Version](https://img.shields.io/badge/version-v1.8.5-orange)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue)
 ![Tests](https://img.shields.io/badge/tests-457%20passing-brightgreen)
 ![License](https://img.shields.io/badge/license-FSL--1.1--MIT-lightgrey)
@@ -10,7 +10,7 @@
 > *μνήμη (mnḗmē, memory) + στρῶμα (strôma, layer) — the substrate everything rests on.*
 
 > [!WARNING]
-> **CRITICAL UPDATE NOTICE (v1.8.3 / v1.8.4)**
+> **CRITICAL UPDATE NOTICE (v1.8.3 / v1.8.5)**
 > Important patches have been released resolving severe daemon crash loops and zombie process accumulation. **All users must fully reinstall Mnemostroma and systemd services** via `pip install -e "."` and `mnemostroma service install` for system stability. Existing SQLite databases will act correctly. If your system crashed previously, execute `python3 scripts/clean-zombies.py` to fix memory state before starting.
 
 ---
@@ -166,12 +166,12 @@ This is not a database with TTL. This is how human memory works.
 
 ## Status
 
-**Current:** v1.8.4 | 2026-04-24
+**Current:** v1.8.5 | 2026-04-24
 
 | Component                                | Status                           |
 | ---------------------------------------- | -------------------------------- |
 | Core backend (Observer, Memory, Storage) | DONE Implemented, 457/457 tests  |
-| Golden Standard Launch (Shell Guards)    | DONE Implemented (v1.8.4)        |
+| Golden Standard Launch (Shell Guards)    | DONE Implemented (v1.8.5)        |
 | Anchor Layer / Emotional Patterns        | DONE Implemented                 |
 | Implicit Feedback (v1.5)                 | DONE Implemented                 |
 | PersistenceLayer Split (Phase 9.2)       | DONE Implemented (v1.7.1)        |
@@ -192,7 +192,7 @@ This is not a database with TTL. This is how human memory works.
 **Requires Python 3.12+**
 
 > [!WARNING]
-> **CRITICAL UPDATE (v1.8.4)**
+> **CRITICAL UPDATE (v1.8.5)**
 > This release stabilizes the single-daemon architecture and adds native AppIndicator tray support for Linux. **A full re-install with `[all]` is highly recommended.**
 
 ---
@@ -714,7 +714,7 @@ Cloud Sync, Subconscious Layer (personalized models), Shared Experience, and Tea
 ---
 
 *Mnemostroma — the memory layer for AI agents*
-*offline · ~650MB RAM (baseline) · ~20ms · 457 tests · v1.8.4*
+*offline · ~650MB RAM (baseline) · ~20ms · 457 tests · v1.8.5*
 
 # [mnemostroma-protocol]
 

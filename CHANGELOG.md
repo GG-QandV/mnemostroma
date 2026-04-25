@@ -1,3 +1,14 @@
+## [1.8.5] — 2026-04-25
+### Added
+- **feat(observer)**: `anchor_replay.py` — A/B Testing tool for anchor logic evaluation.
+- **feat(ner)**: Outcome entity extraction ("успешным", "провалено").
+### Fixed
+- **fix(ner)**: Decision/prohibition priority over technology [BUG-001].
+- **fix(observer)**: Dynamic `SourceType` detection in pipeline [BUG-002].
+- **fix(pipeline)**: Explicit entity attachment to `SessionBrief` for downstream tool consistency.
+### Results
+- Reached 33% decision coverage on real-world session data (baseline was 0%).
+
 ## [1.8.4] — 2026-04-23
 ### Fixed
 - **Urgency Bug**: Expired sessions now correctly persist `urgency_active=False` to SQLite. Resolved 51 "frozen" sessions.
