@@ -393,60 +393,44 @@ Core dependencies: `onnxruntime, tokenizers, numpy, lz4, aiosqlite`
 
 The daemon must be running before any client connects.
 
-**Choose your OS for installation details:**
+**Choose your OS for detailed configuration:**
 
 - [Linux (systemd)](./scripts/linux/README.md)
 - [macOS (launchd)](./scripts/macos/README.md)
 - [Windows (Task Scheduler)](./scripts/windows/README.md)
 
-Or use the universal installer: `bash scripts/install-daemon.sh` (Linux/macOS)
+### Installation & Deployment
 
-### Starting the Daemon
-
-The daemon is a background service that runs independently of any IDE or client. Set it up once per system, then forget about it.
-
-**Linux — systemd user unit**
-
-Use the provided installation script:
+The easiest way to install Mnemostroma is to use the universal installer script. It automatically detects your OS, sets up a virtual environment, and registers background services.
 
 ```bash
 bash scripts/install-daemon.sh
 ```
 
-→ **[Full Linux installation guide →](./scripts/linux/README.md)**
+#### Linux (systemd)
 
-This installs three systemd user units from `scripts/`:
+The installer sets up **four** systemd user units:
 
 - `mnemostroma-daemon.service` — Main daemon (Observer + Memory + Storage)
-- `mnemostroma-proxy.service` — HTTPS passthrough proxy (optional, for Claude Code)
-- `mnemostroma-watchdog.service` — Health monitor
+- `mnemostroma-proxy.service` — HTTPS proxy & SSE Adapter (for claude.ai and Claude Code)
+- `mnemostroma-watchdog.service` — Automated health monitor and recovery
+- `mnemostroma-ui.service` — System tray status icon
 
-Quick commands:
-
-```bash
-systemctl --user status mnemostroma-daemon
-systemctl --user start mnemostroma-daemon
-systemctl --user stop mnemostroma-daemon
-journalctl --user -u mnemostroma-daemon -f
-```
-
-**macOS — launchd LaunchAgent**
-
-Use the provided installation script:
+**Quick Commands (Linux):**
 
 ```bash
-bash scripts/install-daemon.sh
+mnemostroma status   # View status of all services
+mnemo-logs           # Tail daemon logs
+mnemo-restart        # Full stack restart
 ```
 
-→ **[Full macOS installation guide →](./scripts/macos/README.md)**
+#### macOS (launchd)
 
-Or run directly:
+Installs the main daemon as a `LaunchAgent`.
 
-```bash
-bash scripts/macos/install.sh
-```
+- `com.mnemostroma.daemon.plist` — Background daemon process
 
-Quick commands:
+**Quick Commands (macOS):**
 
 ```bash
 launchctl start com.mnemostroma.daemon
@@ -454,23 +438,12 @@ launchctl stop com.mnemostroma.daemon
 tail -f ~/.mnemostroma/daemon.log
 ```
 
-**Windows — Task Scheduler**
+#### Windows (Task Scheduler)
 
-Use the provided PowerShell script (run as Administrator):
+Registers a persistent task in the Windows Task Scheduler.
 
 ```powershell
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 .\scripts\windows\install-daemon.ps1
-```
-
-→ **[Full Windows installation guide →](./scripts/windows/README.md)**
-
-Quick commands:
-
-```powershell
-Start-ScheduledTask -TaskName "Mnemostroma Daemon"
-Stop-ScheduledTask -TaskName "Mnemostroma Daemon"
-taskschd.msc
 ```
 
 > **Architecture note:** Clients (VS Code, Claude Code, Cursor) will spawn lightweight adapter processes (~70 MB) that connect to this daemon via socket. The daemon persists; adapters are ephemeral.
