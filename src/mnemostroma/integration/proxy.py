@@ -142,8 +142,16 @@ class ConductorProxy:
                 lines = [f'  <signal type="{s["type"]}">{s["message"]}</signal>' for s in signals]
                 intuition_xml = "<intuition>\n" + "\n".join(lines) + "\n</intuition>"
                 # Log each fired signal for watch/dashboard observability
+                from ..storage.log_writer import log_event as _log_event
                 for s in signals:
                     cluster = self.ctx.experience_index.get(s["tag"])
+                    await _log_event(self.ctx, "experience.signal", "fire", {
+                        "type": s["type"],
+                        "tag": s["tag"],
+                        "maturity": cluster.maturity if cluster else "unknown",
+                        "avg_score": round(cluster.avg_score, 3) if cluster else 0.0,
+                        "session_count": cluster.session_count if cluster else 0,
+                    })
 
         # 3. Assemble Full XML
         from datetime import timezone
@@ -165,9 +173,16 @@ class ConductorProxy:
         latency_ms = (time.time() - start_time) * 1000
         
         # Log Injection (v1.0 spec — Point #14)
+        from ..storage.log_writer import log_event
         sections = ["decisions", "principles", "conflicts", "deadlines"]
         if relevant_xml: sections.append("relevant")
         
+        await log_event(self.ctx, "tools.inject", "build", {
+            "tokens_approx": len(context_string) // 4,
+            "sections": sections,
+            "cached_static": cached,
+            "relevant_count": len(relevant_sessions) if relevant_sessions else 0
+        }, latency_ms=latency_ms)
 
         return MemoryBlock(
             context=context_string,

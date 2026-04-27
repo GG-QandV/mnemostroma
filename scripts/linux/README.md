@@ -5,36 +5,40 @@ Self-hosted systemd user units for Mnemostroma daemon.
 ## Files
 
 - **mnemostroma-daemon.service** — Main daemon process (Observer + Memory + Storage)
-- **mnemostroma-proxy.service** — HTTPS passthrough proxy & SSE Adapter (Ports 8765-8767)
-- **mnemostroma-watchdog.service** — Health monitor & auto-recovery
-- **mnemostroma-ui.service** — System Tray UI (RAM/Status visualization)
+- **mnemostroma-sse.service** — SSE Adapter (MCP + Observe + Passthrough Proxy ports 8765-8767)
+- **mnemostroma-proxy.service** — HTTP Proxy (legacy, deprecated in favor of sse)
+- **mnemostroma-watchdog.service** — Health monitor
 - **install.sh** — Setup script (copies units and enables them)
 
 ## Installation
 
 ```bash
-# Recommended: Use the universal installer
-bash scripts/install-daemon.sh
+bash scripts/linux/install.sh
 ```
 
-Or run the Linux-specific installer directly:
+Or with a specific username (if installing for another user):
 ```bash
-bash scripts/linux/install.sh
+bash scripts/linux/install.sh username
 ```
 
 ## Management
 
 ```bash
-# Status of all services
-mnemostroma status
+# Status
+systemctl --user status mnemostroma-daemon
+
+# Start/stop
+systemctl --user start mnemostroma-daemon
+systemctl --user stop mnemostroma-daemon
+
+# Enable/disable on boot
+systemctl --user enable mnemostroma-daemon
+systemctl --user disable mnemostroma-daemon
 
 # Logs
-mnemo-logs
-# or
 journalctl --user -u mnemostroma-daemon -f
-
-# Restart
-mnemo-restart
+journalctl --user -u mnemostroma-sse -f
+journalctl --user -u mnemostroma-watchdog -f
 ```
 
 ## Architecture
@@ -42,14 +46,14 @@ mnemo-restart
 | Component | Port | Purpose |
 |-----------|------|---------|
 | **daemon** | socket | Core memory system (Observer, Consolidation, Dissolver) |
-| **proxy** | 8765 | MCP Server (SSE transport for claude.ai) |
-| **proxy** | 8766 | Observe receiver (localhost, browser extension) |
-| **proxy** | 8767 | Passthrough proxy (HTTPS, routes Claude Code API traffic) |
+| **sse** | 8765 | MCP Server (SSE transport for claude.ai) |
+| **sse** | 8766 | Observe receiver (localhost, browser extension) |
+| **sse** | 8767 | Passthrough proxy (HTTPS, routes Claude Code API traffic) |
 | **watchdog** | — | Health checks, heartbeat monitoring |
-| **ui** | — | System tray icon and status window |
 
 ## Details
 
 - User-level units (no sudo required, runs as current user only)
 - Socket location: `~/.mnemostroma/daemon.sock`
-- Integration: Automatically adds aliases (`mnemo-logs`, `mnemo-restart`) to your `.bashrc` or `.zshrc`.
+- Logs: journalctl (no separate log file)
+- Restart policy: always + watchdog health checks

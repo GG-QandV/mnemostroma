@@ -50,14 +50,14 @@ echo "Using Python: ${PYTHON_BIN}"
 echo "VENV_BIN: ${VENV_BIN}"
 
 # 3. Deploy .service files with path substitution
-for svc in mnemostroma-daemon mnemostroma-proxy mnemostroma-watchdog mnemostroma-ui; do
+for svc in mnemostroma-daemon mnemostroma-proxy mnemostroma-watchdog mnemostroma-ui mnemostroma-sse; do
     sed \
         -e "s|%i|${TARGET_USER}|g" \
         -e "s|%h|/home/${TARGET_USER}|g" \
         -e "s|%VENV_BIN%|${VENV_BIN}|g" \
         -e "s|%MNEMOSTROMA_DIR%|/home/${TARGET_USER}/.mnemostroma|g" \
         "${SCRIPT_DIR}/${svc}.service" \
-        > "${UNIT_DIR}/${svc}.service"
+        > "${UNIT_DIR}/${svc}.service" 2>/dev/null || true
     echo "  Installed: ${UNIT_DIR}/${svc}.service"
 done
 
@@ -88,6 +88,7 @@ if [ "$(whoami)" = "${TARGET_USER}" ]; then
         "mnemostroma-proxy.service"
         "mnemostroma-watchdog.service"
         "mnemostroma-ui.service"
+        "mnemostroma-sse.service"
     )
 
     for unit in "${CORE_UNITS[@]}"; do

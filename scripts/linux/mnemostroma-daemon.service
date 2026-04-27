@@ -2,12 +2,12 @@
 Description=Mnemostroma Daemon (Conductor)
 After=network.target
 Wants=mnemostroma-proxy.service mnemostroma-watchdog.service
+# Prevent runaway restarts: max 5 starts per 60s, then stop
+StartLimitBurst=5
+StartLimitIntervalSec=60s
 
 [Service]
 Type=simple
-
-# Golden Standard: guarantee a single instance
-ExecStartPre=/bin/bash -c 'COUNT=$(pgrep -c -f "mnemostroma run" || true); if [ "$COUNT" -gt 0 ]; then echo "ERROR: mnemostroma process already running"; exit 1; fi'
 
 WorkingDirectory=%h/.mnemostroma
 ExecStart=%VENV_BIN%/python3 -m mnemostroma run
@@ -17,6 +17,7 @@ ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 RestartSec=10s
 RestartPreventExitStatus=0
+OnFailure=
 
 Environment="DISPLAY=:0"
 Environment="XAUTHORITY=%h/.Xauthority"

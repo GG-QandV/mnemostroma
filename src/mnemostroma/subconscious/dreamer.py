@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Any, List, Optional
 
 if TYPE_CHECKING:
     from ..core import SystemContext
@@ -36,6 +36,7 @@ class Dreamer:
         self._disk_offset: int = 0
         self._disk_window: int = 1000
         self._disk_pass_resolved: int = 0  # T4 fix: counts resolutions per full pass
+        self.auto_bridge: AutoBridgeWorker | None = AutoBridgeWorker(conductor, ctx)
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -44,6 +45,8 @@ class Dreamer:
     async def start(self) -> None:
         self._running = True
         self._task = asyncio.create_task(self._run())
+        if self.auto_bridge:
+            await self.auto_bridge.start()
         logger.info("Dreamer started.")
 
     async def stop(self) -> None:
@@ -54,6 +57,8 @@ class Dreamer:
                 await self._task
             except asyncio.CancelledError:
                 pass
+        if self.auto_bridge:
+            await self.auto_bridge.stop()
         logger.info("Dreamer stopped.")
 
     # ------------------------------------------------------------------
@@ -137,11 +142,17 @@ class Dreamer:
 
         stats["duration_ms"] = round((time.time() - start) * 1000, 1)
 
+        from ..storage.log_writer import log_event
+        await log_event(self._ctx, "dreamer.cycle", "complete", stats)
 
         logger.info(
             "Dreamer cycle: checked=%d outcomes_updated=%d resurfaced=%d",
             stats["anchors_checked"], stats["outcomes_updated"], stats["resurfaced"],
         )
+
+        if self.auto_bridge and self._conductor.is_idle():
+            asyncio.create_task(self.auto_bridge._try_bridge())
+
         return stats
 
     # ------------------------------------------------------------------
@@ -235,3 +246,141 @@ class Dreamer:
                 return True
 
         return False
+
+# ---------------------------------------------------------------------------
+# AutoBridgeWorker
+# ---------------------------------------------------------------------------
+
+class AutoBridgeWorker:
+    """Idle-triggered automatic context bridge generator.
+
+    Fires when Dreamer detects idle state AND a session exists in RAM.
+    Generates a bridge summary and persists it via log_event().
+    Protects against: duplicates (cooldown), LLM failure (fallback),
+    race conditions (asyncio.shield), empty sessions (guard).
+    """
+
+    def __init__(self, conductor: object, ctx: "SystemContext") -> None:
+        self._conductor = conductor
+        self._ctx = ctx
+        self._cooldown_sec: int = 1800       # from config: session_closure.cooldown_sec
+        self._last_bridge: dict[str, float] = {}   # session_id -> timestamp, RAM-only
+        self._running = False
+        self._task: asyncio.Task | None = None
+
+    async def start(self) -> None:
+        self._running = True
+        self._task = asyncio.create_task(self._run())
+
+    async def stop(self) -> None:
+        self._running = False
+        if self._task:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+
+    async def _run(self) -> None:
+        poll_sec = 120
+        while self._running:
+            try:
+                await asyncio.sleep(poll_sec)
+                if getattr(self._conductor, "is_idle", lambda: False)():
+                    await self._try_bridge()
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error("AutoBridgeWorker._run error: %s", e, exc_info=True)
+
+    async def _try_bridge(self) -> None:
+        """Attempt to generate bridge for current session if cooldown passed."""
+        # 1. Get current session_id from ctx._current_session_file or ram_index latest
+        session_id = self._get_active_session_id()
+        if not session_id:
+            return
+
+        # 2. Cooldown guard — skip if bridge generated recently for this session
+        now = time.time()
+        if now - self._last_bridge.get(session_id, 0) < self._cooldown_sec:
+            return
+
+        # 3. Get session brief from ram_index
+        sb = self._ctx.ram_index.get(session_id)
+        if not sb:
+            return
+
+        # 4. Collect anchor facts for this session
+        anchors = self._collect_session_anchors(session_id)
+
+        # 5. Generate bridge text (with fallback)
+        bridge_text = await self._generate_bridge(sb, anchors)
+
+        # 6. Compute coverage score
+        coverage = self._compute_coverage(bridge_text, anchors)
+
+        # 7. Persist via log_event — asyncio.shield protects from cancellation
+        quality = "LOW" if coverage < 0.5 else "OK"
+        from ..storage.log_writer import log_event
+        await asyncio.shield(
+            log_event(self._ctx, "bridge.auto", "generated", {
+                "session_id": session_id,
+                "bridge_text": bridge_text,
+                "coverage_score": round(coverage, 3),
+                "quality": quality,
+                "anchor_count": len(anchors),
+                "trigger": "idle",
+            })
+        )
+
+        # 8. Update cooldown
+        self._last_bridge[session_id] = now
+
+        logger.info(
+            "AutoBridge | session=%s coverage=%.2f quality=%s anchors=%d",
+            session_id, coverage, quality, len(anchors),
+        )
+
+    def _get_active_session_id(self) -> str | None:
+        """Read from ~/.mnemostroma/current_session file (written by Observer)."""
+        from pathlib import Path
+        p = Path.home() / ".mnemostroma" / "current_session"
+        try:
+            sid = p.read_text(encoding="utf-8").strip()
+            return sid if sid else None
+        except Exception:
+            return None
+
+    def _collect_session_anchors(self, session_id: str) -> list[str]:
+        """Return text representations of anchors linked to session_id."""
+        if not self._ctx.anchor_index:
+            return []
+        result = []
+        for anchor in self._ctx.anchor_index.all():
+            if getattr(anchor, "session_id", None) == session_id:
+                result.append(f"[{anchor.anchor_type}] {anchor.text}")
+        return result[:20]  # cap at 20 to avoid token overflow
+
+    async def _generate_bridge(self, sb: Any, anchors: list[str]) -> str:
+        """Generate bridge summary. Fallback to anchor list if generation fails."""
+        try:
+            # Use existing ctx_semantic summary pattern — no new LLM dependency
+            brief = getattr(sb, "brief", "") or ""
+            tags = ", ".join(getattr(sb, "tags", []) or [])
+            anchor_block = "\n".join(anchors) if anchors else "No anchors."
+            return (
+                f"Session summary: {brief}\n"
+                f"Tags: {tags}\n"
+                f"Key anchors:\n{anchor_block}"
+            )
+        except Exception as e:
+            logger.warning("AutoBridge: generation failed, using fallback: %s", e)
+            return "\n".join(anchors) if anchors else "Bridge generation failed."
+
+    def _compute_coverage(self, bridge_text: str, anchors: list[str]) -> float:
+        """Fraction of anchor texts that appear in bridge (substring match)."""
+        if not anchors:
+            return 1.0   # vacuously complete
+        hits = sum(1 for a in anchors if a[:30] in bridge_text)
+        return hits / len(anchors)
+

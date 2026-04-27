@@ -12,6 +12,7 @@ import numpy as np
 
 from ..core import SystemContext
 from ..storage.content import decompress_content
+from ..storage.log_writer import log_event
 
 logger = logging.getLogger("mnemostroma.tools.content")
 
@@ -35,6 +36,8 @@ async def content_search(
         top_k: Number of results.
     """
     if ctx.content_index is None or ctx.content_index.get_current_count() == 0:
+        await log_event(ctx, "tools.content_search", "call",
+                        {"query_len": len(query), "results_count": 0})
         return []
 
     # Encode with content_embedder; fall back to session_embedder
@@ -125,6 +128,10 @@ async def content_search(
         if len(results) >= top_k:
             break
 
+    await log_event(ctx, "tools.content_search", "call", {
+        "query_len": len(query),
+        "results_count": len(results),
+    })
     return results
 
 
@@ -150,6 +157,8 @@ async def content_get(
                     block.versions[-1]
                 )
             if v:
+                await log_event(ctx, "tools.content_get", "call",
+                                {"content_id": content_id, "source": "ram"})
                 return {
                     "content_id": block.content_id,
                     "content_type": block.content_type,
@@ -196,6 +205,8 @@ async def content_get(
     except Exception:
         tags = []
 
+    await log_event(ctx, "tools.content_get", "call",
+                    {"content_id": content_id, "source": "sqlite"})
     return {
         "content_id": row[0],
         "content_type": row[1],
@@ -234,6 +245,8 @@ async def content_raw(
                     block.versions[-1]
                 )
             if v and v.content_raw:
+                await log_event(ctx, "tools.content_raw", "call",
+                                {"content_id": content_id, "source": "ram"})
                 return decompress_content(v.content_raw)
 
     if ctx.db is None:
@@ -259,6 +272,8 @@ async def content_raw(
     if row is None or row[0] is None:
         return None
 
+    await log_event(ctx, "tools.content_raw", "call",
+                    {"content_id": content_id, "source": "sqlite"})
     return decompress_content(row[0])
 
 
@@ -303,4 +318,6 @@ async def content_history(
             "created_at": row[6],
         })
 
+    await log_event(ctx, "tools.content_history", "call",
+                    {"content_id": content_id, "versions_count": len(result)})
     return result

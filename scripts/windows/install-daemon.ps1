@@ -6,52 +6,49 @@
 #   .\scripts\windows\install-daemon.ps1
 # ─────────────────────────────────────────────────────────────────────
 
+param (
+    [switch]$Local
+)
+
 $ErrorActionPreference = "Stop"
 
 $userProfile = $env:USERPROFILE
 $mnemoDir = "${userProfile}\.mnemostroma"
-$venvDir  = "${mnemoDir}\venv"
-$venvScript = "${venvDir}\Scripts\python.exe"
+$venvScript = "${mnemoDir}\venv\Scripts\python.exe"
 
-Write-Host "Installing Mnemostroma on Windows..."
+Write-Host "Installing Mnemostroma daemon on Windows..."
 Write-Host "  Profile: $userProfile"
 Write-Host "  Mnemostroma dir: $mnemoDir"
 
-# 1. Ensure ~/.mnemostroma exists
-New-Item -ItemType Directory -Force -Path $mnemoDir | Out-Null
-
-# 2. Verify Python 3.12+
-$pythonBin = $null
-foreach ($candidate in @("python3.12", "python3.13", "python3", "python")) {
-    $p = Get-Command $candidate -ErrorAction SilentlyContinue
-    if ($p) {
-        $ver = & $p.Source -c "import sys; print(sys.version_info >= (3,12))" 2>$null
-        if ($ver -eq "True") { $pythonBin = $p.Source; break }
-    }
+if (-Not (Test-Path $mnemoDir)) {
+    New-Item -ItemType Directory -Force -Path $mnemoDir | Out-Null
 }
-if (-not $pythonBin) {
-    Write-Error "Python 3.12+ is required. Download from https://python.org"
-    exit 1
-}
-Write-Host "  ✓ Python found: $pythonBin"
 
-# 3. Create venv if missing
+# 1. Check Python and Create VENV
 if (-Not (Test-Path $venvScript)) {
     Write-Host "  Creating virtual environment..."
-    & $pythonBin -m venv $venvDir
-    Write-Host "  ✓ Venv created: $venvDir"
+    $pythonCmd = if (Get-Command "python3" -ErrorAction SilentlyContinue) { "python3" } else { "python" }
+    & $pythonCmd -m venv "${mnemoDir}\venv"
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Failed to create virtual environment. Ensure Python 3.12+ is installed."
+        exit 1
+    }
+}
+Write-Host "  ✓ Python found: $venvScript"
+
+# 2. Install Mnemostroma
+if ($Local) {
+    Write-Host "  Installing from local source..."
+    & $venvScript -m pip install -e ".[all]"
+} else {
+    Write-Host "  Installing from GitHub..."
+    & $venvScript -m pip install --quiet --upgrade "mnemostroma[all] @ git+https://github.com/GG-QandV/mnemostroma.git"
 }
 
-# 4. Install / upgrade mnemostroma
-Write-Host "  Installing mnemostroma[all]..."
-& "${venvDir}\Scripts\pip.exe" install --quiet --upgrade "mnemostroma[all]"
-Write-Host "  ✓ Package installed"
+# 3. Download Models
+Write-Host "  Downloading models..."
+& $venvScript -m mnemostroma download-models
 
-# Verify venv is ready
-if (-Not (Test-Path $venvScript)) {
-    Write-Error "Virtual env not found at $venvScript after install — aborting."
-    exit 1
-}
 
 # Создать action
 $action = New-ScheduledTaskAction `

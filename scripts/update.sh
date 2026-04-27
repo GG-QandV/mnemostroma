@@ -11,7 +11,7 @@ MNEMO_BIN="$VENV_BIN/mnemostroma"
 
 echo "🧹 Phase 1: Aggressive Cleanup..."
 # Останавливаем системные службы (независимо от их состояния)
-systemctl --user stop mnemostroma-daemon mnemostroma-proxy mnemostroma-watchdog 2>/dev/null || true
+systemctl --user stop mnemostroma-daemon mnemostroma-proxy mnemostroma-watchdog mnemostroma-ui mnemostroma-sse 2>/dev/null || true
 # Запускаем скрипт очистки зомби
 "$PYTHON_BIN" "$REPO_DIR/scripts/clean-zombies.py"
 
@@ -32,7 +32,7 @@ systemctl --user daemon-reload
 
 echo "🚀 Phase 4: Orderly Startup..."
 # Запускаем полный стек через systemd
-systemctl --user start mnemostroma-daemon mnemostroma-proxy mnemostroma-watchdog
+systemctl --user start mnemostroma-daemon mnemostroma-proxy mnemostroma-watchdog mnemostroma-ui mnemostroma-sse
 
 # Ждем появления сокета (до 10 секунд)
 echo "⌛ Waiting for daemon socket..."

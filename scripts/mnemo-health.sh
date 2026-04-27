@@ -38,6 +38,21 @@ check "mnemostroma-daemon.service is active" \
     "systemctl --user is-active mnemostroma-daemon.service" \
     "active"
 
+# 3.1 Proxy unit is active
+check "mnemostroma-proxy.service is active" \
+    "systemctl --user is-active mnemostroma-proxy.service" \
+    "active"
+
+# 3.2 Watchdog unit is active
+check "mnemostroma-watchdog.service is active" \
+    "systemctl --user is-active mnemostroma-watchdog.service" \
+    "active"
+
+# 3.3 SSE unit is active
+check "mnemostroma-sse.service is active" \
+    "systemctl --user is-active mnemostroma-sse.service" \
+    "active"
+
 # 4. No AttributeError in recent logs
 check "No AttributeError in recent logs" \
     "journalctl --user -u mnemostroma-daemon.service -n 50 2>/dev/null | grep -c 'AttributeError\|Traceback'" \
@@ -78,6 +93,6 @@ echo "=== Result: ${PASS} passed, ${FAIL} failed ==="
 
 if [ "$FAIL" -gt 0 ]; then
     echo ""
-    echo "To reset: systemctl --user restart mnemostroma-daemon.service"
+    echo "To reset: systemctl --user restart mnemostroma-daemon.service mnemostroma-proxy.service mnemostroma-watchdog.service mnemostroma-sse.service"
     exit 1
 fi

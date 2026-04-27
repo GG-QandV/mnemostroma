@@ -14,7 +14,7 @@ fi
 
 # 1. Verify Python 3.12+
 PYTHON_BIN=""
-for candidate in python3.12 python3.13 python3; do
+for candidate in python3.12 python3.13 python3 python; do
     if command -v "$candidate" &>/dev/null; then
         ver=$("$candidate" -c "import sys; print(sys.version_info >= (3,12))" 2>/dev/null || echo False)
         if [ "$ver" = "True" ]; then
@@ -34,6 +34,7 @@ echo "✅ Python $PYTHON_VER found."
 
 # 2. Setup VENV
 VENV_DIR="$HOME/.mnemostroma/venv"
+mkdir -p "$HOME/.mnemostroma"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 
@@ -49,9 +50,18 @@ else
     "$VENV_DIR/bin/pip" install --quiet --upgrade "mnemostroma[all] @ git+https://github.com/GG-QandV/mnemostroma.git"
 fi
 
+# 2.5 Download models
+echo "Downloading models..."
+"$VENV_DIR/bin/mnemostroma" download-models
+
 # 3. Clean Zombies
 echo "Ensuring clean state..."
-"$VENV_DIR/bin/python" "$SCRIPT_DIR/../scripts/clean-zombies.py" || echo "Warning: clean-zombies failed"
+if [ -f "$SCRIPT_DIR/../scripts/clean-zombies.py" ]; then
+    "$VENV_DIR/bin/python" "$SCRIPT_DIR/../scripts/clean-zombies.py" || echo "Warning: clean-zombies failed"
+else
+    # Fallback to module command if installed
+    "$VENV_DIR/bin/mnemostroma" cleanup --silent || true
+fi
 
 # 4. Detect OS and run specific installer
 OS_TYPE=$(uname -s)
@@ -78,12 +88,8 @@ cat >> "$SHELL_RC" << EOF
 
 $GUARD_BLOCK_START
 alias mnemo-health="$SCRIPT_DIR/mnemo-health.sh"
-alias mnemo-restart="systemctl --user restart mnemostroma-daemon.service && sleep 3 && mnemostroma status"
+alias mnemo-restart="systemctl --user restart mnemostroma-daemon.service mnemostroma-proxy.service mnemostroma-watchdog.service && sleep 3 && mnemostroma status"
 alias mnemo-logs="journalctl --user -u mnemostroma-daemon.service -f"
-# Auto-guard
-_mnemo_guard() {
-    if pgrep -f "python.*-m mnemostroma run" >/dev/null; then :; fi
-}
 $GUARD_BLOCK_END
 EOF
 

@@ -79,8 +79,15 @@ class CalibrationCollector:
         )
         # Log calibration event for watch/dashboard observability
         try:
+            from ..storage.log_writer import log_event
             import asyncio
             asyncio.ensure_future(
+                log_event(self.ctx, "calibration.update", "finalize", {
+                    "threshold_old": old_threshold,
+                    "threshold_new": threshold,
+                    "samples": len(self._distances),
+                    "p25_distance": round(distances[max(0, int(len(distances)*0.25)-1)], 4),
+                })
             )
         except Exception:
             pass

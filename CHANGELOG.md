@@ -1,3 +1,14 @@
+## [1.9.1] — 2026-04-27
+### Added
+- **feat(autobridge)**: `AutoBridgeWorker` — autonomous background context bridge generation for seamless AI agent handoffs (L5).
+- **feat(windows)**: Full Windows feature-parity installer with Proxy and Watchdog via Task Scheduler (closes GAP-11, GAP-12).
+- **feat(macos)**: Full macOS feature-parity with native `launchctl bootstrap` and multi-agent Proxy/Watchdog `.plist` injection (closes GAP-8, 9, 10).
+- **feat(installer)**: All platforms now auto-download ONNX models during `setup` or service installation (closes GAP-5).
+### Fixed
+- **fix(linux)**: `mnemostroma-sse` is now correctly enabled by `install.sh` (closes GAP-1).
+- **fix(linux)**: Improved Python detector fallback for pyenv/conda and fixed `clean-zombies` invocation edge cases (closes GAP-2, GAP-3, GAP-4).
+- **fix(cli)**: `update.sh` and `mnemo-health.sh` now correctly track and reset `mnemostroma-ui` and `mnemostroma-sse` (closes GAP-14, 15).
+
 ## [1.8.5] — 2026-04-25
 ### Added
 - **feat(observer)**: `anchor_replay.py` — A/B Testing tool for anchor logic evaluation.

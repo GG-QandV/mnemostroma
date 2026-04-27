@@ -1096,7 +1096,11 @@ class DatabaseManager:
 
         # Log storage flush (v1.0 spec — Point #15)
         if self.ctx is not None:
-            pass
+            from .log_writer import log_event
+            await log_event(self.ctx, "storage.flush", "batch", {
+                "flushed_count": len(batch),
+                "queue_depth": self.queue.qsize()
+            })
 
         logger.debug(f"Flushed {len(batch)} sessions to SQLite")
 

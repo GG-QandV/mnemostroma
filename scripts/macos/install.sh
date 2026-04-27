@@ -5,49 +5,78 @@
 # ─────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PLIST_FILE="${SCRIPT_DIR}/com.mnemostroma.daemon.plist"
-AGENT_DIR="${HOME}/Library/LaunchAgents"
-AGENT_FILE="${AGENT_DIR}/com.mnemostroma.daemon.plist"
-
-# Определить venv
-VENV_BIN="${HOME}/.mnemostroma/venv/bin"
-if [ ! -f "${VENV_BIN}/python3" ]; then
-    echo "Error: Virtual env not found at ${VENV_BIN}/python3"
-    echo "Run: python3 -m venv ${HOME}/.mnemostroma/venv"
-    exit 1
+INSTALL_MODE="github"
+if [[ "${1:-}" == "--local" ]]; then
+    INSTALL_MODE="local"
+    echo "⚡ Local editable mode enabled."
 fi
 
-echo "Installing Mnemostroma daemon on macOS..."
-echo "  VENV: ${VENV_BIN}"
-echo "  HOME: ${HOME}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
+AGENT_DIR="${HOME}/Library/LaunchAgents"
 
-# Создать LaunchAgents директорию
+VENV_DIR="${HOME}/.mnemostroma/venv"
+VENV_BIN="${VENV_DIR}/bin"
+
+echo "Installing Mnemostroma on macOS..."
+
+# 1. Setup VENV and Install
+if [ ! -f "${VENV_BIN}/python3" ]; then
+    echo "  Creating virtual environment..."
+    PYTHON_CMD="python3"
+    if ! command -v $PYTHON_CMD &>/dev/null; then PYTHON_CMD="python"; fi
+    $PYTHON_CMD -m venv "${VENV_DIR}"
+fi
+
+if [ "$INSTALL_MODE" == "local" ]; then
+    echo "  Installing from local source..."
+    "${VENV_BIN}/pip" install -e "${REPO_ROOT}[all]"
+else
+    echo "  Installing from GitHub..."
+    "${VENV_BIN}/pip" install --quiet --upgrade "mnemostroma[all] @ git+https://github.com/GG-QandV/mnemostroma.git"
+fi
+
+# 2. Download Models
+echo "  Downloading models..."
+"${VENV_BIN}/mnemostroma" download-models
+
+# 3. Create LaunchAgents directory
 mkdir -p "${AGENT_DIR}"
 
-# Копировать и подставить пути
-sed \
-    -e "s|%VENV_BIN%|${VENV_BIN}|g" \
-    -e "s|%HOME%|${HOME}|g" \
-    "${PLIST_FILE}" \
-    > "${AGENT_FILE}"
+# 4. Copy and patch plists
+SERVICES=("daemon" "proxy" "watchdog")
+for svc in "${SERVICES[@]}"; do
+    PLIST_SRC="${SCRIPT_DIR}/com.mnemostroma.${svc}.plist"
+    PLIST_DEST="${AGENT_DIR}/com.mnemostroma.${svc}.plist"
+    
+    if [ -f "$PLIST_SRC" ]; then
+        sed \
+            -e "s|%VENV_BIN%|${VENV_BIN}|g" \
+            -e "s|%HOME%|${HOME}|g" \
+            "${PLIST_SRC}" \
+            > "${PLIST_DEST}"
+        echo "  ✓ Installed: ${PLIST_DEST}"
+    fi
+done
 
-echo "  ✓ Installed: ${AGENT_FILE}"
-
-# Загрузить агент
-launchctl load "${AGENT_FILE}"
-echo "  ✓ Agent loaded"
-
-# Запустить
-launchctl start com.mnemostroma.daemon
-echo "  ✓ Daemon started"
+# 5. Load agents (using modern bootstrap)
+UID=$(id -u)
+for svc in "${SERVICES[@]}"; do
+    PLIST_DEST="${AGENT_DIR}/com.mnemostroma.${svc}.plist"
+    if [ -f "$PLIST_DEST" ]; then
+        # Unload if exists
+        launchctl bootout "gui/${UID}" "${PLIST_DEST}" 2>/dev/null || true
+        # Load
+        launchctl bootstrap "gui/${UID}" "${PLIST_DEST}"
+        echo "  ✓ Service com.mnemostroma.${svc} loaded"
+    fi
+done
 
 echo ""
 echo "Management:"
-echo "  launchctl start com.mnemostroma.daemon"
-echo "  launchctl stop com.mnemostroma.daemon"
-echo "  launchctl unload ~/Library/LaunchAgents/com.mnemostroma.daemon.plist"
+echo "  Start/Stop (e.g. daemon): launchctl start com.mnemostroma.daemon"
 echo ""
 echo "Logs:"
 echo "  tail -f ~/.mnemostroma/daemon.log"
-echo "  tail -f ~/.mnemostroma/daemon.err"
+echo "  tail -f ~/.mnemostroma/proxy.log"
+echo "  tail -f ~/.mnemostroma/watchdog.log"

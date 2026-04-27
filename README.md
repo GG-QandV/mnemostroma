@@ -2,14 +2,14 @@
 
 ### The memory layer for AI agents
 
-![Version](https://img.shields.io/badge/version-v1.8.5-orange)
+![Version](https://img.shields.io/badge/version-v1.9.1-orange)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue)
-![Tests](https://img.shields.io/badge/tests-457%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-467%20passing-brightgreen)
 ![License](https://img.shields.io/badge/license-FSL--1.1--MIT-lightgrey)
 
 > *μνήμη (mnḗmē, memory) + στρῶμα (strôma, layer) — the substrate everything rests on.*
 
-> **v1.8.5 is stable.** Upgrading from v1.8.3 or earlier? → [See UPGRADE.md](./UPGRADE.md)
+> **v1.9.1 is stable.** Upgrading from v1.8.5 or earlier? → [See UPGRADE.md](./UPGRADE.md)
 
 ---
 
@@ -164,11 +164,11 @@ This is not a database with TTL. This is how human memory works.
 
 ## Status
 
-**Current:** v1.8.5 | 2026-04-24
+**Current:** v1.9.1 | 2026-04-27
 
 | Component                                | Status                           |
 | ---------------------------------------- | -------------------------------- |
-| Core backend (Observer, Memory, Storage) | DONE Implemented, 457/457 tests  |
+| Core backend (Observer, Memory, Storage) | DONE Implemented, 467/467 tests  |
 | Golden Standard Launch (Shell Guards)    | DONE Implemented (v1.8.5)        |
 | Anchor Layer / Emotional Patterns        | DONE Implemented                 |
 | Implicit Feedback (v1.5)                 | DONE Implemented                 |
@@ -182,6 +182,7 @@ This is not a database with TTL. This is how human memory works.
 | Model install CLI                        | DONE Implemented                 |
 | **Daemon auto-start scripts**            | DONE Linux (systemd), macOS, Win |
 | **Hexagonal Storage Refactor**           | DONE Implemented (v1.8.0)        |
+| **AutoBridgeWorker (AI Handoffs)**       | DONE Implemented (v1.9.1)        |
 
 ---
 
@@ -189,7 +190,7 @@ This is not a database with TTL. This is how human memory works.
 
 **Requires Python 3.12+**
 
-> **v1.8.5 is stable.** Upgrading from v1.8.3 or earlier? → [See UPGRADE.md](./UPGRADE.md)
+> **v1.9.1 is stable.** Upgrading from v1.8.5 or earlier? → [See UPGRADE.md](./UPGRADE.md)
 
 ---
 
@@ -257,9 +258,8 @@ mnemostroma setup
 ### Quick Start
 
 1. **Install** via one of the options above.
-2. **Setup**: Run `mnemostroma setup`. This downloads ~600MB of models.
-3. **Start**: `mnemostroma on`
-4. **Dashboard**: `mnemostroma tray` (or `mnemostroma watch` for terminal)
+2. **Start**: The services will automatically start in the background. Check health with `mnemostroma status`.
+3. **Dashboard**: `mnemostroma tray` (or `mnemostroma watch` for terminal)
 
 ---
 
@@ -393,44 +393,60 @@ Core dependencies: `onnxruntime, tokenizers, numpy, lz4, aiosqlite`
 
 The daemon must be running before any client connects.
 
-**Choose your OS for detailed configuration:**
+**Choose your OS for installation details:**
 
 - [Linux (systemd)](./scripts/linux/README.md)
 - [macOS (launchd)](./scripts/macos/README.md)
 - [Windows (Task Scheduler)](./scripts/windows/README.md)
 
-### Installation & Deployment
+Or use the universal installer: `bash scripts/install-daemon.sh` (Linux/macOS)
 
-The easiest way to install Mnemostroma is to use the universal installer script. It automatically detects your OS, sets up a virtual environment, and registers background services.
+### Starting the Daemon
+
+The daemon is a background service that runs independently of any IDE or client. Set it up once per system, then forget about it.
+
+**Linux — systemd user unit**
+
+Use the provided installation script:
 
 ```bash
 bash scripts/install-daemon.sh
 ```
 
-#### Linux (systemd)
+→ **[Full Linux installation guide →](./scripts/linux/README.md)**
 
-The installer sets up **four** systemd user units:
+This installs three systemd user units from `scripts/`:
 
 - `mnemostroma-daemon.service` — Main daemon (Observer + Memory + Storage)
-- `mnemostroma-proxy.service` — HTTPS proxy & SSE Adapter (for claude.ai and Claude Code)
-- `mnemostroma-watchdog.service` — Automated health monitor and recovery
-- `mnemostroma-ui.service` — System tray status icon
+- `mnemostroma-proxy.service` — HTTPS passthrough proxy (optional, for Claude Code)
+- `mnemostroma-watchdog.service` — Health monitor
 
-**Quick Commands (Linux):**
+Quick commands:
 
 ```bash
-mnemostroma status   # View status of all services
-mnemo-logs           # Tail daemon logs
-mnemo-restart        # Full stack restart
+systemctl --user status mnemostroma-daemon
+systemctl --user start mnemostroma-daemon
+systemctl --user stop mnemostroma-daemon
+journalctl --user -u mnemostroma-daemon -f
 ```
 
-#### macOS (launchd)
+**macOS — launchd LaunchAgent**
 
-Installs the main daemon as a `LaunchAgent`.
+Use the provided installation script:
 
-- `com.mnemostroma.daemon.plist` — Background daemon process
+```bash
+bash scripts/install-daemon.sh
+```
 
-**Quick Commands (macOS):**
+→ **[Full macOS installation guide →](./scripts/macos/README.md)**
+
+Or run directly:
+
+```bash
+bash scripts/macos/install.sh
+```
+
+Quick commands:
 
 ```bash
 launchctl start com.mnemostroma.daemon
@@ -438,12 +454,23 @@ launchctl stop com.mnemostroma.daemon
 tail -f ~/.mnemostroma/daemon.log
 ```
 
-#### Windows (Task Scheduler)
+**Windows — Task Scheduler**
 
-Registers a persistent task in the Windows Task Scheduler.
+Use the provided PowerShell script (run as Administrator):
 
 ```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 .\scripts\windows\install-daemon.ps1
+```
+
+→ **[Full Windows installation guide →](./scripts/windows/README.md)**
+
+Quick commands:
+
+```powershell
+Start-ScheduledTask -TaskName "Mnemostroma Daemon"
+Stop-ScheduledTask -TaskName "Mnemostroma Daemon"
+taskschd.msc
 ```
 
 > **Architecture note:** Clients (VS Code, Claude Code, Cursor) will spawn lightweight adapter processes (~70 MB) that connect to this daemon via socket. The daemon persists; adapters are ephemeral.
@@ -683,7 +710,7 @@ Cloud Sync, Subconscious Layer (personalized models), Shared Experience, and Tea
 ---
 
 *Mnemostroma — the memory layer for AI agents*
-*offline · ~650MB RAM (baseline) · ~20ms · 457 tests · v1.8.5*
+*offline · ~340MB RAM (idle) · ~20ms · 467 tests · v1.9.1*
 
 # [mnemostroma-protocol]
 

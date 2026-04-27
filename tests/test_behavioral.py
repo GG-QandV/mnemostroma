@@ -27,6 +27,7 @@ from mnemostroma.memory.session_index import SessionBrief
 from mnemostroma.observer.filter import deterministic_filter
 from mnemostroma.memory.scoring import calculate_score
 from mnemostroma.memory.dissolver import Dissolver, can_evict
+from mnemostroma.storage.log_writer import log_event, LogWriter
 
 
 # ---------------------------------------------------------------------------
@@ -335,7 +336,15 @@ async def test_bt15_log_event_writes_to_db(mock_ctx: SystemContext) -> None:
         )
 
         # Emit two log events
+        await log_event(mock_ctx, "observer.filter", "classify", {
+            "importance": "critical",
+            "signals": ["решил"],
+            "needs_ner": False,
+        }, latency_ms=1.2, session_id="s_bt15")
 
+        await log_event(mock_ctx, "observer.score", "calculate", {
+            "R": 0.8, "T": 0.95, "I": 0.7, "score": 0.82, "profile": "write"
+        }, latency_ms=0.01, session_id="s_bt15")
 
         # Let the flush loop write
         await asyncio.sleep(0.1)
