@@ -857,9 +857,15 @@ def dispatch(args_namespace: argparse.Namespace) -> None:
     elif command == "on": _cmd_on()
     elif command == "off": _cmd_off()
     elif command == "status": _print_status()
-    elif command in ("run", "mcp"):
+    elif command == "run":
         try:
             asyncio.run(_run_daemon())
+        except KeyboardInterrupt:
+            pass
+    elif command == "mcp":
+        try:
+            from mnemostroma.integration.mcp_stdio_adapter import main as mcp_main
+            asyncio.run(mcp_main())
         except KeyboardInterrupt:
             pass
     elif command == "service": _cmd_service(cargs)

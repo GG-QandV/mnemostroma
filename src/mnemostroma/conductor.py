@@ -669,10 +669,11 @@ class Conductor:
             await asyncio.sleep(5)
             try:
                 logger.info("Ensuring Mnemostroma Tray UI is running via systemd...")
-                subprocess.Popen(
+                subprocess.run(
                     ["systemctl", "--user", "start", "mnemostroma-ui"],
                     stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL
+                    stderr=subprocess.DEVNULL,
+                    check=False
                 )
             except Exception as e:
                 logger.warning(f"Failed to trigger tray service: {e}")
