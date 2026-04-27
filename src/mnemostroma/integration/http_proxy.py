@@ -116,6 +116,23 @@ def _last_user_text(messages: list) -> str:
     return ""
 
 
+# ── Memory intent detector ────────────────────────────────────────────
+_MEMORY_SIGNALS = [
+    "как в прошлый раз", "как мы делали", "как раньше", "помнишь",
+    "в прошлой сессии", "мы договорились", "ты говорил", "напомни",
+    "last time", "as before", "we agreed", "you said", "remind me",
+    "previously", "earlier", "remember when", "like we did",
+]
+
+def _detect_memory_intent(text: str) -> float:
+    """Score 0.0–1.0: how strongly text references past context."""
+    if not text:
+        return 0.0
+    low = text.lower()
+    hits = sum(1 for sig in _MEMORY_SIGNALS if sig in low)
+    return min(1.0, hits * 0.4)
+
+
 def _forward_headers(request: Request) -> dict:
     skip = {"host", "content-length", "transfer-encoding"}
     return {k: v for k, v in request.headers.items() if k.lower() not in skip}
@@ -124,11 +141,15 @@ def _forward_headers(request: Request) -> dict:
 # ── Memory inject (fail-open) ─────────────────────────────────────────
 
 async def _inject_memory(body: dict, sid: str) -> dict:
+    intent_score = _detect_memory_intent(_last_user_text(body.get("messages", [])))
+    extra_depth = {"deep": True} if intent_score >= 0.4 else {}
+
     xml = await _cb_inject.call(
         _pool.call,
         "inject",
         {"user_message": _last_user_text(body.get("messages", [])),
-         "session_id": sid},
+         "session_id": sid,
+         **extra_depth},
         fallback=None,
     )
     if not xml:

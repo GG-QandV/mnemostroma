@@ -92,7 +92,7 @@ class ConductorProxy:
         
         return "\n\n".join(xml)
 
-    async def inject(self, user_message: str, max_tokens: int = 600, include_tools: bool = True) -> MemoryBlock:
+    async def inject(self, user_message: str, max_tokens: int = 600, include_tools: bool = True, **kwargs) -> MemoryBlock:
         """Generate the memory block for the LLM prompt.
         
         Args:
@@ -118,7 +118,10 @@ class ConductorProxy:
         # 2. Dynamic Semantic Search
         relevant_xml = ""
         # We ask for a small list to not flood the context
-        relevant_sessions = await ctx_semantic(user_message, self.ctx, k=10, top_n=3)
+        deep = kwargs.get("deep", False)
+        top_k = 20 if deep else 10
+        top_n = 5 if deep else 3
+        relevant_sessions = await ctx_semantic(user_message, self.ctx, k=top_k, top_n=top_n)
         if relevant_sessions:
             # GAP 2: record which session IDs were injected for implicit feedback analysis
             self.ctx._last_injected_ids = [sb.session_id for sb in relevant_sessions]

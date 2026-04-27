@@ -114,6 +114,7 @@ class DatabaseManager:
     Args:
         db: Active aiosqlite connection.
         config: Full system Config (not config.storage, full Config).
+        ctx: SystemContext passed for log_event instrumentation.
     """
 
     def __init__(self, db: aiosqlite.Connection, config: Any, ctx: Optional[Any] = None):

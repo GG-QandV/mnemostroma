@@ -671,7 +671,7 @@ def _print_status() -> None:
             pass
 
 def _print_help():
-    print("Mnemostroma CLI\n\nCommands: setup, on, off, status, config, service, run, mcp, tray, watch, logs")
+    print("Mnemostroma CLI\n\nCommands: setup, on, off, status, health, config, service, run, mcp, tray, watch, logs")
 
 # ---------------------------------------------------------------------------
 # Config Tuner
@@ -797,6 +797,129 @@ def _cmd_db_dump_time(args: list) -> None:
         print(f"Error updating config: {e}")
 
 # ---------------------------------------------------------------------------
+# Health Check (cross-platform)
+# ---------------------------------------------------------------------------
+
+def _cmd_health() -> None:
+    """Cross-platform health check via psutil.
+
+    Covers: daemon process, RAM usage, IPC socket, proxy port,
+    models presence, and duplicate instance guard. No journalctl
+    or systemctl — works on Linux, macOS, and Windows.
+    """
+    import socket as _socket
+    import sys
+
+    passed = 0
+    failed = 0
+
+    def ok(msg: str) -> None:
+        nonlocal passed
+        print(f"  \u2705 {msg}")
+        passed += 1
+
+    def fail(msg: str, hint: str = "") -> None:
+        nonlocal failed
+        print(f"  \u274c {msg}" + (f"\n       Hint: {hint}" if hint else ""))
+        failed += 1
+
+    def skip(msg: str) -> None:
+        print(f"  \u26a0\ufe0f  {msg} (skipped)")
+
+    print("\n=== Mnemostroma Health Check ===")
+    print(f"  Platform: {sys.platform}\n")
+
+    # 1. Single daemon instance
+    procs = _find_mnemo_processes()
+    if len(procs) == 1:
+        ok(f"Single daemon instance (PID {procs[0].pid})")
+    elif len(procs) == 0:
+        fail("Daemon not running", "mnemostroma on  OR  systemctl --user start mnemostroma-daemon")
+    else:
+        fail(f"Multiple daemon instances detected ({len(procs)} processes)",
+             "Run: mnemostroma off  then  mnemostroma on")
+
+    # 2. RAM usage
+    pid = _read_pid()
+    if pid:
+        try:
+            proc = psutil.Process(pid)
+            ram_mb = proc.memory_info().rss // (1024 * 1024)
+            limit_mb = 750
+            if ram_mb < limit_mb:
+                ok(f"RAM usage: {ram_mb} MB (limit {limit_mb} MB)")
+            else:
+                fail(f"RAM usage: {ram_mb} MB exceeds limit {limit_mb} MB",
+                     "Check for eviction loops in logs")
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            skip("RAM check (process not accessible)")
+    else:
+        skip("RAM check (daemon not running)")
+
+    # 3. IPC socket exists
+    sock_path = _MNEMO_DIR / "daemon.sock"
+    if sys.platform == "win32":
+        skip("IPC socket check (Windows uses Named Pipe)")
+    elif sock_path.exists():
+        ok(f"IPC socket present: {sock_path}")
+    else:
+        fail("IPC socket missing", f"Expected: {sock_path}")
+
+    # 4. Proxy port 8767
+    try:
+        with _socket.create_connection(("127.0.0.1", 8767), timeout=1):
+            ok("Proxy port 8767 is open")
+    except OSError:
+        fail("Proxy port 8767 not reachable",
+             "systemctl --user start mnemostroma-proxy  OR  mnemostroma on")
+
+    # 5. Models present
+    manifest_path = _MNEMO_DIR / "models_manifest.json"
+    model_dir = _MNEMO_DIR / "models"
+    if not manifest_path.exists():
+        # Fallback: check package-bundled manifest
+        manifest_path = Path(__file__).parent.parent / "models_manifest.json"
+    ok_models, missing = _models_complete(manifest_path, model_dir)
+    if ok_models:
+        ok(f"Models present in {model_dir}")
+    else:
+        fail(
+            f"Models incomplete ({len(missing)} missing)",
+            "mnemostroma install-models",
+        )
+
+    # 6. No duplicate DB writers (cross-platform via psutil)
+    db_path = _MNEMO_DIR / "mnemostroma.db"
+    if db_path.exists():
+        try:
+            writers = [p for p in psutil.process_iter(['pid', 'open_files'])
+                       if any(str(db_path) in (f.path if hasattr(f, 'path') else '')
+                              for f in (p.info.get('open_files') or []))]
+            if len(writers) <= 1:
+                ok(f"Single SQLite writer ({len(writers)} process)")
+            else:
+                fail(f"Multiple SQLite writers detected ({len(writers)} processes)",
+                     "Potential data corruption risk — restart daemon")
+        except (psutil.AccessDenied, psutil.NoSuchProcess):
+            skip("SQLite writer check (access denied)")
+    else:
+        skip(f"SQLite check (DB not found: {db_path})")
+
+    # 7. Config present
+    if _CONFIG_PATH.exists():
+        ok(f"Config found: {_CONFIG_PATH}")
+    else:
+        fail("Config missing", "mnemostroma setup")
+
+    print(f"\n=== Result: {passed} passed, {failed} failed ===")
+    if failed:
+        print("  Run 'mnemostroma on' or check logs for details.")
+        sys.exit(1)
+    else:
+        print("  System is healthy.\n")
+
+
+# ---------------------------------------------------------------------------
 # Service
 # ---------------------------------------------------------------------------
 
@@ -906,6 +1029,7 @@ def dispatch(args_namespace: argparse.Namespace) -> None:
         run_watch(db_path)
     elif command == "db-dump-time": _cmd_db_dump_time(cargs)
     elif command == "cleanup": _cmd_cleanup(cargs)
+    elif command == "health": _cmd_health()
     else:
         print(f"Unknown command: {command}")
         _print_help()
