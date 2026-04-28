@@ -91,20 +91,6 @@ class Dissolver:
             self._last_blocked_log = now
 
         # Log eviction (v1.0 spec — Point #9)
-        from ..storage.log_writer import log_event
-        await log_event(self.ctx, "dissolver.evict", "evict", {
-            "evicted_count": evicted_count,
-            "ram_before": ram_before,
-            "ram_after": len(self.ctx.ram_index),
-            "reason": "ram_soft_limit",                                      # F-2
-            "evicted_importances": [                                          # F-2
-                getattr(s, "importance", "?") for s in evicted_sessions
-            ],
-            "principle_protected_count": sum(                                 # F-2
-                1 for s in self.ctx.ram_index.values()
-                if s.importance == "principle"
-            ),
-        }, level="WARNING" if evicted_count > 0 else "INFO")
 
         logger.info(f"Dissolver evicted {evicted_count} sessions from RAM.")
 

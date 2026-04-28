@@ -142,8 +142,6 @@ class Dreamer:
 
         stats["duration_ms"] = round((time.time() - start) * 1000, 1)
 
-        from ..storage.log_writer import log_event
-        await log_event(self._ctx, "dreamer.cycle", "complete", stats)
 
         logger.info(
             "Dreamer cycle: checked=%d outcomes_updated=%d resurfaced=%d",
@@ -321,16 +319,7 @@ class AutoBridgeWorker:
 
         # 7. Persist via log_event — asyncio.shield protects from cancellation
         quality = "LOW" if coverage < 0.5 else "OK"
-        from ..storage.log_writer import log_event
         await asyncio.shield(
-            log_event(self._ctx, "bridge.auto", "generated", {
-                "session_id": session_id,
-                "bridge_text": bridge_text,
-                "coverage_score": round(coverage, 3),
-                "quality": quality,
-                "anchor_count": len(anchors),
-                "trigger": "idle",
-            })
         )
 
         # 8. Update cooldown

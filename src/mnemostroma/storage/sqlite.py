@@ -874,6 +874,34 @@ class DatabaseManager:
             for r in rows
         ]
 
+    async def search_sessions_by_time(self, lo: int, hi: int, limit: int) -> list[dict]:
+        """Find sessions WHERE created_at >= lo AND created_at < hi. Uses idx_sessions_date."""
+        results: list[dict] = []
+        try:
+            async with self.db.execute(
+                """SELECT session_id, brief, importance, created_at, tags
+                   FROM sessions
+                   WHERE created_at >= ? AND created_at < ?
+                   ORDER BY created_at ASC
+                   LIMIT ?""",
+                (lo, hi, limit)
+            ) as cursor:
+                async for row in cursor:
+                    try:
+                        tags = json.loads(row[4]) if row[4] else []
+                    except Exception:
+                        tags = []
+                    results.append({
+                        "session_id": row[0],
+                        "brief": row[1],
+                        "importance": row[2],
+                        "created_at": row[3],
+                        "tags": tags,
+                    })
+        except Exception as e:
+            logger.error(f"search_sessions_by_time({lo}, {hi}, {limit}): {e}")
+        return results
+
     async def check_experience_schema(self) -> None:
         """Add emotion columns to experience_metrics if they don't exist (v1.4 migration)."""
         new_columns = [
@@ -1096,11 +1124,7 @@ class DatabaseManager:
 
         # Log storage flush (v1.0 spec — Point #15)
         if self.ctx is not None:
-            from .log_writer import log_event
-            await log_event(self.ctx, "storage.flush", "batch", {
-                "flushed_count": len(batch),
-                "queue_depth": self.queue.qsize()
-            })
+            pass
 
         logger.debug(f"Flushed {len(batch)} sessions to SQLite")
 

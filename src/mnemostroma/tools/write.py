@@ -3,7 +3,6 @@ import time
 import logging
 from typing import List, Dict, Any, Optional
 from ..core import SystemContext
-from ..storage.log_writer import log_event
 
 logger = logging.getLogger("mnemostroma.tools.write")
 
@@ -20,10 +19,6 @@ async def save_content(
     res = await ctx.content.save(content_id, text, **kwargs)
     
     # Log tool call
-    await log_event(ctx, "tools.save_content", "call", {
-        "content_id": content_id,
-        "text_len": len(text)
-    })
     return res
 
 async def ctx_urgent(
@@ -41,10 +36,6 @@ async def ctx_urgent(
     )
     
     # Log tool call
-    await log_event(ctx, "tools.urgent", "call", {
-        "hours_ahead": hours_ahead,
-        "found_count": len(results)
-    })
     return results
 
 async def ctx_expire(session_id: str, ctx: SystemContext):
@@ -65,6 +56,3 @@ async def ctx_expire(session_id: str, ctx: SystemContext):
         await ctx.db.commit()
     
     # Log expiration
-    await log_event(ctx, "tools.expire", "call", {
-        "session_id": session_id
-    })

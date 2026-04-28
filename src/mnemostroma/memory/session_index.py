@@ -49,3 +49,7 @@ class SessionBrief:
     implicit_score: float = 0.5
     # Emotion intensity linked to this session (0.0 = no emotion; used in eviction v2)
     intensity: float = 0.0
+
+    # Content Branch classification (set by Observer PersistStep)
+    # Values: "content" | "research" | "context" | None (unclassified)
+    session_type: Optional[str] = None

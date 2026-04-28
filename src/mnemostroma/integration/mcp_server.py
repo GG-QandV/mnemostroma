@@ -156,18 +156,19 @@ async def list_tools() -> list[Tool]:
                 "required": ["query"]
             }
         ),
-        Tool(
-            name="content_get",
-            description="Retrieve metadata for a specific content block by ID. version=null returns the latest active version.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "content_id": {"type": "string"},
-                    "version": {"type": "integer", "description": "Specific version number (optional)"}
-                },
-                "required": ["content_id"]
-            }
-        ),
+        # DISABLED content_get — API minimization 2026-04-28
+        # Tool(
+        #     name="content_get",
+        #     description="Retrieve metadata for a specific content block by ID. version=null returns the latest active version.",
+        #     inputSchema={
+        #         "type": "object",
+        #         "properties": {
+        #             "content_id": {"type": "string"},
+        #             "version": {"type": "integer", "description": "Specific version number (optional)"}
+        #         },
+        #         "required": ["content_id"]
+        #     }
+        # ),
         Tool(
             name="content_raw",
             description="Retrieve the full raw text of a content version. High latency call — use only when exact text is needed.",
@@ -343,16 +344,17 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             )
             return [TextContent(type="text", text=_serialize(result))]
 
-        elif name == "content_get":
-            from mnemostroma.tools.content import content_get
-            result = await content_get(
-                content_id=arguments["content_id"],
-                ctx=ctx,
-                version=arguments.get("version"),
-            )
-            if result is None:
-                return [TextContent(type="text", text='{"error": "content not found"}')]
-            return [TextContent(type="text", text=_serialize(result))]
+        # DISABLED content_get 2026-04-28
+        # elif name == "X_content_get":
+        #     from mnemostroma.tools.content import content_get
+        #     result = await content_get(
+        #         content_id=arguments["content_id"],
+        #         ctx=ctx,
+        #         version=arguments.get("version"),
+        #     )
+        #     if result is None:
+        #         return [TextContent(type="text", text='{"error": "content not found"}')]
+        #     return [TextContent(type="text", text=_serialize(result))]
 
         elif name == "content_raw":
             from mnemostroma.tools.content import content_raw

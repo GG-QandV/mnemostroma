@@ -91,3 +91,11 @@ class SessionRepo:
             return ok(res)
         except Exception as e:
             return err(StorageError(f"Failed to list recent sessions: {e}"))
+
+    async def search_by_time_window(self, lo: int, hi: int, limit: int) -> Result[list[dict], StorageError]:
+        """Search sessions in time window [lo, hi). Delegates to SQLiteStorage."""
+        try:
+            res = await self._storage.search_sessions_by_time(lo, hi, limit)
+            return ok(res)
+        except Exception as e:
+            return err(StorageError(f"Time window search failed: {e}"))

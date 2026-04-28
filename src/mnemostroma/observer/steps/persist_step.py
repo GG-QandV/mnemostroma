@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
 from __future__ import annotations
 
+import re
 import time
 import logging
 import asyncio
@@ -9,7 +10,6 @@ import numpy as np
 from typing import TYPE_CHECKING
 from .base import PipelineContext
 from ...memory.session_index import SessionBrief
-from ...storage.log_writer import log_event
 from ..utils import compress_text
 from ...subconscious.anchor import Anchor
 from ...subconscious.anchor_index import AnchorIndex
@@ -17,11 +17,30 @@ from ..flag_detector import detect_all_flags, detect_mention_type_embedding, det
 from ..continuation_detector import detect_continuation
 from ...tuner.conflict import tuner_check
 from ...subconscious.precision_guard import precision_extract, _derive_context_tag
+from ..session_classifier import classify_session_type
 
 if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger("mnemostroma.observer.steps.persist")
+
+
+def _derive_content_id(entities: list[dict], session_id: str) -> str:
+    """Derive a stable content_id from NER entities or fall back to session_id.
+
+    Priority:
+        1. NER entity of type 'technology' or 'function' (first found)
+        2. NER entity of type 'code' (first found)
+        3. Fallback: f"{session_id}_content"
+    """
+    for ent in entities:
+        ent_type = ent.get("type", "")
+        if ent_type in ("technology", "function"):
+            return re.sub(r"[^a-z0-9_\-]", "_", ent.get("value", "").lower())[:64]
+    for ent in entities:
+        if ent.get("type") == "code":
+            return re.sub(r"[^a-z0-9_\-]", "_", ent.get("value", "").lower())[:64]
+    return f"{session_id}_content"
 
 
 class PersistStep:
@@ -58,6 +77,29 @@ class PersistStep:
             embedding=embedding_f32,
             embedding_model_version="multilingual-e5-small"
         )
+
+        # ── Content Branch routing (Mechanism #12) ──────────────────────────
+        _n_classify = getattr(ctx.config, "session_type_classify_after_n", 5)
+        _msg_count = pctx.metadata.get("msg_count", 0)
+        if _msg_count >= _n_classify:
+            pctx.session_type = classify_session_type(stripped)
+            pctx.sb.session_type = pctx.session_type
+
+            if pctx.session_type == "content" and getattr(ctx, "content", None) is not None:
+                _content_id = _derive_content_id(pctx.entities, session_id)
+                _content_tags = [t for t in tags if not t.startswith("org:")]
+                try:
+                    await ctx.content.save(
+                        content_id=_content_id,
+                        text=stripped,
+                        content_type="text",
+                        session_id=session_id,
+                        tags=_content_tags,
+                        why_changed=pctx.sb.brief,
+                    )
+                except Exception as _ce:
+                    logger.warning("Content branch save failed: %s", _ce)
+        # ── End Content Branch routing ───────────────────────────────────────
 
         # 6.5b. Create Anchor
         anchor_type = AnchorIndex.infer_anchor_type(pctx.importance, pctx.entities)
@@ -99,8 +141,6 @@ class PersistStep:
                     return await tuner_check(pctx.sb, ctx)
                 except Exception as e:
                     logger.error(f"Tuner failed, skipping conflict check: {e}")
-                    await log_event(ctx, "tuner.conflict", "error", {"error": str(e)},
-                                    session_id=session_id, level="ERROR")
                     return pctx.sb
 
             cont, pctx.sb = await asyncio.gather(_run_continuation(), _run_conflict())
@@ -123,8 +163,6 @@ class PersistStep:
                     pctx.sb = await tuner_check(pctx.sb, ctx)
                 except Exception as e:
                     logger.error(f"Tuner failed, skipping conflict check: {e}")
-                    await log_event(ctx, "tuner.conflict", "error", {"error": str(e)},
-                                    session_id=session_id, level="ERROR")
                 if ctx.session_index:
                     label = ctx.get_session_label(session_id)
                     ctx.session_index.add_items([vec_f32], [label])
@@ -190,12 +228,6 @@ class PersistStep:
         if ctx.persistence is not None:
             await ctx.persistence.save_anchor(pctx.anchor)
 
-        await log_event(ctx, "observer.anchor", "create", {
-            "anchor_type": anchor_type,
-            "is_new_entity": is_new_entity,
-            "continuation_of": continuation_of,
-            "continuation_depth": continuation_depth,
-        }, session_id=session_id)
 
         # 7b. RAM indices
         ctx.ram_index[session_id] = pctx.sb
@@ -236,16 +268,7 @@ class PersistStep:
                 _new_mat = _cl.maturity
                 _old_mat = _old_maturities.get(_tag)
                 if _old_mat is not None and _old_mat != _new_mat:
-                    await log_event(ctx, "experience.cluster", "maturity_change", {
-                        "cluster_id":    _tag,
-                        "from_maturity": _old_mat,
-                        "to_maturity":   _new_mat,
-                        "pos_count":     _cl.emotion_positive,
-                        "neg_count":     _cl.emotion_negative,
-                        "pos_neg_ratio": round(_cl.emotion_valence, 3),
-                        "dominant_tags": [_tag],
-                        "session_count": _cl.session_count,
-                    }, level="INFO")
+                    pass
 
             resolved_emotions = pctx.metadata.get("resolved_emotions", [])
             for emo in resolved_emotions:
@@ -297,12 +320,6 @@ class PersistStep:
             ctx.persistence.enqueue_session(pctx.sb)
 
         # Log Save
-        await log_event(ctx, "observer.save", "persist", {
-            "layer": "RAM_HOT",
-            "tags": pctx.sb.tags,
-            "brief": pctx.sb.brief,
-            "bare_entity": pctx.sb.bare_entity
-        }, session_id=session_id)
         
         return pctx
 

@@ -1,12 +1,13 @@
 import time
 import logging
 import re
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 from ..core import SystemContext
 from ..memory.search import semantic_search
-from ..storage.log_writer import log_event
 from ..feedback.implicit import signal_use
 from .admin import ctx_bridge as _ctx_bridge
+from .time_utils import enrich_with_time, parse_exact_time_with_mask
+from .response_builder import build_search_response
 
 logger = logging.getLogger("mnemostroma.tools.read")
 
@@ -144,11 +145,6 @@ async def ctx_semantic(
         await tracker.on_semantic_query(returned_ids)
 
     # Log tool call (v1.0 spec Point #13)
-    await log_event(ctx, "tools.semantic", "call", {
-        "query": query,
-        "results_count": len(results),
-        "total_latency_ms": round(latency, 2)
-    }, latency_ms=latency)
 
     return results
 
@@ -158,15 +154,88 @@ async def ctx_search(
     importance: Optional[str] = None,
     age: Optional[str] = None,
     limit: int = 10,
-) -> List[Any]:
-    """Filter RAM index by tag intersection. Pure RAM, no ONNX (<0.01ms).
+    exact_time: Optional[str] = None,
+) -> Union[Dict[str, Any], List[Any]]:
+    """Search sessions by tags (RAM) or by exact time with optional tag filter.
+
+    When exact_time is provided:
+        - Parses the time string with optional X-mask (minute/hour/day precision)
+        - Scans RAM index for matching sessions; falls back to SQL if RAM is empty
+        - Applies tags/importance as additional filters (tags=[] skips tag filter)
+        - Returns a SearchResponse dict with tiered protection against context overflow
+
+    When exact_time is absent:
+        - Legacy behaviour: pure RAM tag-intersection scan
+        - tags must be non-empty
 
     Args:
-        tags: List of tags to match (intersection — session must have ALL tags).
-        importance: Optional filter: 'critical' | 'important' | 'background' | 'principle'.
-        age: Optional filter on age_signal field.
-        limit: Max results, sorted by score desc.
+        tags: Tag intersection filter. Optional when exact_time is provided.
+        ctx: SystemContext.
+        importance: Optional importance filter.
+        age: Optional age_signal filter (legacy path only).
+        limit: Max results for legacy path; not applied to exact_time path.
+        exact_time: Time string with optional X-mask, e.g. "27/04/26 21:18:XX".
+
+    Returns:
+        dict (SearchResponse) when exact_time is provided.
+        List[SessionBrief] for legacy tag-only path (backward compatible).
     """
+    # ── PLAN B: exact_time path ──────────────────────────────────────────────
+    if exact_time is not None:
+        # 1. Parse time string → [lo, hi)
+        lo, hi = parse_exact_time_with_mask(exact_time)
+        if lo is None:
+            # hi holds the error message when lo is None
+            error_msg: str = hi  # type: ignore[assignment]
+            return [{"error": error_msg, "exact_time_received": exact_time}]
+
+        # 2. RAM scan — fast path (~0.1ms)
+        candidates: List[Dict[str, Any]] = [
+            {
+                "session_id": sb.session_id,
+                "brief": sb.brief,
+                "created_at": sb.created_at,
+                "importance": sb.importance,
+                "tags": list(getattr(sb, "tags", [])),
+            }
+            for sb in ctx.ram_index.values()
+            if lo <= sb.created_at < hi
+        ]
+
+        # 3. SQL fallback when RAM returns nothing (evicted sessions)
+        if not candidates and ctx.session_repo is not None:
+            # Use a high internal limit so build_search_response sees the full count
+            _SQL_SCAN_LIMIT = 200
+            result = await ctx.session_repo.search_by_time_window(lo, hi, _SQL_SCAN_LIMIT)
+            if result.is_ok():
+                candidates = result.unwrap() or []
+            else:
+                logger.warning("ctx_search SQL fallback failed: %s", result)
+
+        # 4. Apply additional filters on top
+        tag_set = set(tags) if tags else set()
+        filtered: List[Dict[str, Any]] = [
+            r for r in candidates
+            if (not tag_set or tag_set.issubset(set(r.get("tags", []))))
+            and (importance is None or r.get("importance") == importance)
+        ]
+
+        # 5. Enrich each result with human-readable time
+        for r in filtered:
+            enrich_with_time(r)
+
+        # 6. Build tiered response (full / warning / compact)
+        response = build_search_response(filtered, total_matched=len(filtered))
+
+        return response
+
+    # ── PLAN A legacy: tag-only RAM scan ─────────────────────────────────────
+    if not tags:
+        raise ValueError(
+            "ctx_search requires at least one tag when exact_time is not provided. "
+            "Provide tags=[] together with exact_time for time-only search."
+        )
+
     tag_set = set(tags)
     results = [
         sb for sb in ctx.ram_index.values()
@@ -175,11 +244,6 @@ async def ctx_search(
         and (age is None or sb.age_signal == age)
     ]
     results.sort(key=lambda x: x.score, reverse=True)
-    await log_event(ctx, "tools.search", "call", {
-        "tags": tags,
-        "importance": importance,
-        "results_count": len(results[:limit]),
-    })
     return results[:limit]
 
 
@@ -193,7 +257,6 @@ async def ctx_full(session_id: str, ctx: SystemContext) -> Optional[Dict[str, An
         return None
 
     await signal_use(session_id, ctx)
-    await log_event(ctx, "tools.full", "call", {"session_id": session_id})
     return data
 
 
@@ -237,10 +300,6 @@ async def ctx_anchors(
             "created_at": a.created_at,
         })
 
-    await log_event(ctx, "tools.anchors", "call", {
-        "anchor_type": anchor_type,
-        "results_count": len(result),
-    })
     return result
 
 
@@ -262,10 +321,6 @@ async def ctx_precision(
     if error is not None:
         return []
 
-    await log_event(ctx, "tools.precision", "call", {
-        "precision_type": precision_type,
-        "results_count": len(result),
-    })
     return result
 
 
@@ -281,11 +336,6 @@ async def ctx_recent(
     if ctx.session_repo:
         results, error = await ctx.session_repo.load_recent(days, by, limit)
         if error is None:
-            await log_event(ctx, "tools.recent", "call", {
-                "days": days,
-                "by": by,
-                "results_count": len(results),
-            })
             return results
 
     # LEGACY mode fallback: scan ram_index directly
@@ -298,12 +348,6 @@ async def ctx_recent(
     candidates.sort(key=lambda x: x.created_at, reverse=True)
     results = candidates[:limit]
 
-    await log_event(ctx, "tools.recent", "call", {
-        "days": days,
-        "by": by,
-        "results_count": len(results),
-        "source": "ram_fallback",
-    })
     return results
 
 
@@ -423,9 +467,5 @@ async def ctx_active(ctx: SystemContext) -> Dict[str, Any]:
     ctx.last_message_text = ""
 
     # Log tool call (v1.0 spec)
-    await log_event(ctx, "tools.active", "call", {
-        "returned_count": len(res["active_variables"]),
-        "urgency_count": len(urgency_active)
-    })
 
     return res

@@ -1,3 +1,10 @@
+## [1.11.0] — 2026-04-28
+### Added
+- **feat(storage)**: `Exact Time` search — exact time window queries capability for high-precision temporal routing.
+- **feat(observer)**: `Content Branch` automation — mechanism #12 automatically intercepts, classifies, and saves `content` sessions to `ContentManager`.
+### Changed
+- **refactor(api)**: Disabled explicit `save_content`, `content_get`, `ctx_expire`, and `ctx_urgent` MCP routes to enforce API minimization and "Agent does not write memory" invariant.
+
 ## [1.9.1] — 2026-04-27
 ### Added
 - **feat(autobridge)**: `AutoBridgeWorker` — autonomous background context bridge generation for seamless AI agent handoffs (L5).

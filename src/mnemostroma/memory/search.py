@@ -7,7 +7,6 @@ from typing import List, Dict, Any, Optional
 from ..core import SystemContext
 from ..memory.session_index import SessionBrief
 from .scoring import calculate_score
-from ..storage.log_writer import log_event
 
 logger = logging.getLogger("mnemostroma.memory")
 
@@ -76,13 +75,6 @@ async def semantic_search(
         relevances = [float(1.0 - d) for d in distances]
 
     # KNN/HNSW Log (Privacy-conscious: no full query text)
-    await log_event(ctx, "matrix.search", "query", {
-        "query_len": len(query),
-        "query_snippet": query[:20] + "..." if len(query) > 20 else query,
-        "prefix_used": bool(prefix),
-        "k": k,
-        "results_count": len(candidates)
-    })
     
     final_results = []
     for i, cand in enumerate(candidates):
@@ -102,10 +94,5 @@ async def semantic_search(
     final_results.sort(key=lambda x: x.score, reverse=True)
     
     # Rerank Log
-    await log_event(ctx, "reranker.rerank", "rerank", {
-        "input_count": len(candidates),
-        "output_count": top_n,
-        "top_score": final_results[0].score if final_results else 0
-    })
     
     return final_results[:top_n]

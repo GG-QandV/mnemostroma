@@ -42,6 +42,9 @@ class PipelineContext:
     sb: Optional["SessionBrief"] = None
     anchor: Optional["Anchor"] = None
 
+    # Set by PersistStep after classify_session_type()
+    session_type: Optional[str] = None
+
 
 class Step(Protocol):
     """Protocol for a single pipeline step."""

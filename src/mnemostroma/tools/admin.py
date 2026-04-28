@@ -8,7 +8,6 @@ from typing import Dict, Any, List, Optional
 from pathlib import Path
 
 from ..core import SystemContext
-from ..storage.log_writer import log_event
 from ..memory.growth_forecast import GrowthForecast
 
 logger = logging.getLogger("mnemostroma.tools.admin")
@@ -39,10 +38,6 @@ async def ctx_status(ctx: SystemContext) -> Dict[str, Any]:
     }
     
     # Log the status check
-    await log_event(ctx, "tools.admin", "status_check", {
-        "ram_count": stats["ram_index_count"],
-        "index_count": stats["session_index"]["count"]
-    })
     
     return stats
 
@@ -60,7 +55,6 @@ async def ctx_sync(ctx: SystemContext) -> bool:
         pass
             
         latency = (time.time() - start) * 1000
-        await log_event(ctx, "tools.admin", "sync", {"latency_ms": latency})
         return True
     except Exception as e:
         logger.error(f"Sync failed: {e}")
@@ -101,7 +95,6 @@ async def ctx_dump(ctx: SystemContext, target_dir: Optional[str] = None) -> str:
     with open(filepath, "w", encoding="utf-8") as f:
         json.dump(dump_data, f, indent=4, ensure_ascii=False)
         
-    await log_event(ctx, "tools.admin", "dump", {"path": filepath})
     return filepath
 
 
@@ -143,7 +136,6 @@ async def ctx_load(session_id: str, ctx: SystemContext):
     ctx.sid_to_id[session_id] = label
     ctx.id_to_sid[label] = session_id
 
-    await log_event(ctx, "tools.admin", "load", {"session_id": session_id})
     return sb
 
 
@@ -263,10 +255,6 @@ async def ctx_growth(ctx: SystemContext) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"ctx_growth: error: {e}")
 
-    await log_event(ctx, "tools.admin", "growth", {
-        "total": result["sessions_total"],
-        "db_mb": result["db_size_mb"],
-    })
     return result
 
 
@@ -345,9 +333,4 @@ async def ctx_bridge(ctx: SystemContext) -> Dict[str, Any]:
         "ram_sessions": len(ctx.ram_index),
     }
 
-    await log_event(ctx, "tools.admin", "bridge", {
-        "variables": len(active_variables),
-        "decisions": len(last_decisions),
-        "open_issues": len(open_issues),
-    })
     return result

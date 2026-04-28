@@ -21,7 +21,6 @@ from .core import SystemContext, ModelRegistry
 from .storage.sqlite import init_db, DatabaseManager, check_anchor_schema
 from .storage.persistence import PersistenceLayer
 from .storage.content_manager import ContentManager
-from .storage.log_writer import LogWriter
 from .memory.hnsw import init_session_index, init_content_index
 from .memory.dissolver import Dissolver
 from .memory.consolidation import ConsolidationWorker
@@ -230,11 +229,6 @@ class Conductor:
             self._dreamer_task = dreamer
         
         # Initial Bootstrap Log
-        from .storage.log_writer import log_event
-        await log_event(self.ctx, "conductor.bootstrap", "start", {
-            "db_path": str(db_path),
-            "logs_path": str(logs_path)
-        })
 
         # B03: Health Check Log (v1.0 spec — Point #17)
         try:
@@ -243,11 +237,6 @@ class Conductor:
             _ram_mb = round(_rss / 1024 / 1024, 2)
         except Exception:
             _ram_mb = -1.0
-        await log_event(self.ctx, "conductor.health", "check", {
-            "ram_mb": _ram_mb,
-            "observer_alive": True,
-            "issues": []
-        })
         
         # Heartbeat + loop monitor + outbox worker
         self._stopping = False
@@ -378,7 +367,6 @@ class Conductor:
         except Exception:
             _ram_mb_stop = -1.0
         if self.ctx and self.ctx.log_writer:
-            from .storage.log_writer import log_event as _le_stop
             await _le_stop(self.ctx, "conductor.shutdown", "stop", {
                 "reason": "api_call",
                 "ram_mb": _ram_mb_stop,
@@ -562,26 +550,27 @@ class Conductor:
             return await ctx_recent(ctx=ctx, days=args.get("days", 7.0),
                                     by=args.get("by", "created"),
                                     limit=args.get("limit", 20))
-        if name == "ctx_urgent":
-            from mnemostroma.tools.write import ctx_urgent
-            return await ctx_urgent(ctx, hours_ahead=args.get("hours_ahead", 72.0))
-
-        # WRITE
-        if name == "ctx_expire":
-            from mnemostroma.tools.write import ctx_expire
-            await ctx_expire(args["session_id"], ctx)
-            return {"expired": True}
-        if name == "save_content":
-            from mnemostroma.tools.write import save_content
-            return await save_content(
-                content_id   = args["content_id"],
-                text         = args["text"],
-                ctx          = ctx,
-                content_type = args.get("content_type"),
-                session_id   = args.get("session_id"),
-                tags         = args.get("tags"),
-                why_changed  = args.get("why_changed"),
-            )
+        # DISABLED write tools — API minimization 2026-04-28
+        # if name == "ctx_urgent":
+        #     from mnemostroma.tools.write import ctx_urgent
+        #     return await ctx_urgent(ctx, hours_ahead=args.get("hours_ahead", 72.0))
+        #
+        # # WRITE
+        # if name == "ctx_expire":
+        #     from mnemostroma.tools.write import ctx_expire
+        #     await ctx_expire(args["session_id"], ctx)
+        #     return {"expired": True}
+        # if name == "save_content":
+        #     from mnemostroma.tools.write import save_content
+        #     return await save_content(
+        #         content_id   = args["content_id"],
+        #         text         = args["text"],
+        #         ctx          = ctx,
+        #         content_type = args.get("content_type"),
+        #         session_id   = args.get("session_id"),
+        #         tags         = args.get("tags"),
+        #         why_changed  = args.get("why_changed"),
+        #     )
         if name == "observe":
             await self.observe(args["session_id"], args["text"])
             return {"ok": True}
@@ -609,10 +598,11 @@ class Conductor:
                                         project_id=args.get("project_id"),
                                         status=args.get("status", "active"),
                                         top_k=args.get("topk", 5))
-        if name == "content_get":
-            from mnemostroma.tools.content import content_get
-            return await content_get(args["content_id"], ctx,
-                                     version=args.get("version"))
+        # DISABLED content_get — API minimization 2026-04-28
+        # if name == "content_get":
+        #     from mnemostroma.tools.content import content_get
+        #     return await content_get(args["content_id"], ctx,
+        #                              version=args.get("version"))
         if name == "content_raw":
             from mnemostroma.tools.content import content_raw
             return await content_raw(args["content_id"], ctx,

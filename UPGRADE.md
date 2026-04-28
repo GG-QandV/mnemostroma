@@ -1,5 +1,21 @@
 # Mnemostroma Upgrade Guide
 
+## Upgrading to v1.11.0 (Current)
+
+This version introduces **Content Branch automation** (Mechanism #12) and **Exact Time search** capabilities.
+
+### Steps to Upgrade
+
+1. **Update code:**
+   ```bash
+   git pull origin main
+   ```
+2. **Restart services:**
+   ```bash
+   mnemostroma off
+   mnemostroma on
+   ```
+
 ## Upgrading to v1.8.5 (Recommended)
 
 This version is a critical stability release that unifies the single-daemon architecture and stabilizes service management.

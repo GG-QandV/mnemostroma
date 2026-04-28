@@ -21,7 +21,7 @@ _SOCKET_PATH          = _MNEMO_DIR / "daemon.sock"
 _PIPE_NAME            = r"\\.\pipe\mnemostroma"
 _CURRENT_SESSION_FILE = _MNEMO_DIR / "current_session"
 
-_VERSION  = "1.8.0"
+_VERSION  = "1.11.0"
 _PROTOCOL = "2024-11-05"
 
 # ── Tool definitions — plain dicts, no pydantic ───────────────────────
@@ -109,18 +109,7 @@ _TOOLS = [
             "required": ["query"],
         },
     },
-    {
-        "name": "content_get",
-        "description": "Retrieve metadata for a specific content block by ID.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "content_id": {"type": "string"},
-                "version": {"type": "integer"},
-            },
-            "required": ["content_id"],
-        },
-    },
+
     {
         "name": "content_raw",
         "description": "Retrieve the full raw text of a specific content version.",
