@@ -52,24 +52,28 @@ fi
 
 # 2.5 Download models
 echo "Downloading models..."
-"$VENV_DIR/bin/mnemostroma" download-models
+"$VENV_DIR/bin/mnemostroma" install-models
 
 # 3. Clean Zombies
 echo "Ensuring clean state..."
-if [ -f "$SCRIPT_DIR/../scripts/clean-zombies.py" ]; then
+if [[ "$SCRIPT_DIR" != /dev/fd/* ]] && [ -f "$SCRIPT_DIR/../scripts/clean-zombies.py" ]; then
     "$VENV_DIR/bin/python" "$SCRIPT_DIR/../scripts/clean-zombies.py" || echo "Warning: clean-zombies failed"
 else
-    # Fallback to module command if installed
     "$VENV_DIR/bin/mnemostroma" cleanup --silent || true
 fi
 
 # 4. Detect OS and run specific installer
 OS_TYPE=$(uname -s)
-case "${OS_TYPE}" in
-    Linux) bash "${SCRIPT_DIR}/linux/install.sh" "$@" ;;
-    Darwin) bash "${SCRIPT_DIR}/macos/install.sh" "$@" ;;
-    *) echo "Error: Unsupported OS: ${OS_TYPE}"; exit 1 ;;
-esac
+if [[ "$SCRIPT_DIR" == /dev/fd/* ]]; then
+    # curl-pipe mode: sub-scripts are unavailable, use CLI service installer
+    "$VENV_DIR/bin/mnemostroma" service install
+else
+    case "${OS_TYPE}" in
+        Linux)  bash "${SCRIPT_DIR}/linux/install.sh" "$@" ;;
+        Darwin) bash "${SCRIPT_DIR}/macos/install.sh" "$@" ;;
+        *) echo "Error: Unsupported OS: ${OS_TYPE}"; exit 1 ;;
+    esac
+fi
 
 # 5. Smart Aliases/Guards
 SHELL_RC="$HOME/.bashrc"

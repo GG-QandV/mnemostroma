@@ -912,6 +912,9 @@ def dispatch(args_namespace: argparse.Namespace) -> None:
         run_watch(db_path)
     elif command == "db-dump-time": _cmd_db_dump_time(cargs)
     elif command == "cleanup": _cmd_cleanup(cargs)
+    elif command in ("install-models", "download-models"):
+        manifest_path = _MNEMO_DIR / "models_manifest.json"
+        _install_models(manifest_path, force="--force" in cargs)
     else:
         print(f"Unknown command: {command}")
         _print_help()

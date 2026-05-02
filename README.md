@@ -257,7 +257,7 @@ mnemostroma setup
 ### Quick Start
 
 1. **Install** via one of the options above.
-2. **Setup**: Run `mnemostroma setup`. This downloads ~600MB of models.
+2. **Setup**: Run `mnemostroma setup`. This downloads ~300 MB of models.
 3. **Start**: `mnemostroma on`
 4. **Dashboard**: `mnemostroma tray` (or `mnemostroma watch` for terminal)
 
