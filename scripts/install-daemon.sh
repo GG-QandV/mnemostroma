@@ -56,23 +56,25 @@ echo "Downloading models..."
 
 # 3. Clean Zombies
 echo "Ensuring clean state..."
-if [[ "$SCRIPT_DIR" != /dev/fd/* ]] && [ -f "$SCRIPT_DIR/../scripts/clean-zombies.py" ]; then
-    "$VENV_DIR/bin/python" "$SCRIPT_DIR/../scripts/clean-zombies.py" || echo "Warning: clean-zombies failed"
+if [ -f "$SCRIPT_DIR/clean-zombies.py" ]; then
+    "$VENV_DIR/bin/python" "$SCRIPT_DIR/clean-zombies.py" || echo "Warning: clean-zombies failed"
 else
     "$VENV_DIR/bin/mnemostroma" cleanup --silent || true
 fi
 
 # 4. Detect OS and run specific installer
 OS_TYPE=$(uname -s)
-if [[ "$SCRIPT_DIR" == /dev/fd/* ]]; then
-    # curl-pipe mode: sub-scripts are unavailable, use CLI service installer
-    "$VENV_DIR/bin/mnemostroma" service install
+case "${OS_TYPE}" in
+    Linux)   PLATFORM_INSTALLER="${SCRIPT_DIR}/linux/install.sh" ;;
+    Darwin)  PLATFORM_INSTALLER="${SCRIPT_DIR}/macos/install.sh" ;;
+    *)       echo "Error: Unsupported OS: ${OS_TYPE}"; exit 1 ;;
+esac
+
+if [ -f "$PLATFORM_INSTALLER" ]; then
+    bash "$PLATFORM_INSTALLER" "$@"
 else
-    case "${OS_TYPE}" in
-        Linux)  bash "${SCRIPT_DIR}/linux/install.sh" "$@" ;;
-        Darwin) bash "${SCRIPT_DIR}/macos/install.sh" "$@" ;;
-        *) echo "Error: Unsupported OS: ${OS_TYPE}"; exit 1 ;;
-    esac
+    # curl-pipe mode: platform sub-scripts unavailable, use CLI service installer
+    "$VENV_DIR/bin/mnemostroma" service install
 fi
 
 # 5. Smart Aliases/Guards
