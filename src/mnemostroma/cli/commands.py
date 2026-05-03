@@ -245,6 +245,23 @@ def _load_manifest(manifest_path: Path) -> dict:
     with open(manifest_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
+def _ensure_manifest(force: bool = False) -> Path:
+    """Copy models_manifest.json from package to ~/.mnemostroma/ if missing or force=True.
+
+    Single source of truth for manifest provisioning — used by both setup and
+    install-models paths. Ensures the package version always wins when force=True,
+    which is critical on version upgrades where local manifest may be stale.
+
+    Returns:
+        Path: resolved path to ~/.mnemostroma/models_manifest.json
+    """
+    import shutil
+    manifest_path = _MNEMO_DIR / "models_manifest.json"
+    pkg_manifest = Path(__file__).parent.parent / "models_manifest.json"
+    if (not manifest_path.exists() or force) and pkg_manifest.exists():
+        shutil.copy(pkg_manifest, manifest_path)
+    return manifest_path
+
 def _check_hf_token() -> bool:
     import os
     if os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_HUB_TOKEN"):
@@ -419,10 +436,7 @@ def _cmd_setup() -> None:
             shutil.copy(pkg_default, config_dest)
             print(f"  ✓ Config:    {config_dest}")
 
-    manifest_dest = _MNEMO_DIR / "models_manifest.json"
-    pkg_manifest = Path(__file__).parent.parent / "models_manifest.json"
-    if not manifest_dest.exists() and pkg_manifest.exists():
-        shutil.copy(pkg_manifest, manifest_dest)
+    manifest_dest = _ensure_manifest(force=False)
 
     if sys.platform == "darwin":
         _macos_preflight()
@@ -430,7 +444,7 @@ def _cmd_setup() -> None:
         _windows_preflight()
 
     # Model install
-    _install_models(manifest_dest, force=False)
+    _install_models(manifest_dest, force=False)  # manifest_dest from _ensure_manifest above
 
     try:
         from mnemostroma.setup.tls import generate_passthrough_tls
@@ -439,10 +453,8 @@ def _cmd_setup() -> None:
     except Exception:
         pass
 
-    # Patch systemd units with current python path
-    if sys.platform == "linux":
-        print("  ⚙️  Configuring systemd units...")
-        _patch_systemd_units(sys.executable)
+    # systemd unit installation is NOT done here — use `mnemostroma service install`.
+    # Separation of concerns: setup = config+models+TLS, service install = OS integration.
 
     # Detect extras
     has_tray = False
@@ -475,7 +487,7 @@ def _cmd_setup() -> None:
     
     print("\nNext steps:")
     if sys.platform == "linux":
-        print("  1. Enable services:  bash scripts/install-daemon.sh")
+        print("  1. Install services:  mnemostroma service install")
     print("  2. Start daemon:     mnemostroma on")
     if has_tray:
         print("  3. Open tray:        mnemostroma tray")
@@ -800,34 +812,132 @@ def _cmd_db_dump_time(args: list) -> None:
 # Service
 # ---------------------------------------------------------------------------
 
+def _cmd_service_linux() -> None:
+    """Install systemd user units from bundled service templates.
+
+    Reads .service templates from the package (service_templates/linux/),
+    substitutes %VENV_BIN% and %MNEMOSTROMA_DIR% with resolved paths,
+    writes to ~/.config/systemd/user/, then reloads and enables all units.
+
+    Idempotent: safe to run multiple times — always produces the same result.
+
+    Note: %h is intentionally left unsubstituted — systemd resolves it
+    natively as the user's home directory. Hardcoding the path would break
+    on directory renames or non-standard home locations.
+    """
+    import importlib.resources
+    import shutil
+
+    venv_bin = str(Path(sys.executable).parent)
+    mnemo_dir = str(_MNEMO_DIR)
+    unit_dir = Path.home() / ".config" / "systemd" / "user"
+    unit_dir.mkdir(parents=True, exist_ok=True)
+
+    # Check systemd availability before writing any files
+    if not shutil.which("systemctl"):
+        print("  ⚠ systemctl not found — skipping systemd unit install.")
+        print("    Start daemon manually: mnemostroma on")
+        return
+
+    units = [
+        "mnemostroma-daemon.service",
+        "mnemostroma-proxy.service",
+        "mnemostroma-watchdog.service",
+        "mnemostroma-ui.service",
+        "mnemostroma-sse.service",
+    ]
+
+    try:
+        templates_pkg = importlib.resources.files("mnemostroma.service_templates.linux")
+    except (TypeError, ModuleNotFoundError):
+        # Fallback: resolve relative to this file (editable/local installs)
+        templates_pkg = None
+
+    installed = []
+    for unit_name in units:
+        try:
+            if templates_pkg is not None:
+                content = templates_pkg.joinpath(unit_name).read_text(encoding="utf-8")
+            else:
+                fallback = Path(__file__).parent / "service_templates" / "linux" / unit_name
+                content = fallback.read_text(encoding="utf-8")
+        except (FileNotFoundError, TypeError) as e:
+            print(f"  ⚠ Template not found for {unit_name}: {e}")
+            continue
+
+        # Substitute only non-systemd-native variables
+        content = content.replace("%VENV_BIN%", venv_bin)
+        content = content.replace("%MNEMOSTROMA_DIR%", mnemo_dir)
+        # %h is NOT substituted — systemd resolves it natively as $HOME
+
+        dest = unit_dir / unit_name
+        dest.write_text(content, encoding="utf-8")
+        print(f"  ✓ Installed: {dest}")
+        installed.append(unit_name)
+
+    if not installed:
+        print("  ✗ No units installed.")
+        return
+
+    # Reload systemd to pick up new/changed units
+    result = subprocess.run(
+        ["systemctl", "--user", "daemon-reload"],
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        print(f"  ⚠ daemon-reload failed: {result.stderr.strip()}")
+
+    # Enable units (idempotent — safe if already enabled)
+    core_units = [u for u in installed if u not in ("mnemostroma-ui.service", "mnemostroma-sse.service")]
+    failed_enable = []
+    for unit in core_units:
+        res = subprocess.run(
+            ["systemctl", "--user", "enable", unit],
+            capture_output=True, text=True
+        )
+        if res.returncode != 0:
+            failed_enable.append(unit)
+            print(f"  ⚠ enable failed for {unit}: {res.stderr.strip()}")
+    enabled_count = len(core_units) - len(failed_enable)
+    print(f"  ✓ {enabled_count}/{len(core_units)} core units enabled.")
+    if failed_enable:
+        print(f"  ⚠ {len(failed_enable)} unit(s) not enabled — run 'systemctl --user enable <unit>' manually.")
+    else:
+        print("  Run 'mnemostroma on' to start the daemon.")
+
+
 def _cmd_service(args: list) -> None:
+    """Route to OS-specific service installer.
+
+    Does NOT call install-daemon.sh — that direction is one-way only
+    (install-daemon.sh → CLI). Calling back would create a cycle.
+    """
     import platform
-    import subprocess
     subcmd = args[0] if args else "install"
-    
+
     if subcmd != "install":
         print(f"Service command {subcmd} not supported via python CLI. Use OS commands.")
         return
-        
-    script_dir = Path(__file__).parent.parent.parent.parent / "scripts"
+
     os_name = platform.system()
-    
-    if os_name in ("Linux", "Darwin"):
-        sh_script = script_dir / "install-daemon.sh"
-        if not sh_script.exists():
-            print(f"Error: installation script not found at {sh_script}")
-            return
-        print(f"Running automated service installer for {os_name}...")
-        subprocess.run(["bash", str(sh_script)], check=False)
+    print(f"Installing Mnemostroma services for {os_name}...")
+
+    if os_name == "Linux":
+        _cmd_service_linux()
+    elif os_name == "Darwin":
+        print("  macOS: use 'bash scripts/macos/install.sh' for launchd setup.")
     elif os_name == "Windows":
+        script_dir = Path(__file__).parent.parent.parent.parent / "scripts"
         ps_script = script_dir / "windows" / "install-daemon.ps1"
         if not ps_script.exists():
-            print(f"Error: installation script not found at {ps_script}")
+            print(f"  Error: {ps_script} not found.")
             return
-        print(f"Running automated service installer for Windows...")
-        subprocess.run(["powershell", "-ExecutionPolicy", "Bypass", "-File", str(ps_script)], check=False)
+        subprocess.run(
+            ["powershell", "-ExecutionPolicy", "Bypass", "-File", str(ps_script)],
+            check=False
+        )
     else:
-        print(f"Unsupported OS: {os_name}")
+        print(f"  Unsupported OS: {os_name}")
 
 # ---------------------------------------------------------------------------
 # CLI Core
@@ -913,11 +1023,9 @@ def dispatch(args_namespace: argparse.Namespace) -> None:
     elif command == "db-dump-time": _cmd_db_dump_time(cargs)
     elif command == "cleanup": _cmd_cleanup(cargs)
     elif command in ("install-models", "download-models"):
-        manifest_path = _MNEMO_DIR / "models_manifest.json"
-        pkg_manifest = Path(__file__).parent.parent / "models_manifest.json"
-        if not manifest_path.exists() and pkg_manifest.exists():
-            shutil.copy(pkg_manifest, manifest_path)
-        _install_models(manifest_path, force="--force" in cargs)
+        force = "--force" in cargs
+        manifest_path = _ensure_manifest(force=force)
+        _install_models(manifest_path, force=force)
     else:
         print(f"Unknown command: {command}")
         _print_help()

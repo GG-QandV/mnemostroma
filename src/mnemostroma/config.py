@@ -95,10 +95,10 @@ class ObserverConfig:
     tags_min_for_search: int
     urgency_score_modifier_expired: float
     urgency_score_modifier_principle: float
-    session_type_classify_after_n: int
-    gliner_mode: str
-    gliner_auto_switch_precision_threshold: float
-    gliner_auto_switch_after_sessions: int
+    session_type_classify_after_n: int = 3
+    gliner_mode: str = "open"
+    gliner_auto_switch_precision_threshold: float = 0.85
+    gliner_auto_switch_after_sessions: int = 10
     # B.3 — embedding-based mention_type classification
     mention_type_enabled: bool = True
     mention_type_threshold: float = 0.7

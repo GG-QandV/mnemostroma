@@ -103,6 +103,14 @@ async def check_session_schema(db: aiosqlite.Connection) -> None:
     except Exception:
         pass
 
+    # 3. session_type (v1.11.0)
+    try:
+        await db.execute("ALTER TABLE sessions ADD COLUMN session_type TEXT")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_sessions_type ON sessions(session_type)")
+        await db.commit()
+    except Exception:
+        pass
+
 
 class DatabaseManager:
     """Manager for async persistence to SQLite.

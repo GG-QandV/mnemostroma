@@ -1,3 +1,29 @@
+## Upgrading to v1.11.1 (Current)
+
+This is a **stability patch** for the installer pipeline. No schema migrations required.
+
+### Steps to Upgrade
+
+**From v1.11.0 via GitHub:**
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/GG-QandV/mnemostroma/main/scripts/install-daemon.sh)
+```
+
+**From local clone:**
+```bash
+git pull origin main
+~/.mnemostroma/venv/bin/pip install -e .[all]
+mnemostroma service install
+```
+
+**What changed:**
+- Installer no longer crashes with `FileNotFoundError: models_manifest.json` on fresh installs
+- `bash <(curl ...)` mode no longer fails with `/dev/fd/linux/install.sh: No such file or directory`
+- Editable dev installs are now preserved across `install-daemon.sh` re-runs
+
+No configuration changes. No DB migration needed.
+
+---
 # Mnemostroma Upgrade Guide
 
 ## Upgrading to v1.11.0 (Current)

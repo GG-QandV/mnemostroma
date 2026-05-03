@@ -335,7 +335,7 @@ def format_report(report: AnalysisReport) -> str:
     lines.append("=" * 60)
 
     # Observer Filter
-    if report.filter_stats:
+    if report.filter_stats.get('total'):
         lines.append("\n── OBSERVER FILTER ──")
         fs = report.filter_stats
         lines.append(f"  Total decisions: {fs['total']}")

@@ -1,3 +1,12 @@
+## [1.11.1] — 2026-05-03
+### Fixed
+- **fix(install)**: `_ensure_manifest()` — provisioned manifest before model download, eliminating `FileNotFoundError` on fresh installs (reported by user on curl-pipe path).
+- **fix(install)**: `linux/install.sh` replaced with thin wrapper delegating to `mnemostroma service install` — eliminates `/dev/fd/linux/install.sh: No such file or directory` in curl-pipe mode.
+- **fix(install)**: `install-daemon.sh` — editable install detection prevents GitHub pip from silently overwriting local source link (`R-09`).
+- **fix(install)**: `systemctl enable` loop now reports per-unit failures instead of silent success (`R-05`).
+- **fix(install)**: `mnemostroma-sse.service` `WorkingDirectory` uses systemd-native `%h` specifier (consistent with all other units) (`R-06`).
+- **fix(install)**: `service install` failure in `install-daemon.sh` is now fatal (`exit 1`) rather than silently ignored (`R-02`).
+
 ## [1.11.0] — 2026-04-28
 ### Added
 - **feat(storage)**: `Exact Time` search — exact time window queries capability for high-precision temporal routing.
