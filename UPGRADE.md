@@ -12,8 +12,8 @@ bash <(curl -fsSL https://raw.githubusercontent.com/GG-QandV/mnemostroma/main/sc
 **From local clone:**
 ```bash
 git pull origin main
-~/.mnemostroma/venv/bin/pip install -e .[all]
-mnemostroma service install
+~/.mnemostroma/venv/bin/pip install --upgrade "mnemostroma[all] @ git+https://github.com/GG-QandV/mnemostroma.git"
+mnemostroma off && mnemostroma on
 ```
 
 **What changed:**
@@ -22,6 +22,17 @@ mnemostroma service install
 - Editable dev installs are now preserved across `install-daemon.sh` re-runs
 
 No configuration changes. No DB migration needed.
+
+### Do I need to run `mnemostroma service install`?
+
+| Situation | Required? |
+|---|---|
+| Your v1.11.0 daemon was working normally | ❌ Not required |
+| Your install failed with `/dev/fd/linux/install.sh: No such file or directory` | ✅ Required — your unit files were never written |
+| Fresh install on a new machine | ✅ Called automatically by the installer |
+| You want to refresh unit files to latest templates | ✅ Optional but safe (idempotent) |
+
+`mnemostroma service install` is always safe to run — it is fully idempotent and will not affect your data or configuration.
 
 ---
 # Mnemostroma Upgrade Guide
