@@ -4,7 +4,7 @@
 
 ![Version](https://img.shields.io/badge/version-v1.11.1-orange)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue)
-![Tests](https://img.shields.io/badge/tests-457%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-502%20passing-brightgreen)
 ![License](https://img.shields.io/badge/license-FSL--1.1--MIT-lightgrey)
 
 > *μνήμη (mnḗmē, memory) + στρῶμα (strôma, layer) — the substrate everything rests on.*
@@ -168,7 +168,7 @@ This is not a database with TTL. This is how human memory works.
 
 | Component                                | Status                           |
 | ---------------------------------------- | -------------------------------- |
-| Core backend (Observer, Memory, Storage) | DONE Implemented, 457/502 tests  |
+| Core backend (Observer, Memory, Storage) | DONE Implemented, 502/502 tests  |
 | Golden Standard Launch (Shell Guards)    | DONE Implemented (v1.11.1)       |
 | Anchor Layer / Emotional Patterns        | DONE Implemented                 |
 | Implicit Feedback (v1.5)                 | DONE Implemented                 |
@@ -656,7 +656,7 @@ It gives your agent an actual memory.
 git clone https://github.com/GG-QandV/mnemostroma.git
 cd mnemostroma
 pip install -e ".[dev]"
-pytest tests/                          # run all 411 tests
+pytest tests/                          # run all 502 tests
 pytest tests/ --ignore=tests/test_memory_layers.py \
               --ignore=tests/test_data_contracts.py  # fast mode (~14s)
 ```
