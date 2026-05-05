@@ -1,6 +1,6 @@
 # Release Notes — Mnemostroma v1.11.1
 
-## 🔧 Installer Stability Patch
+## Installer Stability Patch
 
 This is a targeted stability release focused entirely on the installation pipeline. No new features. No breaking changes. No DB migration required.
 

@@ -8,14 +8,17 @@ This release marks a major architectural milestone. Mnemostroma now moves from a
 
 - **Content Branch Automation (Mechanism #12)**: 
   The Observer pipeline now autonomously classifies sessions. If a session contains significant code snippets, research findings, or documentation updates, it is automatically routed to the `ContentManager`. 
+  
   - **Result**: Agents no longer need to call `save_content` manually. Memory is captured as it happens.
 
 - **Exact Time Search**:
   Temporal memory retrieval has been upgraded to "surgical" precision. You can now query memory with high-precision temporal windows (SQL + Semantic hybrid).
+  
   - **Benefit**: "What did we decide between 2:15 PM and 2:30 PM yesterday?" is now a native capability.
 
 - **API Minimization (The Invariant Push)**:
   To enforce the architectural invariant **"Observer writes, Agent acts"**, we have muted redundant write tools in the MCP server:
+  
   - `save_content` (now automated)
   - `content_get` (now integrated into `content_search` / `content_raw`)
   - `ctx_expire` & `ctx_urgent` (handled by internal decay/bridge logic)
