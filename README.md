@@ -2,14 +2,14 @@
 
 ### The memory layer for AI agents
 
-![Version](https://img.shields.io/badge/version-v1.11.1-orange)
+![Version](https://img.shields.io/badge/version-v1.11.2-orange)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue)
 ![Tests](https://img.shields.io/badge/tests-502%20passing-brightgreen)
 ![License](https://img.shields.io/badge/license-FSL--1.1--MIT-lightgrey)
 
 > *μνήμη (mnḗmē, memory) + στρῶμα (strôma, layer) — the substrate everything rests on.*
 
-> **v1.11.1 is stable.** Upgrading from v1.9.1 or earlier? → [See UPGRADE.md](./UPGRADE.md)
+> **v1.11.2 is stable.** Upgrading from v1.9.1 or earlier? → [See UPGRADE.md](./UPGRADE.md)
 
 ---
 
@@ -164,7 +164,7 @@ This is not a database with TTL. This is how human memory works.
 
 ## Status
 
-**Current:** v1.11.1 | 2026-04-28
+**Current:** v1.11.2 | 2026-05-10
 
 | Component                                | Status                           |
 | ---------------------------------------- | -------------------------------- |
@@ -189,7 +189,7 @@ This is not a database with TTL. This is how human memory works.
 
 **Requires Python 3.12+**
 
-> **v1.11.1 is stable.** Upgrading from v1.9.1 or earlier? → [See UPGRADE.md](./UPGRADE.md)
+> **v1.11.2 is stable.** Upgrading from v1.9.1 or earlier? → [See UPGRADE.md](./UPGRADE.md)
 
 ---
 

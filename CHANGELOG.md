@@ -1,3 +1,13 @@
+## [1.11.2] - 2026-05-10
+
+### Fixed
+
+- fix(core): missing `LogWriter` import in `conductor.py` caused `NameError`
+  and daemon crash on startup after fresh install from GitHub.
+  Discovered during v1.11.1 field upgrade on Linux. Patched in venv,
+  fixed in source. Introduced `scripts/update_version.py` for automated
+  version management across all docs.
+
 ## [1.11.1] — 2026-05-03
 ### Fixed
 - **fix(install)**: `_ensure_manifest()` — provisioned manifest before model download, eliminating `FileNotFoundError` on fresh installs (reported by user on curl-pipe path).

@@ -1,6 +1,6 @@
 [project]
 name = "mnemostroma"
-version = "1.11.1"
+version = "1.11.2"
 description = "Autonomous memory layer for AI agents — offline, RAM-first, no cloud"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -85,6 +85,7 @@ mnemostroma = [
     "config_default.json",
     "models_manifest.json",
     "py.typed",
+    "service_templates/linux/*.service",
 ]
 
 [tool.pytest.ini_options]
@@ -117,3 +118,6 @@ forbidden_modules = [
     "numpy",
     "asyncio"
 ]
+
+[tool.mnemostroma]
+previous_version = "1.11.2"

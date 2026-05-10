@@ -1,4 +1,32 @@
-## Upgrading to v1.11.1 (Current)
+## Upgrading to v1.11.2 (Current)
+
+Hotfix release. No schema migrations. No configuration changes.
+
+### What changed
+- `conductor.py`: missing `LogWriter` import — caused `NameError` and daemon
+  crash on startup after fresh GitHub install.
+- `scripts/update_version.py`: new script for automated version management
+  across README, UPGRADE, and CLI banner.
+
+### Upgrade steps
+
+```bash
+~/.mnemostroma/venv/bin/pip install --upgrade \
+  "mnemostroma[all] @ git+https://github.com/GG-QandV/mnemostroma.git"
+mnemostroma off && mnemostroma on
+```
+
+### Do I need `mnemostroma service install`?
+
+| Situation                                     | Required?                     |
+| --------------------------------------------- | ----------------------------- |
+| v1.11.1 daemon was working (patched manually) | ❌ Not required                |
+| v1.11.1 daemon was crashing on startup        | ❌ Not required — pip fixes it |
+| Fresh install                                 | ✅ Called automatically        |
+
+---
+
+## Upgrading to v1.11.1 (Previous)
 
 This is a **stability patch** for the installer pipeline. No schema migrations required.
 
@@ -37,7 +65,7 @@ No configuration changes. No DB migration needed.
 ---
 # Mnemostroma Upgrade Guide
 
-## Upgrading to v1.11.0 (Current)
+## Upgrading to v1.11.0
 
 This version introduces **Content Branch automation** (Mechanism #12) and **Exact Time search** capabilities.
 
