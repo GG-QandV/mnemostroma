@@ -164,7 +164,7 @@ This is not a database with TTL. This is how human memory works.
 
 ## Status
 
-**Current:** v1.11.2 | 2026-05-10
+**Current:** v1.11.2 | 2026-05-12
 
 | Component                                | Status                           |
 | ---------------------------------------- | -------------------------------- |

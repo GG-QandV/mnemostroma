@@ -221,20 +221,8 @@ async def run():
 
     servers = [uvicorn.Server(mcp_config), uvicorn.Server(obs_config)]
 
-    # Passthrough proxy — only if TLS certs exist (mnemostroma[sse] + mnemostroma setup)
-    _srv_cert = _MNEMO_DIR / "certs" / "passthrough-cert.pem"
-    _srv_key  = _MNEMO_DIR / "certs" / "passthrough-key.pem"
-    if _srv_cert.exists() and _srv_key.exists():
-        try:
-            from .proxy_passthrough import make_passthrough_app
-            pass_config = uvicorn.Config(
-                make_passthrough_app(), host="127.0.0.1", port=8767, log_level="warning",
-                ssl_certfile=str(_srv_cert), ssl_keyfile=str(_srv_key),
-            )
-            servers.append(uvicorn.Server(pass_config))
-            logger.info("  Passthrough: https://localhost:8767 (Claude Code proxy)")
-        except ImportError:
-            logger.warning("proxy_passthrough deps missing — skipping :8767 (pip install mnemostroma[sse])")
+    # Proxy on 8767 is owned by mnemostroma-proxy.service (http_proxy)
+    # SSE adapter manages only 8765 (MCP) and 8766 (Observe)
 
     logger.info("Mnemostroma SSE Adapter starting...")
     logger.info("  MCP SSE: http://localhost:8765/sse (Auth required)")
