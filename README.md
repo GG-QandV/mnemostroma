@@ -230,33 +230,40 @@ pip install "git+https://github.com/GG-QandV/mnemostroma.git[all]"
 mnemostroma setup
 ```
 
-**Windows (PowerShell — без прав администратора):**
+**Windows — установка за 3 шага:**
 
-**Prerequisites:** Python 3.12 ([python.org](https://python.org/downloads)) с галочкой "Add to PATH" и Git ([git-scm.com](https://git-scm.com)).
-Скрипт также проверит и установит Python автоматически через `winget`, если он не найден.
+**Шаг 1.** Скачайте файл установщика:
 
-**Option A — Автоматически (рекомендуется):**
+👉 **[Скачать install-windows.bat](https://raw.githubusercontent.com/GG-QandV/mnemostroma/main/scripts/install-windows.bat)**
 
-```powershell
-# Шаг 1 — скачать
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/GG-QandV/mnemostroma/main/scripts/install-windows.ps1" -OutFile "$env:TEMP\mnemo-install.ps1"
-# Шаг 2 — запустить
-powershell -ExecutionPolicy Bypass -File "$env:TEMP\mnemo-install.ps1"
-```
+*(правая кнопка мыши → «Сохранить ссылку как» → выберите Рабочий стол или папку Загрузки)*
 
-**Option B — Вручную:**
+**Шаг 2.** Дважды кликните на скачанный файл `install-windows.bat`.
+
+Появится чёрное окно — это нормально. Установщик автоматически:
+- проверит и установит Python, если нужно
+- создаст виртуальное окружение
+- скачает Mnemostroma (~300 МБ моделей)
+- настроит автозапуск при входе в систему
+
+**Шаг 3.** Дождитесь сообщения `Done. You can close this window.` и закройте окно.
+
+> 💡 Если Windows показывает предупреждение «Неизвестный издатель» — нажмите **«Подробнее» → «Выполнить в любом случае»**.
+> На семейном ПК — запустите установщик под каждой учётной записью отдельно.
+
+<details>
+<summary>Ручная установка (для опытных пользователей)</summary>
 
 ```powershell
 py -3.12 -m venv "$env:USERPROFILE\.mnemostroma\venv"
 & "$env:USERPROFILE\.mnemostroma\venv\Scripts\pip" install "git+https://github.com/GG-QandV/mnemostroma.git[all]"
-# Добавить Scripts\ в PATH, затем:
 mnemostroma setup
 mnemostroma service install
 mnemostroma on
 ```
+</details>
 
-> ⚠️ `SIGUSR1/2` недоступны на Windows. Используйте `mnemostroma off` / `mnemostroma on`.
-> На семейном ПК устанавливайте отдельно под каждой учётной записью — данные хранятся изолированно.
+
 
 ---
 
