@@ -236,20 +236,36 @@ mnemostroma setup
 
 👉 **[Скачать install-windows.bat](https://raw.githubusercontent.com/GG-QandV/mnemostroma/main/scripts/install-windows.bat)**
 
-*(правая кнопка мыши → «Сохранить ссылку как» → выберите Рабочий стол или папку Загрузки)*
+*(правая кнопка мыши → «Сохранить ссылку как» → Рабочий стол или папка Загрузки)*
 
-**Шаг 2.** Дважды кликните на скачанный файл `install-windows.bat`.
+**Шаг 2.** Дважды кликните на `install-windows.bat`.
 
 Появится чёрное окно — это нормально. Установщик автоматически:
 - проверит и установит Python, если нужно
-- создаст виртуальное окружение
-- скачает Mnemostroma (~300 МБ моделей)
-- настроит автозапуск при входе в систему
+- скачает Mnemostroma (~300 МБ моделей AI)
+- настроит автозапуск при входе в Windows
 
 **Шаг 3.** Дождитесь сообщения `Done. You can close this window.` и закройте окно.
 
-> 💡 Если Windows показывает предупреждение «Неизвестный издатель» — нажмите **«Подробнее» → «Выполнить в любом случае»**.
+> 💡 Если Windows показывает «Неизвестный издатель» — нажмите **«Подробнее» → «Выполнить в любом случае»**.
 > На семейном ПК — запустите установщик под каждой учётной записью отдельно.
+
+**Что создаётся после установки:**
+
+| Файл | Назначение |
+|---|---|
+| `%USERPROFILE%\.mnemostroma\install.log` | Полный лог установки для диагностики |
+| `%USERPROFILE%\.mnemostroma\install-manifest.json` | Манифест установки (используется при удалении) |
+| `%USERPROFILE%\.mnemostroma\daemon.log` | Лог работы демона |
+
+> 🤖 **Если что-то пошло не так:** откройте `install.log` из папки `%USERPROFILE%\.mnemostroma\`,
+> скопируйте содержимое и вставьте в [ChatGPT](https://chat.openai.com), [Claude](https://claude.ai) или [Gemini](https://gemini.google.com) с вопросом «что здесь пошло не так?».
+
+**Удаление:**
+
+👉 **[Скачать uninstall-windows.bat](https://raw.githubusercontent.com/GG-QandV/mnemostroma/main/scripts/uninstall-windows.bat)**
+
+Двойной клик — удалит задачи автозапуска, PATH и venv. Данные памяти спросит отдельно.
 
 <details>
 <summary>Ручная установка (для опытных пользователей)</summary>
@@ -263,9 +279,9 @@ mnemostroma on
 ```
 </details>
 
-
-
 ---
+
+
 
 ### Installation Extras
 

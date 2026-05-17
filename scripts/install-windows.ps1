@@ -24,7 +24,23 @@ $venvPy     = "$venvDir\Scripts\python.exe"
 $venvPip    = "$venvDir\Scripts\pip.exe"
 $venvMnemo  = "$venvDir\Scripts\mnemostroma.exe"
 $scriptsDir = "$venvDir\Scripts"
+$installLog = "$mnemoDir\install.log"
+$manifestPath = "$mnemoDir\install-manifest.json"
 
+# ── Create install dir and start logging ──────────────────────────────────────
+
+New-Item -ItemType Directory -Force -Path $mnemoDir | Out-Null
+Start-Transcript -Path $installLog -Append -Force
+
+Write-Host ""
+Write-Host "==================================================================="
+Write-Host "  Mnemostroma Installation Log"
+Write-Host "  Date    : $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+Write-Host "  OS      : $([System.Environment]::OSVersion.VersionString)"
+Write-Host "  Build   : $((Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').DisplayVersion)"
+Write-Host "  User    : $env:USERNAME"
+Write-Host "  Install : $mnemoDir"
+Write-Host "==================================================================="
 Write-Host ""
 Write-Host "  ███╗   ███╗███╗  ██╗███████╗███╗   ███╗ ██████╗"
 Write-Host "  ████╗ ████║████╗ ██║██╔════╝████╗ ████║██╔═══██╗"
@@ -34,9 +50,20 @@ Write-Host "  ██║ ╚═╝ ██║██║ ╚███║████
 Write-Host "  ╚═╝     ╚═╝╚═╝  ╚══╝╚══════╝╚═╝     ╚═╝ ╚═════╝"
 Write-Host "              Mnemostroma — Windows Installer"
 Write-Host ""
-Write-Host "  Install dir : $mnemoDir"
-Write-Host "  User        : $env:USERNAME"
-Write-Host ""
+
+# Manifest — will be written at the end
+$manifest = @{
+    install_date  = (Get-Date -Format "o")
+    version       = "unknown"
+    venv_dir      = $venvDir
+    scripts_dir   = $scriptsDir
+    path_added    = $false
+    python_bin    = ""
+    git_version   = ""
+    tasks         = @()
+    install_log   = $installLog
+    status        = "in_progress"
+}
 
 
 # ── STEP 1: Ensure Python 3.12+ ───────────────────────────────────────────────
@@ -74,6 +101,11 @@ if (-not $pythonCmd) {
         Write-Host "    https://python.org/downloads"
         Write-Host "  ✔ Check 'Add Python to PATH' during installation."
         Write-Host "  Then re-run this script."
+        Write-Host ""
+        Write-Host "  Installation log saved to: $installLog"
+        $manifest.status = "failed_no_python"
+        $manifest | ConvertTo-Json | Set-Content $manifestPath -Encoding UTF8
+        Stop-Transcript
         exit 1
     }
 
@@ -90,6 +122,12 @@ if (-not $pythonCmd) {
         Write-Host ""
         Write-Host "  Install manually: https://python.org/downloads"
         Write-Host "  ✔ Check 'Add Python to PATH', then re-run this script."
+        Write-Host ""
+        Write-Host "  Installation log saved to: $installLog"
+        Write-Host "  Paste the log contents to ChatGPT or Claude for help."
+        $manifest.status = "failed_winget_python"
+        $manifest | ConvertTo-Json | Set-Content $manifestPath -Encoding UTF8
+        Stop-Transcript
         exit 1
     }
 
@@ -103,12 +141,18 @@ if (-not $pythonCmd) {
     if (-not $pythonCmd) {
         Write-Host ""
         Write-Host "  ❌ Python was installed but is not yet in PATH for this session."
-        Write-Host "  Close this PowerShell window, open a new one, and re-run the script."
+        Write-Host "  Close this window, open a new one, and re-run the installer."
+        Write-Host ""
+        Write-Host "  Installation log saved to: $installLog"
+        $manifest.status = "failed_python_path"
+        $manifest | ConvertTo-Json | Set-Content $manifestPath -Encoding UTF8
+        Stop-Transcript
         exit 1
     }
 }
 
 $pyVer = & $pythonCmd -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}')"
+$manifest.python_bin = (Get-Command $pythonCmd).Source
 Write-Host "  ✓ Python $pyVer ($pythonCmd)"
 
 
@@ -123,10 +167,16 @@ if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
     Write-Host ""
     Write-Host "  Install Git from: https://git-scm.com/download/win"
     Write-Host "  Use default settings. Then re-run this script."
+    Write-Host ""
+    Write-Host "  Installation log saved to: $installLog"
+    $manifest.status = "failed_no_git"
+    $manifest | ConvertTo-Json | Set-Content $manifestPath -Encoding UTF8
+    Stop-Transcript
     exit 1
 }
 
 $gitVer = (git --version) -replace "git version ", ""
+$manifest.git_version = $gitVer
 Write-Host "  ✓ Git $gitVer"
 
 
@@ -134,8 +184,6 @@ Write-Host "  ✓ Git $gitVer"
 
 Write-Host ""
 Write-Host "[3/8] Setting up virtual environment..."
-
-New-Item -ItemType Directory -Force -Path $mnemoDir | Out-Null
 
 if (-not (Test-Path $venvPy)) {
     Write-Host "  Creating venv at $venvDir..."
@@ -145,6 +193,11 @@ if (-not (Test-Path $venvPy)) {
         Write-Host ""
         Write-Host "  ❌ Failed to create virtual environment."
         Write-Host "  Error: $_"
+        Write-Host ""
+        Write-Host "  Installation log saved to: $installLog"
+        $manifest.status = "failed_venv"
+        $manifest | ConvertTo-Json | Set-Content $manifestPath -Encoding UTF8
+        Stop-Transcript
         exit 1
     }
 }
@@ -158,17 +211,19 @@ Write-Host ""
 Write-Host "[4/8] Installing Mnemostroma..."
 
 if ($Local) {
-    # Detect script location for local install
     $repoRoot = if ($PSScriptRoot) { Split-Path $PSScriptRoot -Parent } else { $PWD.Path }
     Write-Host "  Local mode: $repoRoot"
     try {
         & $venvPy -m pip install --quiet -e "$repoRoot[all]"
     } catch {
         Write-Host "  ❌ Local install failed: $_"
+        Write-Host "  Installation log saved to: $installLog"
+        $manifest.status = "failed_pip_local"
+        $manifest | ConvertTo-Json | Set-Content $manifestPath -Encoding UTF8
+        Stop-Transcript
         exit 1
     }
 } else {
-    # Check for editable install — preserve it
     $isEditable = (& $venvPy -m pip show -f mnemostroma 2>$null) -match "Editable project location"
     if ($isEditable) {
         Write-Host "  ⚡ Editable install detected — preserving local source link."
@@ -186,6 +241,12 @@ if ($Local) {
             Write-Host "    - No internet connection"
             Write-Host "    - Git not in PATH (restart PowerShell after Git install)"
             Write-Host "    - pip version too old — try: $venvPy -m pip install --upgrade pip"
+            Write-Host ""
+            Write-Host "  Installation log saved to: $installLog"
+            Write-Host "  Paste the log contents to ChatGPT or Claude for help."
+            $manifest.status = "failed_pip_github"
+            $manifest | ConvertTo-Json | Set-Content $manifestPath -Encoding UTF8
+            Stop-Transcript
             exit 1
         }
     }
@@ -194,11 +255,20 @@ if ($Local) {
 if (-not (Test-Path $venvMnemo)) {
     Write-Host ""
     Write-Host "  ❌ mnemostroma CLI not found after install. Something went wrong."
-    Write-Host "  Check the output above for errors."
+    Write-Host "  Installation log saved to: $installLog"
+    $manifest.status = "failed_cli_missing"
+    $manifest | ConvertTo-Json | Set-Content $manifestPath -Encoding UTF8
+    Stop-Transcript
     exit 1
 }
 
-Write-Host "  ✓ Mnemostroma installed"
+# Capture installed version
+try {
+    $mnemoVersion = (& $venvPy -c "import mnemostroma; print(mnemostroma.__version__)") 2>$null
+    $manifest.version = $mnemoVersion
+} catch { $manifest.version = "unknown" }
+
+Write-Host "  ✓ Mnemostroma $($manifest.version) installed"
 
 
 # ── STEP 5: Add Scripts to PATH (User scope) ─────────────────────────────────
@@ -213,12 +283,12 @@ if ($userPath -notlike "*$scriptsDir*") {
         "$userPath;$scriptsDir",
         "User"
     )
+    $manifest.path_added = $true
     Write-Host "  ✓ Added to user PATH: $scriptsDir"
 } else {
     Write-Host "  ✓ Already in PATH"
 }
 
-# Patch current process so mnemostroma works immediately
 $env:PATH = "$env:PATH;$scriptsDir"
 
 
@@ -235,6 +305,10 @@ try {
     Write-Host ""
     Write-Host "  ❌ Setup failed: $_"
     Write-Host "  Try running manually: mnemostroma setup"
+    Write-Host "  Installation log saved to: $installLog"
+    $manifest.status = "failed_setup"
+    $manifest | ConvertTo-Json | Set-Content $manifestPath -Encoding UTF8
+    Stop-Transcript
     exit 1
 }
 
@@ -246,19 +320,19 @@ Write-Host "  ✓ Setup complete"
 Write-Host ""
 Write-Host "[7/8] Registering autostart tasks (Task Scheduler)..."
 
+$registeredTasks = @()
+
 function Register-MnemoTask {
     param($TaskName, $Argument, $DelaySeconds, $LogFile)
 
     $logPath = "$mnemoDir\$LogFile"
 
     if ($Argument -eq "-m mnemostroma run") {
-        # Daemon: run directly, no log redirect (uses daemon.log internally)
         $action = New-ScheduledTaskAction `
             -Execute $venvPy `
             -Argument $Argument `
             -WorkingDirectory $mnemoDir
     } else {
-        # Proxy / Watchdog: redirect output to log file via cmd wrapper
         $action = New-ScheduledTaskAction `
             -Execute "cmd.exe" `
             -Argument "/c `"$venvPy`" $Argument >> `"$logPath`" 2>&1" `
@@ -266,9 +340,7 @@ function Register-MnemoTask {
     }
 
     $trigger = New-ScheduledTaskTrigger -AtLogOn
-    if ($DelaySeconds -gt 0) {
-        $trigger.Delay = "PT${DelaySeconds}S"
-    }
+    if ($DelaySeconds -gt 0) { $trigger.Delay = "PT${DelaySeconds}S" }
 
     $settings = New-ScheduledTaskSettingsSet `
         -RestartCount 999 `
@@ -286,23 +358,23 @@ function Register-MnemoTask {
             -RunLevel Limited `
             -Force | Out-Null
         Write-Host "  ✓ Registered: '$TaskName'"
+        return $true
     } catch {
         Write-Host "  ⚠ Could not register '$TaskName': $_"
         Write-Host "    Run PowerShell as Administrator and re-run this script to fix."
+        return $false
     }
 }
 
-Register-MnemoTask "Mnemostroma Daemon"   "-m mnemostroma run"                          0  "daemon.log"
-Register-MnemoTask "Mnemostroma Proxy"    "-m mnemostroma.integration.http_proxy"       20 "proxy.log"
-Register-MnemoTask "Mnemostroma Watchdog" "-m mnemostroma.watchdog"                     25 "watchdog.log"
+if (Register-MnemoTask "Mnemostroma Daemon"   "-m mnemostroma run"                    0  "daemon.log")   { $registeredTasks += "Mnemostroma Daemon" }
+if (Register-MnemoTask "Mnemostroma Proxy"    "-m mnemostroma.integration.http_proxy" 20 "proxy.log")    { $registeredTasks += "Mnemostroma Proxy" }
+if (Register-MnemoTask "Mnemostroma Watchdog" "-m mnemostroma.watchdog"               25 "watchdog.log") { $registeredTasks += "Mnemostroma Watchdog" }
 
-# Start all tasks immediately
-foreach ($taskName in @("Mnemostroma Daemon", "Mnemostroma Proxy", "Mnemostroma Watchdog")) {
-    try {
-        Start-ScheduledTask -TaskName $taskName
-    } catch {
-        Write-Host "  ⚠ Could not start '$taskName' now (will start on next login): $_"
-    }
+$manifest.tasks = $registeredTasks
+
+foreach ($taskName in $registeredTasks) {
+    try { Start-ScheduledTask -TaskName $taskName }
+    catch { Write-Host "  ⚠ Could not start '$taskName' now (will start on next login): $_" }
 }
 
 Write-Host "  ✓ Tasks started"
@@ -323,22 +395,36 @@ try {
 }
 
 
+# ── Write manifest ────────────────────────────────────────────────────────────
+
+$manifest.status = "success"
+$manifest | ConvertTo-Json -Depth 3 | Set-Content $manifestPath -Encoding UTF8
+Write-Host ""
+Write-Host "  ✓ Install manifest saved: $manifestPath"
+
+
 # ── Done ──────────────────────────────────────────────────────────────────────
 
 Write-Host ""
-Write-Host "─────────────────────────────────────────────────────"
+Write-Host "==================================================================="
 Write-Host "  🎉 Mnemostroma installed successfully!"
-Write-Host "─────────────────────────────────────────────────────"
+Write-Host "==================================================================="
 Write-Host ""
 Write-Host "  Management:"
 Write-Host "    mnemostroma on      — start daemon"
 Write-Host "    mnemostroma off     — stop daemon"
 Write-Host "    mnemostroma status  — check status"
 Write-Host ""
-Write-Host "  Logs:"
-Write-Host "    Get-Content $mnemoDir\daemon.log -Wait -Tail 30"
+Write-Host "  Uninstall:"
+Write-Host "    Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/GG-QandV/mnemostroma/main/scripts/uninstall-windows.ps1' -OutFile `"`$env:TEMP\mnemo-uninstall.ps1`""
+Write-Host "    powershell -ExecutionPolicy Bypass -File `"`$env:TEMP\mnemo-uninstall.ps1`""
 Write-Host ""
-Write-Host "  Task Scheduler GUI:  taskschd.msc"
+Write-Host "  Logs:"
+Write-Host "    Installation log : $installLog"
+Write-Host "    Daemon log       : $mnemoDir\daemon.log"
+Write-Host ""
+Write-Host "  If something went wrong, paste contents of install.log"
+Write-Host "  to ChatGPT, Claude or Gemini for step-by-step help."
 Write-Host ""
 Write-Host "  ⚠ NOTE: SIGUSR1/SIGUSR2 are not available on Windows."
 Write-Host "    Use 'mnemostroma off' and 'mnemostroma on' instead."
@@ -350,3 +436,5 @@ Write-Host ""
 Write-Host "  ℹ If 'mnemostroma' is not found in new terminals:"
 Write-Host "    Close and reopen PowerShell (PATH update takes effect on new sessions)."
 Write-Host ""
+
+Stop-Transcript
