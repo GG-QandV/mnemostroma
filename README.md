@@ -363,16 +363,15 @@ Core dependencies: `onnxruntime, tokenizers, numpy, lz4, aiosqlite`
 
 ---
 
-## API surface (12 tools via MCP)
+## API surface (11 tools via MCP)
 
-**Recollection (8):**
+**Recollection (7):**
 
 - `ctx_full(id)`: Full-text version from SQLite (for exact quoting)
 - `ctx_anchors(type)`: Subconscious anchors (decisions, facts, deadlines)
 - `ctx_precision(type)`: Exact data (links, formulas, quotes)
 - `ctx_bridge()`: Structured context handoff packet for next agent
 - `content_search(query)`: Semantic search over artifacts (code, docs)
-- `content_get(id, version)`: Metadata retrieval for artifact
 - `content_raw(id, version)`: Full source retrieval (expensive)
 - `content_history(id)`: Version lineage and change log
 
@@ -383,7 +382,8 @@ Core dependencies: `onnxruntime, tokenizers, numpy, lz4, aiosqlite`
 - `ctx_search(tags)`: Tag-based search (precise, multi-language)
 - `ctx_recent(n)`: Temporally ordered recent sessions (Repo-backed)
 
-> **Note:** `ctx_active` is removed — current context is injected via `<memorycontext>` in the system prompt automatically. `ctx_urgent` is merged into `ctx_anchors(type="deadline")`. `ctx_load` is daemon-internal only.
+> [!NOTE]
+> `ctx_active` is removed — current context is injected via `<memorycontext>` in the system prompt automatically. `ctx_urgent` is merged into `ctx_anchors(type="deadline")`. `ctx_load` is daemon-internal only.
 
 **Observer Principle:** You never call "save_memory". The Observer watches your conversation and handles everything in the background. Tools are for *reading* memory, not writing it.
 
