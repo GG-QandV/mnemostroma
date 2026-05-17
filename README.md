@@ -488,6 +488,28 @@ Registers a persistent task in the Windows Task Scheduler.
 
 > **Architecture note:** Clients (VS Code, Claude Code, Cursor) will spawn lightweight adapter processes (~70 MB) that connect to this daemon via socket. The daemon persists to maintain cross-session memory; adapters are ephemeral.
 
+### Claude.ai (Web Interface) — Custom MCP Connector (Beta)
+
+Claude.ai supports connecting custom remote MCP servers via Server-Sent Events (SSE). This allows Claude in the web interface to directly call Mnemostroma's memory tools.
+
+To connect Mnemostroma as a Custom Connector in **Claude.ai → Settings → Integrations → Add Custom Connector** (or via `https://claude.ai/customize/connectors?modal=add-custom-connector`):
+
+1. **Start the SSE Adapter** in a separate terminal:
+   ```bash
+   mnemostroma sse
+   ```
+2. **Expose your SSE port (8765)** to the internet via Cloudflare Tunnel (recommended) or a similar secure tunneling service (e.g. Serveo), since Claude's servers require a publicly accessible HTTPS URL.
+3. **Fill the Add Custom Connector form** in Claude.ai with the following values:
+
+| Field | Value | Description |
+|---|---|---|
+| **Name** | `mnemostroma` | Any identifier for the connector |
+| **Target URL** | `https://mnemo.yourdomain.com/sse` | Your public HTTPS endpoint pointing to port `8765` |
+| **Authorization Header** | `Bearer <your-sse-token>` | Retrieve your secure token: `cat ~/.mnemostroma/sse_token` |
+| **OAuth Settings** | *Leave blank (optional)* | Not required for local deployment |
+
+> For a complete, step-by-step walkthrough of setting up Cloudflare Tunnels, generating tokens, and testing your endpoint, see the dedicated [Claude.ai Setup Guide](./docs/CLAUDE_AI_SETUP.md).
+
 ---
 
 ### Claude Desktop
