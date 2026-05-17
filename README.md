@@ -2,14 +2,14 @@
 
 ### The memory layer for AI agents
 
-![Version](https://img.shields.io/badge/version-v2.1.5-orange)
+![Version](https://img.shields.io/badge/version-v2.1.5--beta-orange)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue)
 ![Tests](https://img.shields.io/badge/tests-531%20passing-brightgreen)
 ![License](https://img.shields.io/badge/license-FSL--1.1--MIT-lightgrey)
 
 > *μνήμη (mnḗmē, memory) + στρῶμα (strôma, layer) — the substrate everything rests on.*
 
-> **v2.1.5 is stable.** Upgrading from v1.9.1 or earlier? → [See UPGRADE.md](./UPGRADE.md)
+> **v2.1.5 Beta (Active Development).** Upgrading from v1.9.1 or earlier? → [See UPGRADE.md](./UPGRADE.md)
 
 ---
 
@@ -164,7 +164,7 @@ This is not a database with TTL. This is how human memory works.
 
 ## Status
 
-**Current:** v2.1.5 | 2026-05-17
+**Current:** v2.1.5 Beta (Active Development) | 2026-05-17
 
 | Component                                | Status                           |
 | ---------------------------------------- | -------------------------------- |
@@ -189,7 +189,7 @@ This is not a database with TTL. This is how human memory works.
 
 **Requires Python 3.12+**
 
-> **v2.1.5 is stable.** Upgrading from v1.9.1 or earlier? → [See UPGRADE.md](./UPGRADE.md)
+> **v2.1.5 Beta (Active Development).** Upgrading from v1.9.1 or earlier? → [See UPGRADE.md](./UPGRADE.md)
 
 ---
 
@@ -387,6 +387,7 @@ Core dependencies: `onnxruntime, tokenizers, numpy, lz4, aiosqlite`
 
 **Observer Principle:** You never call "save_memory". The Observer watches your conversation and handles everything in the background. Tools are for *reading* memory, not writing it.
 
+
 ---
 
 ## <img src="https://raw.githubusercontent.com/GG-QandV/mnemostroma/main/src/extension/assets/browser-thin.svg" width="28" height="28" align="center" /> Browser Integration (Mnemostroma Extension)
@@ -396,7 +397,6 @@ Core dependencies: `onnxruntime, tokenizers, numpy, lz4, aiosqlite`
 Mnemostroma includes a lightweight, secure browser extension that allows you to seamlessly feed chat contexts from leading LLM interfaces into your local memory layer.
 
 ### Supported Chat Interfaces:
-
 - **Claude** (`claude.ai`)
 - **ChatGPT** (`chatgpt.com`)
 - **Gemini** (`gemini.google.com`)
@@ -405,7 +405,6 @@ Mnemostroma includes a lightweight, secure browser extension that allows you to 
 - **Grok** (`x.ai` / `grok.com`)
 
 ### <img src="https://raw.githubusercontent.com/GG-QandV/mnemostroma/main/src/extension/assets/lightning-thin.svg" width="20" height="20" align="center" /> Quick Extension Installation:
-
 1. Open your browser extension settings (e.g. `chrome://extensions/` in Chrome or Edge, or `about:debugging` in Firefox).
 2. Enable **"Developer mode"** in the top right.
 3. Click **"Load unpacked"** and select the extension directory:
@@ -413,7 +412,6 @@ Mnemostroma includes a lightweight, secure browser extension that allows you to 
 4. The extension will automatically connect to your local Mnemostroma daemon (`http://127.0.0.1:8766`).
 
 ### <img src="https://raw.githubusercontent.com/GG-QandV/mnemostroma/main/src/extension/assets/traffic-signal-thin.svg" width="20" height="20" align="center" /> Action Icon & Badge Indicators:
-
 The Mnemostroma icon in your extension bar is fully functional and uses colors + text badges to show real-time connectivity status:
 
 - **Active (Green badge / Clean)**: Everything is perfect. The local daemon is active, global capture is enabled, and the last memory stream POST request was successful.
@@ -716,7 +714,7 @@ Cloud Sync, Subconscious Layer (personalized models), Shared Experience, and Tea
 ---
 
 *Mnemostroma — the memory layer for AI agents*
-*offline · ~650MB RAM (baseline) · ~20ms · 531 tests · v2.1.5*
+*offline · ~650MB RAM (baseline) · ~20ms · 531 tests · v2.1.5 Beta*
 
 # [mnemostroma-protocol]
 
