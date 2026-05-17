@@ -9,6 +9,8 @@ Mnemostroma v2.0.5 is a major stable release introducing dual-client support, li
 ### Key Features and Capabilities
 
 #### 1. Mnemostroma Browser Extension (v1.0.4)
+<img src="https://raw.githubusercontent.com/GG-QandV/mnemostroma/main/src/extension/assets/head-circuit-256.png" width="96" align="right" />
+
 - **Live Memory Feeding**: Watches the DOM structure of your active web chat sessions and seamlessly streams messages to the local Mnemostroma daemon.
 - **Universal Multi-Platform Support**: Out-of-the-box compatibility with **Claude**, **ChatGPT**, **Perplexity**, **Gemini**, **DeepSeek**, and **Grok**.
 - **Release Guard Architecture**: Operates with `IS_MCP_TUNNELING_ENABLED = false` by default for the public channel, running in a 100% stable, low-overhead, and leak-proof DOM observation mode.
