@@ -530,7 +530,7 @@ _BANNER = f"""
   ██║╚██╔╝██║██║╚████║██╔══╝  ██║╚██╔╝██║██║   ██║
   ██║ ╚═╝ ██║██║ ╚███║███████╗██║ ╚═╝ ██║╚██████╔╝
   ╚═╝     ╚═╝╚═╝  ╚══╝╚══════╝╚═╝     ╚═╝ ╚═════╝
-                    MNEMOSTROMA v{__version__}
+                    MNEMOSTROMA v{__version__} Beta
 """
 
 def _cmd_cleanup(args: list) -> bool:
