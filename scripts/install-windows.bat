@@ -1,5 +1,5 @@
 @echo off
-:: Mnemostroma — Windows Installer Launcher
+:: Mnemostroma - Windows Installer Launcher
 :: Double-click this file to install Mnemostroma.
 :: No administrator rights required.
 
@@ -7,7 +7,7 @@ title Mnemostroma Installer
 color 0A
 echo.
 echo  ==========================================
-echo    Mnemostroma — Windows Installer
+echo    Mnemostroma - Windows Installer
 echo  ==========================================
 echo.
 echo  Downloading installer, please wait...
