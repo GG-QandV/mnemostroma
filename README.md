@@ -164,7 +164,7 @@ This is not a database with TTL. This is how human memory works.
 
 ## Status
 
-**Current:** v2.1.5 Beta (Active Development) | 2026-05-17
+**Current:** v2.1.5 Beta (Active Development) | 2026-05-18
 
 | Component                                | Status                           |
 | ---------------------------------------- | -------------------------------- |
@@ -230,12 +230,33 @@ pip install "git+https://github.com/GG-QandV/mnemostroma.git[all]"
 mnemostroma setup
 ```
 
-**Windows (PowerShell):**
+**Windows (PowerShell — без прав администратора):**
+
+**Prerequisites:** Python 3.12 ([python.org](https://python.org/downloads)) с галочкой "Add to PATH" и Git ([git-scm.com](https://git-scm.com)).
+Скрипт также проверит и установит Python автоматически через `winget`, если он не найден.
+
+**Option A — Автоматически (рекомендуется):**
 
 ```powershell
-pip install "git+https://github.com/GG-QandV/mnemostroma.git[all]"
-mnemostroma setup
+# Шаг 1 — скачать
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/GG-QandV/mnemostroma/main/scripts/install-windows.ps1" -OutFile "$env:TEMP\mnemo-install.ps1"
+# Шаг 2 — запустить
+powershell -ExecutionPolicy Bypass -File "$env:TEMP\mnemo-install.ps1"
 ```
+
+**Option B — Вручную:**
+
+```powershell
+py -3.12 -m venv "$env:USERPROFILE\.mnemostroma\venv"
+& "$env:USERPROFILE\.mnemostroma\venv\Scripts\pip" install "git+https://github.com/GG-QandV/mnemostroma.git[all]"
+# Добавить Scripts\ в PATH, затем:
+mnemostroma setup
+mnemostroma service install
+mnemostroma on
+```
+
+> ⚠️ `SIGUSR1/2` недоступны на Windows. Используйте `mnemostroma off` / `mnemostroma on`.
+> На семейном ПК устанавливайте отдельно под каждой учётной записью — данные хранятся изолированно.
 
 ---
 
@@ -273,6 +294,15 @@ Ensure you installed with `[all]` or `[tray]`. On Linux, verify `python3-gi` is 
 
 **`mnemostroma: command not found`**
 Ensure your PATH is updated (run `pipx ensurepath` or `source ~/.bashrc`).
+
+**Windows-specific errors:**
+
+| Error | Cause | Fix |
+|---|---|---|
+| `pip is not recognized` | Python not in PATH | Reinstall Python with "Add to PATH" checked |
+| `mnemostroma is not recognized` | `Scripts\` not in PATH | Close and reopen PowerShell |
+| `git is not recognized` | Git not installed | Install from [git-scm.com](https://git-scm.com) |
+| `Register-ScheduledTask` error | Group Policy restriction | Run PowerShell as Administrator |
 
 ---
 
@@ -480,10 +510,11 @@ tail -f ~/.mnemostroma/daemon.log
 
 #### Windows (Task Scheduler)
 
-Registers a persistent task in the Windows Task Scheduler.
+Registers three persistent tasks in Windows Task Scheduler (Daemon, Proxy, Watchdog). No administrator rights required.
 
 ```powershell
-.\scripts\windows\install-daemon.ps1
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/GG-QandV/mnemostroma/main/scripts/install-windows.ps1" -OutFile "$env:TEMP\mnemo-install.ps1"
+powershell -ExecutionPolicy Bypass -File "$env:TEMP\mnemo-install.ps1"
 ```
 
 > **Architecture note:** Clients (VS Code, Claude Code, Cursor) will spawn lightweight adapter processes (~70 MB) that connect to this daemon via socket. The daemon persists to maintain cross-session memory; adapters are ephemeral.

@@ -99,8 +99,8 @@ def _kill_all_daemon_instances(known_pid: int | None = None) -> None:
     """
     import subprocess
     try:
-        result = subprocess.run(
-            ["pgrep", "-f", r"mnemostroma run"],
+        result = subprocess.run(  # PATCH-WD-2026-05-17
+            ["pgrep", "-f", r"python.*-m mnemostroma run"],
             capture_output=True, text=True
         )
         my_pid = os.getpid()
@@ -122,24 +122,30 @@ def _clean_socket() -> None:
     logger.info("Removed stale socket")
 
 
-async def _check_daemon(hb_timeout: int) -> None:
+async def _check_daemon(hb_timeout: int) -> None:  # PATCH-WD-2026-05-17
     hb_ok = _heartbeat_ok(hb_timeout)
     if hb_ok:
-        return  # Normal or hydrating
+        return
 
-    if _HEARTBEAT_FILE.exists() and not hb_ok:
-        logger.error(f"Daemon HANG (no heartbeat for {hb_timeout}s) → SIGKILL")
+    # Heartbeat просрочен или файла нет — проверяем сокет независимо
+    sock_ok = await _socket_responsive()
+
+    if not sock_ok:
+        # Нет ни heartbeat ни сокета — полная недоступность
+        logger.error("Daemon UNRESPONSIVE (no heartbeat + no socket) → SIGKILL")
         _kill(_PID_DAEMON, signal.SIGKILL)
         _kill_all_daemon_instances()
         _clean_socket()
-        return
-
-    sock_ok = await _socket_responsive()
-    if _SOCKET_PATH.exists() and not sock_ok:
-        logger.error("Socket stale (no response) → clean + SIGTERM")
-        _clean_socket()
-        _kill(_PID_DAEMON, signal.SIGTERM)
+    elif _HEARTBEAT_FILE.exists():
+        # Сокет отвечает, но heartbeat завис — hang
+        logger.error(
+            f"Daemon HANG (socket ok, heartbeat stale >{hb_timeout}s) → SIGKILL"
+        )
+        _kill(_PID_DAEMON, signal.SIGKILL)
         _kill_all_daemon_instances()
+        _clean_socket()
+    # else: heartbeat файла нет и сокета нет — daemon ещё не поднялся,
+    # не убиваем (Phase 2 мог войти чуть раньше чем daemon записал heartbeat)
 
 
 async def _check_proxy(timeout: int) -> None:
@@ -161,11 +167,13 @@ async def run() -> None:
         hb_timeout = config.watchdog.heartbeat_timeout_sec
         check_int = config.watchdog.check_interval_sec
         startup_failsafe = config.watchdog.startup_failsafe_sec
+        proxy_timeout = getattr(config.watchdog, "proxy_timeout_sec", PROXY_TIMEOUT)  # PATCH-WD-2026-05-17
     except Exception as e:
         logger.warning(f"Failed to load config, using defaults: {e}")
         hb_timeout = HEARTBEAT_TIMEOUT
         check_int = CHECK_INTERVAL
         startup_failsafe = STARTUP_FAILSAFE
+        proxy_timeout = PROXY_TIMEOUT  # PATCH-WD-2026-05-17
 
     logger.info(
         f"Watchdog started: check every {check_int}s, "
@@ -173,28 +181,58 @@ async def run() -> None:
         f"hang threshold {hb_timeout}s"
     )
     
-    # PHASE 1: Booting / Hydration Immunity
+    # PHASE 1: Booting / Hydration Immunity  # PATCH-WD-2026-05-17
     logger.info(f"PHASE 1: Waiting for daemon & proxy ready (max {startup_failsafe}s)...")
     start_boot = time.time()
-    while (time.time() - start_boot) < startup_failsafe:
-        d_ok = _heartbeat_ok(20) # Daemon heartbeat started
-        p_ok = await _proxy_healthy(2) # Proxy health port open
-        
+    phase1_ok = False
+    while True:
+        elapsed = time.time() - start_boot
+        d_ok = _heartbeat_ok(20)
+        p_ok = await _proxy_healthy(2)
+
         if d_ok and p_ok:
-            logger.info("System healthy. Entering PHASE 2 (Active).")
+            logger.info(f"System healthy ({elapsed:.0f}s). Entering PHASE 2 (Active).")
+            phase1_ok = True
             break
+
+        if elapsed >= startup_failsafe - 20:
+            logger.warning(
+                f"Boot slow ({elapsed:.0f}s / {startup_failsafe}s max)... still waiting"
+            )
+
+        if elapsed >= startup_failsafe:
+            # Последний шанс: проверить сокет отдельно от heartbeat
+            sock_ok = await _socket_responsive()
+            if sock_ok:
+                # Сокет живой — daemon работает, heartbeat просто не записался ещё
+                logger.warning(
+                    f"Heartbeat absent but socket alive after {elapsed:.0f}s "
+                    f"— entering Phase 2 with grace period"
+                )
+                phase1_ok = True
+                break
+            else:
+                logger.error(
+                    f"System failed to stabilize within {startup_failsafe}s "
+                    f"(no heartbeat, no socket) → Emergency Exit"
+                )
+                _kill(_PID_DAEMON, signal.SIGKILL)
+                _kill(_PID_PROXY, signal.SIGKILL)
+                return
+
+        _notify_systemd()  # держать systemd WatchdogSec живым во время boot
         await asyncio.sleep(5)
-    else:
-        logger.error(f"System failed to stabilize within {startup_failsafe}s → Emergency Exit")
-        _kill(_PID_DAEMON, signal.SIGKILL)
-        _kill(_PID_PROXY, signal.SIGKILL)
-        return
 
     # PHASE 2: Active Monitoring
+    _iteration = 0  # PATCH-WD-2026-05-17
     while True:
-        await asyncio.gather(
+        _iteration += 1  # PATCH-WD-2026-05-17
+        if _iteration % 10 == 0:
+            logger.info(f"Watchdog alive, iteration #{_iteration}, daemon/proxy checks ok")
+
+        await asyncio.gather(  # PATCH-WD-2026-05-17
             _check_daemon(hb_timeout), 
-            _check_proxy(PROXY_TIMEOUT)
+            _check_proxy(proxy_timeout)
         )
         _notify_systemd()
         await asyncio.sleep(check_int)

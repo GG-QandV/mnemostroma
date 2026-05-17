@@ -1,3 +1,27 @@
+## [2.1.6] — 2026-05-18
+
+### Added
+- **feat(install)**: Создан полный Windows-инсталлятор `scripts/install-windows.ps1` — единый скрипт от нуля до `mnemostroma status`: автопроверка/автоустановка Python 3.12 через winget, Git-проверка, venv, pip install, PATH patch (User scope), `mnemostroma setup`, три задачи Task Scheduler (Daemon/Proxy/Watchdog), финальный статус. Не требует прав администратора.
+
+### Fixed
+- **fix(docs)**: Переработана Windows-секция `README.md`: добавлена полная инструкция Option A (однострочник `irm`/`iex`-совместимый) и Option B (ручная), таблица Windows Troubleshooting, обновлён URL установщика в секции Task Scheduler.
+
+## [2.1.5] — 2026-05-17
+
+### Added
+- **feat(cli)**: Интегрированы системные действия управления туннелем Serveo через CLI (`mnemostroma tunnel start/stop/status`).
+- **feat(install)**: Создан systemd-шаблон `mnemostroma-serveo.service` в `src/mnemostroma/service_templates/linux/` для автоматического управления туннелем Serveo в пользовательском пространстве systemd.
+- **feat(test)**: Разработан асинхронный тестовый сьют `tests/test_watchdog.py` (6 новых тестов), проверяющий крайние случаи поведения вочдога (медленный запуск, зависание, отсутствие heartbeat, ложные срабатывания).
+
+### Fixed
+- **fix(integration)**: Устранен критический ASGI-баг Starlette (`TypeError` / `Response already started`) при вызове HTTP/SSE адаптеров. Реализован оберточный класс `ASGIAppWrapper` в `mcp_http_adapter.py` и `mcp_sse_adapter.py`, гарантирующий корректное ASGI-выполнение.
+- **fix(watchdog)**: Исправлена «мертвая ветка» проверки сокета в `_check_daemon()` при зависании heartbeat.
+- **fix(watchdog)**: Переработан Boot-период (`Phase 1`): вочдог больше не убивает демон Мнемостромы при медленной гидратации, если UNIX-сокет активен.
+- **fix(watchdog)**: Добавлены превентивные уведомления `sd_notify` (`_notify_systemd()`) во время Boot-фазы для удержания таймера systemd WatchdogSec.
+- **fix(watchdog)**: Сужен паттерн `pgrep` (`python.*-m mnemostroma run`) для исключения ложного убийства сторонних процессов и утилит grep.
+- **fix(watchdog)**: Интегрирован параметр `proxy_timeout` из конфигурационного файла `config.json` взамен жестко захардкоженной константы в Phase 2.
+- **fix(watchdog)**: Добавлен лог активности "watchdog alive" каждые 10 итераций в Phase 2.
+
 ## [2.0.5] — 2026-05-17
 
 ### Added

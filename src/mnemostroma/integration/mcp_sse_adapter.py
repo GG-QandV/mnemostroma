@@ -9,11 +9,21 @@ from pathlib import Path
 from typing import Any
 
 from starlette.applications import Starlette
+from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route, Mount
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 import uvicorn
+
+from starlette.middleware.base import BaseHTTPMiddleware
+
+class ServeoHeaderMiddleware(BaseHTTPMiddleware):  # PATCH-2026-05-17
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        response.headers["serveo-skip-browser-warning"] = "true"
+        return response
+
 
 from mcp.server import Server
 from mcp.server.sse import SseServerTransport
@@ -60,12 +70,11 @@ from .mcp_stdio_adapter import _TOOLS  # Reuse tools definition from stdio adapt
 
 # ── IPC client ────────────────────────────────────────────────────────
 
-_msg_id = 0
+import itertools
+_msg_id_counter = itertools.count(1)  # PATCH-2026-05-17
 
 def _next_id() -> int:
-    global _msg_id
-    _msg_id += 1
-    return _msg_id
+    return next(_msg_id_counter)
 
 # ── Windows Named Pipe helper ─────────────────────────────────────────
 
@@ -159,27 +168,41 @@ sse = SseServerTransport("/messages/")
 
 # ── Starlette App (MCP SSE) ───────────────────────────────────────────
 
-async def handle_sse(request):
-    # Auth BEFORE opening SSE stream
-    auth = request.headers.get("Authorization")
-    if not auth or auth != f"Bearer {TOKEN}":
-        return Response("Unauthorized", status_code=401)
+class ASGIAppWrapper:
+    def __init__(self, app):
+        self.app = app
+    async def __call__(self, scope, receive, send):
+        await self.app(scope, receive, send)
 
-    # New isolated Server() for this connection
+def _check_auth(request: Request) -> bool:
+    bearer  = request.headers.get("Authorization", "")
+    api_key = request.headers.get("api-key", "")
+    query   = request.query_params.get("token", "")
+    return bearer == f"Bearer {TOKEN}" or api_key == TOKEN or query == TOKEN
+
+
+async def handle_sse(scope, receive, send):
+    request = Request(scope, receive)
+    if not _check_auth(request):
+        response = Response("Unauthorized", status_code=401)
+        await response(scope, receive, send)
+        return
+
     mcp_instance = _make_mcp_server()
 
-    async with sse.connect_sse(request.scope, request.receive, request._send) as (read_stream, write_stream):
+    async with sse.connect_sse(scope, receive, send) as (read_stream, write_stream):
         await mcp_instance.run(
             read_stream, write_stream, mcp_instance.create_initialization_options()
         )
 
-async def handle_messages(request):
-    # Auth check
-    auth = request.headers.get("Authorization")
-    if not auth or auth != f"Bearer {TOKEN}":
-        return Response("Unauthorized", status_code=401)
+async def handle_messages(scope, receive, send):
+    request = Request(scope, receive)
+    if not _check_auth(request):
+        response = Response("Unauthorized", status_code=401)
+        await response(scope, receive, send)
+        return
 
-    return await sse.handle_post_message(request.scope, request.receive, request._send)
+    await sse.handle_post_message(scope, receive, send)
 
 async def handle_health(request):
     try:
@@ -189,6 +212,14 @@ async def handle_health(request):
         return JSONResponse({"status": "error", "daemon": str(e)}, status_code=503)
 
 # ── Starlette App (Observe Receiver - Localhost only) ─────────────────
+
+async def handle_mcp_config(request):
+    serveo_path = _MNEMO_DIR / "serveo_url"
+    serveo_base = serveo_path.read_text(encoding="utf-8").strip() if serveo_path.exists() else None
+    local_url  = f"http://localhost:8765/sse?token={TOKEN}"
+    public_url = f"{serveo_base}/sse?token={TOKEN}" if serveo_base else None
+    return JSONResponse({"local_url": local_url, "public_url": public_url})
+
 
 async def handle_observe(request):
     """Browser extension -> /observe endpoint."""
@@ -210,21 +241,26 @@ async def handle_observe(request):
 # ── Unified Runner ────────────────────────────────────────────────────
 
 def make_mcp_app():
-    return Starlette(
-        debug=True,
+    return Starlette(  # PATCH-2026-05-17
+        debug=os.getenv("MNEMO_DEBUG", "false").lower() == "true",
         routes=[
-            Route("/sse", endpoint=handle_sse),
-            Route("/messages/", endpoint=handle_messages, methods=["POST"]),
+            Route("/sse", endpoint=ASGIAppWrapper(handle_sse)),
+            Route("/messages/", endpoint=ASGIAppWrapper(handle_messages), methods=["POST"]),
             Route("/health", endpoint=handle_health),
+        ],
+        middleware=[
+            Middleware(ServeoHeaderMiddleware),
+            Middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]),
         ]
     )
 
 def make_observe_app():
     return Starlette(
-        debug=True,
+        debug=os.getenv("MNEMO_DEBUG", "false").lower() == "true",  # PATCH-2026-05-17
         routes=[
-            Route("/health",  endpoint=handle_health),
-            Route("/observe", endpoint=handle_observe, methods=["POST"]),
+            Route("/health",     endpoint=handle_health),
+            Route("/mcp-config", endpoint=handle_mcp_config),
+            Route("/observe",    endpoint=handle_observe, methods=["POST"]),
         ],
         middleware=[
             Middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]),

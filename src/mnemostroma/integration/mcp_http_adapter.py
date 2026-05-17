@@ -40,18 +40,30 @@ def _get_or_create_token() -> str:
 
 TOKEN = _get_or_create_token()
 
+_OBSERVE_TOKEN_PATH = _MNEMO_DIR / "observe_token"  # PATCH-2026-05-17
+
+def _get_or_create_observe_token() -> str:
+    _MNEMO_DIR.mkdir(parents=True, exist_ok=True)
+    if not _OBSERVE_TOKEN_PATH.exists():
+        token = secrets.token_urlsafe(32)
+        _OBSERVE_TOKEN_PATH.write_text(token, encoding="utf-8")
+        _OBSERVE_TOKEN_PATH.chmod(0o600)
+        return token
+    return _OBSERVE_TOKEN_PATH.read_text(encoding="utf-8").strip()
+
+OBSERVE_TOKEN = _get_or_create_observe_token()
+
 # ── Tool list (keep in sync with mcp_stdio_adapter.py) ──────────────
 
 from .mcp_stdio_adapter import _TOOLS  # Reuse tools definition from stdio adapter
 
 # ── IPC client ────────────────────────────────────────────────────────
 
-_msg_id = 0
+import itertools
+_msg_id_counter = itertools.count(1)  # PATCH-2026-05-17
 
 def _next_id() -> int:
-    global _msg_id
-    _msg_id += 1
-    return _msg_id
+    return next(_msg_id_counter)
 
 # ── Windows Named Pipe helper ─────────────────────────────────────────
 
@@ -138,16 +150,27 @@ session_manager = StreamableHTTPSessionManager(
 
 # ── Starlette App (MCP HTTP) ───────────────────────────────────────────
 
-async def handle_mcp(request: Request):
-    auth = request.headers.get("Authorization")
-    if not auth or auth != f"Bearer {TOKEN}":
-        return Response("Unauthorized", status_code=401)
-    
+class ASGIAppWrapper:
+    def __init__(self, app):
+        self.app = app
+    async def __call__(self, scope, receive, send):
+        await self.app(scope, receive, send)
+
+def _check_auth(request: Request) -> bool:
+    bearer  = request.headers.get("Authorization", "")
+    api_key = request.headers.get("api-key", "")
+    query   = request.query_params.get("token", "")
+    return bearer == f"Bearer {TOKEN}" or api_key == TOKEN or query == TOKEN
+
+
+async def handle_mcp(scope, receive, send):  # PATCH-2026-05-17
+    request = Request(scope, receive)
+    if not _check_auth(request):
+        response = Response("Unauthorized", status_code=401)
+        await response(scope, receive, send)
+        return
     async with session_manager.run():
-        await session_manager.handle_request(request.scope, request.receive, request._send)
-    # The session_manager handles the response, so we don't need to return anything explicitly, 
-    # but to satisfy starlette if it expects something, wait handle_request usually consumes it all.
-    return Response(status_code=200) if not request._send else None # A dummy fallback just in case, but handle_request handles it.
+        await session_manager.handle_request(scope, receive, send)
 
 async def handle_health(request: Request):
     try:
@@ -158,8 +181,10 @@ async def handle_health(request: Request):
 
 # ── Starlette App (Observe Receiver - Localhost only) ─────────────────
 
-async def handle_observe(request: Request):
-    """Browser extension -> /observe endpoint."""
+async def handle_observe(request: Request):  # PATCH-2026-05-17
+    auth = request.headers.get("X-Mnemo-Token")
+    if not auth or auth != OBSERVE_TOKEN:
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
     try:
         data = await request.json()
         session_id = data.get("session_id")
@@ -194,10 +219,10 @@ async def handle_mcp_config(request: Request) -> JSONResponse:
     })
 
 def make_mcp_app():
-    return Starlette(
-        debug=True,
+    return Starlette(  # PATCH-2026-05-17
+        debug=os.getenv("MNEMO_DEBUG", "false").lower() == "true",
         routes=[
-            Route("/mcp",        endpoint=handle_mcp,        methods=["GET", "POST", "DELETE"]),
+            Route("/mcp",        endpoint=ASGIAppWrapper(handle_mcp),        methods=["GET", "POST", "DELETE"]),
             Route("/health",     endpoint=handle_health),
             Route("/mcp-config", endpoint=handle_mcp_config, methods=["GET"]),
         ]
@@ -205,7 +230,7 @@ def make_mcp_app():
 
 def make_observe_app():
     return Starlette(
-        debug=True,
+        debug=os.getenv("MNEMO_DEBUG", "false").lower() == "true",  # PATCH-2026-05-17
         routes=[
             Route("/health",  endpoint=handle_health),
             Route("/observe", endpoint=handle_observe, methods=["POST"]),

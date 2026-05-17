@@ -687,8 +687,27 @@ def _print_status() -> None:
         except Exception:
             pass
 
-def _print_help():
-    print("Mnemostroma CLI\n\nCommands: setup, on, off, status, config, service, run, mcp, tray, watch, logs")
+def _print_help():  # PATCH-2026-05-17
+    print("""Mnemostroma CLI
+
+Commands:
+  setup            First-time setup (config, models, TLS)
+  on / off         Start / stop daemon
+  status           Show daemon status
+  run              Run daemon in foreground
+  mcp              Start MCP stdio adapter
+  sse              Start MCP SSE adapter (browser-only)
+  tunnel           Manage Serveo SSH tunnel
+                     start [--subdomain NAME] | stop | status
+  service install  Install systemd/launchd units
+  config           list | set <key> <value>
+  tray             System tray icon
+  watch            Live session viewer
+  logs             Show recent logs [--days N] [--json]
+  cleanup          Kill stale daemon processes
+  install-models   Download/update ML models [--force]
+  db-dump-time     Set backup interval in hours
+""")
 
 # ---------------------------------------------------------------------------
 # Config Tuner
@@ -850,6 +869,7 @@ def _cmd_service_linux() -> None:
         "mnemostroma-watchdog.service",
         "mnemostroma-ui.service",
         "mnemostroma-sse.service",
+        "mnemostroma-serveo.service",  # PATCH-2026-05-17 — Serveo SSH tunnel unit
     ]
 
     try:
@@ -893,7 +913,11 @@ def _cmd_service_linux() -> None:
         print(f"  ⚠ daemon-reload failed: {result.stderr.strip()}")
 
     # Enable units (idempotent — safe if already enabled)
-    core_units = [u for u in installed if u not in ("mnemostroma-ui.service", "mnemostroma-sse.service")]
+    core_units = [u for u in installed if u not in (  # PATCH-2026-05-17
+        "mnemostroma-ui.service",
+        "mnemostroma-sse.service",
+        "mnemostroma-serveo.service",  # не auto-enable — только по запросу
+    )]
     failed_enable = []
     for unit in core_units:
         res = subprocess.run(
@@ -948,6 +972,129 @@ def _cmd_service(args: list) -> None:
 # CLI Core
 # ---------------------------------------------------------------------------
 
+def _cmd_tunnel(args: list) -> None:  # PATCH-2026-05-17
+    """Управление Serveo SSH туннелем для MCP SSE адаптера.
+
+    Subcommands:
+        start [--subdomain NAME]  — запустить туннель (systemd или foreground)
+        stop                      — остановить туннель
+        status                    — показать статус и URL
+    """
+    import shutil
+
+    subcmd = args[0] if args else "start"
+    subdomain = "mnemostroma"
+    if "--subdomain" in args:
+        idx = args.index("--subdomain")
+        if idx + 1 < len(args):
+            subdomain = args[idx + 1]
+
+    token_path = _MNEMO_DIR / "sse_token"
+    token = token_path.read_text(encoding="utf-8").strip() if token_path.exists() else "<run mnemostroma on first>"
+    public_url = f"https://{subdomain}.serveo.net"
+    mcp_url = f"{public_url}/sse"
+
+    if subcmd == "start":
+        # Записать текущий URL для /mcp-config эндпоинта
+        (_MNEMO_DIR / "serveo_url").write_text(public_url, encoding="utf-8")
+
+        use_systemd = False
+        if sys.platform == "linux" and shutil.which("systemctl"):
+            result = subprocess.run(
+                ["systemctl", "--user", "is-enabled", "mnemostroma-serveo"],
+                capture_output=True, text=True
+            )
+            use_systemd = result.returncode == 0
+
+        if use_systemd:
+            subprocess.run(["systemctl", "--user", "start", "mnemostroma-serveo"])
+            print(f"✓ Serveo tunnel started via systemd")
+        else:
+            if not shutil.which("ssh"):
+                print("❌ ssh not found. Install OpenSSH.")
+                sys.exit(1)
+            ssh_cmd = [
+                "ssh",
+                "-o", "ServerAliveInterval=60",
+                "-o", "ServerAliveCountMax=3",
+                "-o", "ExitOnForwardFailure=yes",
+                "-o", "StrictHostKeyChecking=no",
+                "-R", f"{subdomain}:80:localhost:8765",
+                "serveo.net"
+            ]
+            print(f"Starting Serveo tunnel (foreground)...")
+            print(f"  Subdomain: {subdomain}")
+            subprocess.Popen(
+                ssh_cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True
+            )
+            import time as _t; _t.sleep(2)
+
+        print(f"\n  MCP SSE URL : {mcp_url}")
+        print(f"  Bearer Token: {token}")
+        print(f"\n  Add to claude.ai → Settings → Integrations:")
+        print(f"    URL   : {mcp_url}")
+        print(f"    Header: Authorization: Bearer {token}")
+
+    elif subcmd == "stop":
+        use_systemd = False
+        if sys.platform == "linux" and shutil.which("systemctl"):
+            result = subprocess.run(
+                ["systemctl", "--user", "is-enabled", "mnemostroma-serveo"],
+                capture_output=True, text=True
+            )
+            use_systemd = result.returncode == 0
+
+        if use_systemd:
+            subprocess.run(["systemctl", "--user", "stop", "mnemostroma-serveo"])
+            print("✓ Serveo tunnel stopped (systemd)")
+        else:
+            for proc in psutil.process_iter(['pid', 'cmdline']):
+                try:
+                    cmd = proc.info.get('cmdline') or []
+                    if "ssh" in cmd and "serveo.net" in cmd:
+                        proc.kill()
+                        print(f"✓ Killed SSH tunnel PID {proc.pid}")
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+
+        serveo_url_file = _MNEMO_DIR / "serveo_url"
+        serveo_url_file.unlink(missing_ok=True)
+
+    elif subcmd == "status":
+        serveo_url_file = _MNEMO_DIR / "serveo_url"
+        active = False
+        for proc in psutil.process_iter(['pid', 'cmdline']):
+            try:
+                cmd = proc.info.get('cmdline') or []
+                if "ssh" in cmd and "serveo.net" in cmd:
+                    active = True
+                    print(f"  Tunnel process: PID {proc.pid} (active)")
+                    break
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
+        if not active:
+            if sys.platform == "linux" and shutil.which("systemctl"):
+                res = subprocess.run(
+                    ["systemctl", "--user", "is-active", "mnemostroma-serveo"],
+                    capture_output=True, text=True
+                )
+                if res.returncode == 0:
+                    active = True
+                    print(f"  Tunnel: active (systemd)")
+        if not active:
+            print("  Tunnel: stopped")
+        if serveo_url_file.exists():
+            url = serveo_url_file.read_text().strip()
+            print(f"  Public URL: {url}/sse")
+            print(f"  Token: {token}")
+    else:
+        print(f"Unknown tunnel subcommand: {subcmd}")
+        print("Usage: mnemostroma tunnel [start|stop|status] [--subdomain NAME]")
+
+
 def build_cli() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="mnemostroma", add_help=False)
     parser.add_argument("command", nargs="?", default=None)
@@ -984,16 +1131,7 @@ def dispatch(args_namespace: argparse.Namespace) -> None:
         except KeyboardInterrupt:
             pass
     elif command == "service": _cmd_service(cargs)
-    elif command == "tunnel":
-        import sys as _sys
-        _scripts = Path(__file__).parent.parent.parent.parent / "scripts"
-        _mgr = _scripts / "serveo_manager.py"
-        if not _mgr.exists():
-            print("❌ serveo_manager.py not found in scripts/")
-        else:
-            import runpy
-            _sys.argv = [str(_mgr)]
-            runpy.run_path(str(_mgr), run_name="__main__")
+    elif command == "tunnel": _cmd_tunnel(cargs)  # PATCH-2026-05-17
     elif command == "config": _handle_config(cargs)
     elif command == "tray":
         try:
@@ -1009,18 +1147,16 @@ def dispatch(args_namespace: argparse.Namespace) -> None:
         except Exception as e:
             print(f"\n❌ Tray failure: {e}")
             sys.exit(1)
-    elif command == "sse":
+    elif command == "sse":  # PATCH-2026-05-17
         try:
-            # We assume 'sse' logic might be in conductor or a separate tool
-            # For now, if user calls it, we check dependencies
-            import starlette
-            import uvicorn
-            print("SSE adapter starting...")
-            # actual sse launch logic would go here
+            from mnemostroma.integration.mcp_sse_adapter import run as sse_run
+            asyncio.run(sse_run())
         except ImportError:
             print("\n❌ Error: 'sse' dependencies missing.")
-            print("   Please install them using: pip install 'mnemostroma[sse]'")
+            print("   Install: pip install 'mnemostroma[sse]'")
             sys.exit(1)
+        except KeyboardInterrupt:
+            pass
     elif command == "logs":
         from mnemostroma.tools.logs import run_logs
         db_path = _MNEMO_DIR / "logs.db"
