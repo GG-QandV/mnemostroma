@@ -1,12 +1,14 @@
-# ─────────────────────────────────────────────────────────────────────────────
-# uninstall-windows.ps1 — Mnemostroma Windows Uninstaller
+# =============================================================================
+# uninstall-windows.ps1 -- Mnemostroma Windows Uninstaller
+# Compatible with: PowerShell 5.1+ (Windows 10/11 built-in)
 #
-# Usage:
-#   Invoke-WebRequest -Uri "https://raw.githubusercontent.com/GG-QandV/mnemostroma/main/scripts/uninstall-windows.ps1" -OutFile "$env:TEMP\mnemo-uninstall.ps1"
-#   powershell -ExecutionPolicy Bypass -File "$env:TEMP\mnemo-uninstall.ps1"
+# Usage (recommended):
+#   1. Download uninstall-windows.bat from GitHub
+#   2. Double-click it
 #
-# Or double-click uninstall-windows.bat (if available)
-# ─────────────────────────────────────────────────────────────────────────────
+# Usage (manual):
+#   powershell -ExecutionPolicy Bypass -File ".\scripts\uninstall-windows.ps1"
+# =============================================================================
 
 $ErrorActionPreference = "SilentlyContinue"
 
@@ -19,36 +21,40 @@ Start-Transcript -Path $uninstallLog -Append -Force
 
 Write-Host ""
 Write-Host "==================================================================="
-Write-Host "  Mnemostroma Uninstaller"
+Write-Host "  Mnemostroma -- Uninstaller"
 Write-Host "  Date : $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 Write-Host "  User : $env:USERNAME"
 Write-Host "==================================================================="
 Write-Host ""
 
-# ── Read manifest ─────────────────────────────────────────────────────────────
+# -- Read manifest ------------------------------------------------------------
 
-$manifest = $null
-$tasks     = @("Mnemostroma Daemon", "Mnemostroma Proxy", "Mnemostroma Watchdog")
+$manifest   = $null
+$tasks      = @("Mnemostroma Daemon", "Mnemostroma Proxy", "Mnemostroma Watchdog")
 $scriptsDir = "$mnemoDir\venv\Scripts"
+$pathAdded  = $true
 
 if (Test-Path $manifestPath) {
     try {
         $manifest   = Get-Content $manifestPath -Raw | ConvertFrom-Json
         $tasks      = $manifest.tasks
         $scriptsDir = $manifest.scripts_dir
-        Write-Host "  ✓ Found install manifest (installed: $($manifest.install_date), version: $($manifest.version))"
+        $pathAdded  = $manifest.path_added
+        Write-Host "  OK Found install manifest"
+        Write-Host "     Installed : $($manifest.install_date)"
+        Write-Host "     Version   : $($manifest.version)"
     } catch {
-        Write-Host "  ⚠ Could not read manifest — using defaults."
+        Write-Host "  WARN Could not read manifest -- using defaults."
     }
 } else {
-    Write-Host "  ⚠ No install manifest found at $manifestPath"
-    Write-Host "    Proceeding with default task names and paths."
+    Write-Host "  WARN No install manifest found at $manifestPath"
+    Write-Host "       Proceeding with default task names and paths."
 }
 
 Write-Host ""
 
 
-# ── STEP 1: Stop and remove Task Scheduler tasks ─────────────────────────────
+# -- STEP 1: Stop and remove Task Scheduler tasks -----------------------------
 
 Write-Host "[1/4] Removing Task Scheduler tasks..."
 
@@ -56,31 +62,30 @@ foreach ($taskName in $tasks) {
     try {
         Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
         Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
-        Write-Host "  ✓ Removed: '$taskName'"
+        Write-Host "  OK Removed: $taskName"
     } catch {
-        Write-Host "  ⚠ Could not remove '$taskName' (may not exist): $_"
+        Write-Host "  WARN Could not remove '$taskName' (may not exist): $_"
     }
 }
 
 
-# ── STEP 2: Remove Scripts from user PATH ────────────────────────────────────
+# -- STEP 2: Remove Scripts from user PATH ------------------------------------
 
 Write-Host ""
 Write-Host "[2/4] Removing from user PATH..."
 
-$pathAdded = if ($manifest) { $manifest.path_added } else { $true }
-
 if ($pathAdded) {
-    $currentPath = [System.Environment]::GetEnvironmentVariable("PATH", "User") ?? ""
+    $currentPath = [System.Environment]::GetEnvironmentVariable("PATH", "User")
+    if ($currentPath -eq $null) { $currentPath = "" }
     $newPath = ($currentPath -split ";" | Where-Object { $_ -ne $scriptsDir }) -join ";"
     [System.Environment]::SetEnvironmentVariable("PATH", $newPath, "User")
-    Write-Host "  ✓ Removed from PATH: $scriptsDir"
+    Write-Host "  OK Removed from PATH: $scriptsDir"
 } else {
-    Write-Host "  ✓ PATH was not modified by installer — skipping"
+    Write-Host "  OK PATH was not modified by installer -- skipping"
 }
 
 
-# ── STEP 3: Remove venv ───────────────────────────────────────────────────────
+# -- STEP 3: Remove venv ------------------------------------------------------
 
 Write-Host ""
 Write-Host "[3/4] Removing virtual environment..."
@@ -89,22 +94,22 @@ $venvDir = "$mnemoDir\venv"
 if (Test-Path $venvDir) {
     try {
         Remove-Item $venvDir -Recurse -Force
-        Write-Host "  ✓ Removed: $venvDir"
+        Write-Host "  OK Removed: $venvDir"
     } catch {
-        Write-Host "  ❌ Could not remove venv: $_"
-        Write-Host "    Remove manually: rmdir /s /q `"$venvDir`""
+        Write-Host "  ERROR Could not remove venv: $_"
+        Write-Host "        Remove manually: rmdir /s /q `"$venvDir`""
     }
 } else {
-    Write-Host "  ✓ Venv not found — already removed"
+    Write-Host "  OK Venv not found -- already removed"
 }
 
 
-# ── STEP 4: Remove data directory ────────────────────────────────────────────
+# -- STEP 4: Remove data directory --------------------------------------------
 
 Write-Host ""
 Write-Host "[4/4] Data directory..."
 Write-Host ""
-Write-Host "  Your data and memory are stored in:"
+Write-Host "  Your memory data is stored in:"
 Write-Host "  $mnemoDir"
 Write-Host ""
 
@@ -114,10 +119,10 @@ if ($answer -eq "y" -or $answer -eq "Y") {
     Stop-Transcript
     try {
         Remove-Item $mnemoDir -Recurse -Force
-        Write-Host "  ✓ Removed: $mnemoDir"
+        Write-Host "  OK Removed: $mnemoDir"
     } catch {
-        Write-Host "  ❌ Could not fully remove data directory: $_"
-        Write-Host "    Remove manually: rmdir /s /q `"$mnemoDir`""
+        Write-Host "  ERROR Could not fully remove data directory: $_"
+        Write-Host "        Remove manually: rmdir /s /q `"$mnemoDir`""
     }
 } else {
     Write-Host "  Keeping data directory (logs and memory preserved)."
@@ -127,7 +132,7 @@ if ($answer -eq "y" -or $answer -eq "Y") {
 }
 
 
-# ── Done ──────────────────────────────────────────────────────────────────────
+# -- Done ---------------------------------------------------------------------
 
 Write-Host ""
 Write-Host "==================================================================="

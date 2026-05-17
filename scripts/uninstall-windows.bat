@@ -1,12 +1,12 @@
 @echo off
-:: Mnemostroma — Windows Uninstaller Launcher
+:: Mnemostroma - Windows Uninstaller Launcher
 :: Double-click this file to uninstall Mnemostroma.
 
 title Mnemostroma Uninstaller
 color 0C
 echo.
 echo  ==========================================
-echo    Mnemostroma — Uninstaller
+echo    Mnemostroma - Uninstaller
 echo  ==========================================
 echo.
 echo  Downloading uninstaller, please wait...
