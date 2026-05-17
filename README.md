@@ -363,7 +363,7 @@ Core dependencies: `onnxruntime, tokenizers, numpy, lz4, aiosqlite`
 
 ---
 
-## API surface (11 tools via MCP)
+## <img src="https://raw.githubusercontent.com/GG-QandV/mnemostroma/main/src/extension/assets/terminal-thin.svg" width="28" height="28" align="center" /> API surface (11 tools via MCP)
 
 **Recollection (7):**
 
@@ -390,7 +390,7 @@ Core dependencies: `onnxruntime, tokenizers, numpy, lz4, aiosqlite`
 
 ---
 
-## 🌐 Browser Integration (Mnemostroma Extension)
+## <img src="https://raw.githubusercontent.com/GG-QandV/mnemostroma/main/src/extension/assets/browser-thin.svg" width="28" height="28" align="center" /> Browser Integration (Mnemostroma Extension)
 
 <img src="https://raw.githubusercontent.com/GG-QandV/mnemostroma/main/src/extension/assets/head-circuit-256.png" width="100" align="right" />
 
@@ -404,23 +404,23 @@ Mnemostroma includes a lightweight, secure browser extension that allows you to 
 - **Perplexity** (`perplexity.ai`)
 - **Grok** (`x.ai` / `grok.com`)
 
-### ⚡ Quick Extension Installation:
+### <img src="https://raw.githubusercontent.com/GG-QandV/mnemostroma/main/src/extension/assets/lightning-thin.svg" width="20" height="20" align="center" /> Quick Extension Installation:
 1. Open your browser extension settings (e.g. `chrome://extensions/` in Chrome or Edge, or `about:debugging` in Firefox).
 2. Enable **"Developer mode"** in the top right.
 3. Click **"Load unpacked"** and select the extension directory:
    - Path: `src/extension` inside your Mnemostroma repository.
 4. The extension will automatically connect to your local Mnemostroma daemon (`http://127.0.0.1:8766`).
 
-### 🚦 Action Icon & Badge Indicators:
+### <img src="https://raw.githubusercontent.com/GG-QandV/mnemostroma/main/src/extension/assets/traffic-signal-thin.svg" width="20" height="20" align="center" /> Action Icon & Badge Indicators:
 The Mnemostroma icon in your extension bar is fully functional and uses colors + text badges to show real-time connectivity status:
 
-- 🟢 **Green (Clean Badge)**: Everything is perfect. The local daemon is active, global capture is enabled, and the last memory stream POST request was successful.
-- 🟡 **Yellow (`!` Badge)**: Warning status. The daemon is running, but either global memory capture is paused in the popup menu, the current site is disabled, or the last POST request failed.
-- 🔴 **Red (`X` Badge)**: Offline. The extension cannot connect to the Mnemostroma daemon. Make sure the daemon is running (`mnemostroma start` or universal script).
+- **Active (Green badge / Clean)**: Everything is perfect. The local daemon is active, global capture is enabled, and the last memory stream POST request was successful.
+- **Warning (Yellow badge / `!` marker)**: Warning status. The daemon is running, but either global memory capture is paused in the popup menu, the current site is disabled, or the last POST request failed.
+- **Offline (Red badge / `X` marker)**: Offline. The extension cannot connect to the Mnemostroma daemon. Make sure the daemon is running (`mnemostroma start` or universal script).
 
 ---
 
-## Connecting to LLM (MCP)
+## <img src="https://raw.githubusercontent.com/GG-QandV/mnemostroma/main/src/extension/assets/plug-thin.svg" width="28" height="28" align="center" /> Connecting to LLM (MCP)
 
 The daemon must be running before any client connects.
 
