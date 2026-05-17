@@ -120,4 +120,4 @@ forbidden_modules = [
 ]
 
 [tool.mnemostroma]
-previous_version = "2.1.5"
+previous_version = "2.0.5"

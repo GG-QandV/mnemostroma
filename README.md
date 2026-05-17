@@ -387,7 +387,6 @@ Core dependencies: `onnxruntime, tokenizers, numpy, lz4, aiosqlite`
 
 **Observer Principle:** You never call "save_memory". The Observer watches your conversation and handles everything in the background. Tools are for *reading* memory, not writing it.
 
-
 ---
 
 ## <img src="https://raw.githubusercontent.com/GG-QandV/mnemostroma/main/src/extension/assets/browser-thin.svg" width="28" height="28" align="center" /> Browser Integration (Mnemostroma Extension)
@@ -397,6 +396,7 @@ Core dependencies: `onnxruntime, tokenizers, numpy, lz4, aiosqlite`
 Mnemostroma includes a lightweight, secure browser extension that allows you to seamlessly feed chat contexts from leading LLM interfaces into your local memory layer.
 
 ### Supported Chat Interfaces:
+
 - **Claude** (`claude.ai`)
 - **ChatGPT** (`chatgpt.com`)
 - **Gemini** (`gemini.google.com`)
@@ -405,6 +405,7 @@ Mnemostroma includes a lightweight, secure browser extension that allows you to 
 - **Grok** (`x.ai` / `grok.com`)
 
 ### <img src="https://raw.githubusercontent.com/GG-QandV/mnemostroma/main/src/extension/assets/lightning-thin.svg" width="20" height="20" align="center" /> Quick Extension Installation:
+
 1. Open your browser extension settings (e.g. `chrome://extensions/` in Chrome or Edge, or `about:debugging` in Firefox).
 2. Enable **"Developer mode"** in the top right.
 3. Click **"Load unpacked"** and select the extension directory:
@@ -412,6 +413,7 @@ Mnemostroma includes a lightweight, secure browser extension that allows you to 
 4. The extension will automatically connect to your local Mnemostroma daemon (`http://127.0.0.1:8766`).
 
 ### <img src="https://raw.githubusercontent.com/GG-QandV/mnemostroma/main/src/extension/assets/traffic-signal-thin.svg" width="20" height="20" align="center" /> Action Icon & Badge Indicators:
+
 The Mnemostroma icon in your extension bar is fully functional and uses colors + text badges to show real-time connectivity status:
 
 - **Active (Green badge / Clean)**: Everything is perfect. The local daemon is active, global capture is enabled, and the last memory stream POST request was successful.
