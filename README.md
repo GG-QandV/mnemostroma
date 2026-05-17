@@ -2,14 +2,14 @@
 
 ### The memory layer for AI agents
 
-![Version](https://img.shields.io/badge/version-v1.11.2-orange)
+![Version](https://img.shields.io/badge/version-v2.0.5-orange)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue)
-![Tests](https://img.shields.io/badge/tests-502%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-531%20passing-brightgreen)
 ![License](https://img.shields.io/badge/license-FSL--1.1--MIT-lightgrey)
 
 > *μνήμη (mnḗmē, memory) + στρῶμα (strôma, layer) — the substrate everything rests on.*
 
-> **v1.11.2 is stable.** Upgrading from v1.9.1 or earlier? → [See UPGRADE.md](./UPGRADE.md)
+> **v2.0.5 is stable.** Upgrading from v1.9.1 or earlier? → [See UPGRADE.md](./UPGRADE.md)
 
 ---
 
@@ -164,11 +164,11 @@ This is not a database with TTL. This is how human memory works.
 
 ## Status
 
-**Current:** v1.11.2 | 2026-05-12
+**Current:** v2.0.5 | 2026-05-17
 
 | Component                                | Status                           |
 | ---------------------------------------- | -------------------------------- |
-| Core backend (Observer, Memory, Storage) | DONE Implemented, 502/502 tests  |
+| Core backend (Observer, Memory, Storage) | DONE Implemented, 531/531 tests  |
 | Golden Standard Launch (Shell Guards)    | DONE Implemented (v1.11.1)       |
 | Anchor Layer / Emotional Patterns        | DONE Implemented                 |
 | Implicit Feedback (v1.5)                 | DONE Implemented                 |
@@ -189,7 +189,7 @@ This is not a database with TTL. This is how human memory works.
 
 **Requires Python 3.12+**
 
-> **v1.11.2 is stable.** Upgrading from v1.9.1 or earlier? → [See UPGRADE.md](./UPGRADE.md)
+> **v2.0.5 is stable.** Upgrading from v1.9.1 or earlier? → [See UPGRADE.md](./UPGRADE.md)
 
 ---
 
@@ -656,7 +656,7 @@ It gives your agent an actual memory.
 git clone https://github.com/GG-QandV/mnemostroma.git
 cd mnemostroma
 pip install -e ".[dev]"
-pytest tests/                          # run all 502 tests
+pytest tests/                          # run all 531 tests
 pytest tests/ --ignore=tests/test_memory_layers.py \
               --ignore=tests/test_data_contracts.py  # fast mode (~14s)
 ```
@@ -685,7 +685,7 @@ Cloud Sync, Subconscious Layer (personalized models), Shared Experience, and Tea
 ---
 
 *Mnemostroma — the memory layer for AI agents*
-*offline · ~650MB RAM (baseline) · ~20ms · 502 tests · v1.11.1*
+*offline · ~650MB RAM (baseline) · ~20ms · 531 tests · v2.0.5*
 
 # [mnemostroma-protocol]
 

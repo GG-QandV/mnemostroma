@@ -100,3 +100,10 @@ $GUARD_BLOCK_END
 EOF
 
 echo "Installation finalized."
+echo ""
+echo "📢 IMPORTANT NEXT STEP:"
+echo "To capture chat sessions from Claude, Perplexity, ChatGPT, Gemini, etc. into Mnemostroma,"
+echo "you MUST load the Mnemostroma browser extension into your browser."
+echo "Read the easy setup guide:"
+echo "👉 src/extension/docs/INSTALL.md"
+echo ""

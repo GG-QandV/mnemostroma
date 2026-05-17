@@ -1,4 +1,4 @@
-## Upgrading to v1.11.2 (Current)
+## Upgrading to v2.0.5 (Current)
 
 Hotfix release. No schema migrations. No configuration changes.
 

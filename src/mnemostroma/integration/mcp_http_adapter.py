@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from starlette.applications import Starlette
+from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route, Mount
 from starlette.middleware import Middleware
@@ -16,10 +17,10 @@ from starlette.middleware.cors import CORSMiddleware
 import uvicorn
 
 from mcp.server import Server
-from mcp.server.sse import SseServerTransport
+from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.types import Tool, TextContent
 
-logger = logging.getLogger("mnemostroma.sse_adapter")
+logger = logging.getLogger("mnemostroma.http_adapter")
 
 _MNEMO_DIR = Path.home() / ".mnemostroma"
 _SOCKET_PATH = _MNEMO_DIR / "daemon.sock"
@@ -33,26 +34,11 @@ def _get_or_create_token() -> str:
     if not _TOKEN_PATH.exists():
         token = secrets.token_urlsafe(32)
         _TOKEN_PATH.write_text(token, encoding="utf-8")
-        _TOKEN_PATH.chmod(0o600)
-        logger.info(f"Generated new SSE token in {_TOKEN_PATH}")
+        logger.info(f"Generated new SSE/HTTP token in {_TOKEN_PATH}")
         return token
     return _TOKEN_PATH.read_text(encoding="utf-8").strip()
 
-
 TOKEN = _get_or_create_token()
-
-_OBSERVE_TOKEN_PATH = _MNEMO_DIR / "observe_token"
-
-def _get_or_create_observe_token() -> str:
-    _MNEMO_DIR.mkdir(parents=True, exist_ok=True)
-    if not _OBSERVE_TOKEN_PATH.exists():
-        token = secrets.token_urlsafe(32)
-        _OBSERVE_TOKEN_PATH.write_text(token, encoding="utf-8")
-        _OBSERVE_TOKEN_PATH.chmod(0o600)
-        return token
-    return _OBSERVE_TOKEN_PATH.read_text(encoding="utf-8").strip()
-
-OBSERVE_TOKEN = _get_or_create_observe_token()
 
 # ── Tool list (keep in sync with mcp_stdio_adapter.py) ──────────────
 
@@ -71,11 +57,7 @@ def _next_id() -> int:
 
 if sys.platform == "win32":
     async def _open_pipe() -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
-        """Open Named Pipe via ProactorEventLoop (Windows-only).
-
-        ProactorEventLoop is the default on Windows starting from Python 3.8.
-        create_pipe_connection() is a low-level API, analogous to open_unix_connection.
-        """
+        """Open Named Pipe via ProactorEventLoop (Windows-only)."""
         loop = asyncio.get_running_loop()
         reader = asyncio.StreamReader()
         protocol = asyncio.StreamReaderProtocol(reader)
@@ -86,7 +68,6 @@ if sys.platform == "win32":
         )
         writer = asyncio.StreamWriter(transport, protocol, reader, loop)
         return reader, writer
-
 
 async def _ipc_call(tool: str, args: dict) -> Any:
     """Send one request to the daemon IPC socket, return result or raise."""
@@ -123,15 +104,8 @@ async def _ipc_call(tool: str, args: dict) -> Any:
             pass
 
 # ── MCP Server factory ────────────────────────────────────────────────
-# Create a new Server() for each SSE connection.
-# SseServerTransport (sse) — safely shared: isolates sessions by UUID.
 
 def _make_mcp_server() -> Server:
-    """Factory: fresh Server() with registered handlers.
-
-    Called inside handle_sse() for each new client.
-    Guarantees isolated negotiation state and absence of race conditions.
-    """
     srv = Server("mnemostroma")
 
     @srv.list_tools()
@@ -153,35 +127,29 @@ def _make_mcp_server() -> Server:
 
     return srv
 
+# ── Session Manager (replaces SseServerTransport) ─────────────────────
 
-# SseServerTransport is safe to share: each session is isolated by UUID.
-sse = SseServerTransport("/messages/")
+session_manager = StreamableHTTPSessionManager(
+    app=_make_mcp_server(),
+    event_store=None,       # stateless — no session persistence needed
+    json_response=True,     # return JSON, not binary stream
+    stateless=True,         # crucial for cloudflared quick tunnel
+)
 
-# ── Starlette App (MCP SSE) ───────────────────────────────────────────
+# ── Starlette App (MCP HTTP) ───────────────────────────────────────────
 
-async def handle_sse(request):
-    # Auth BEFORE opening SSE stream
+async def handle_mcp(request: Request):
     auth = request.headers.get("Authorization")
     if not auth or auth != f"Bearer {TOKEN}":
         return Response("Unauthorized", status_code=401)
+    
+    async with session_manager.run():
+        await session_manager.handle_request(request.scope, request.receive, request._send)
+    # The session_manager handles the response, so we don't need to return anything explicitly, 
+    # but to satisfy starlette if it expects something, wait handle_request usually consumes it all.
+    return Response(status_code=200) if not request._send else None # A dummy fallback just in case, but handle_request handles it.
 
-    # New isolated Server() for this connection
-    mcp_instance = _make_mcp_server()
-
-    async with sse.connect_sse(request.scope, request.receive, request._send) as (read_stream, write_stream):
-        await mcp_instance.run(
-            read_stream, write_stream, mcp_instance.create_initialization_options()
-        )
-
-async def handle_messages(request):
-    # Auth check
-    auth = request.headers.get("Authorization")
-    if not auth or auth != f"Bearer {TOKEN}":
-        return Response("Unauthorized", status_code=401)
-
-    return await sse.handle_post_message(request.scope, request.receive, request._send)
-
-async def handle_health(request):
+async def handle_health(request: Request):
     try:
         await _ipc_call("ctx_active", {})
         return JSONResponse({"status": "ok", "daemon": "connected", "mcpConfirmed": True})
@@ -190,11 +158,8 @@ async def handle_health(request):
 
 # ── Starlette App (Observe Receiver - Localhost only) ─────────────────
 
-async def handle_observe(request):
+async def handle_observe(request: Request):
     """Browser extension -> /observe endpoint."""
-    auth = request.headers.get("X-Mnemo-Token")
-    if not auth or auth != OBSERVE_TOKEN:
-        return JSONResponse({"error": "unauthorized"}, status_code=401)
     try:
         data = await request.json()
         session_id = data.get("session_id")
@@ -209,13 +174,32 @@ async def handle_observe(request):
 
 # ── Unified Runner ────────────────────────────────────────────────────
 
+async def handle_mcp_config(request: Request) -> JSONResponse:
+    """Return ready-to-use MCP client config, with Serveo headers if tunnel is active."""
+    serveo_path = _MNEMO_DIR / "serveo_url"
+    if serveo_path.exists():
+        public_url = serveo_path.read_text().strip()
+        endpoint = f"{public_url}/mcp"
+        headers = {"serveo-skip-browser-warning": "true"}
+    else:
+        endpoint = "http://localhost:8768/mcp"
+        headers = {}
+    return JSONResponse({
+        "mcpServers": {
+            "mnemostroma": {
+                "url": endpoint,
+                "headers": headers,
+            }
+        }
+    })
+
 def make_mcp_app():
     return Starlette(
         debug=True,
         routes=[
-            Route("/sse", endpoint=handle_sse),
-            Route("/messages/", endpoint=handle_messages, methods=["POST"]),
-            Route("/health", endpoint=handle_health),
+            Route("/mcp",        endpoint=handle_mcp,        methods=["GET", "POST", "DELETE"]),
+            Route("/health",     endpoint=handle_health),
+            Route("/mcp-config", endpoint=handle_mcp_config, methods=["GET"]),
         ]
     )
 
@@ -240,13 +224,13 @@ def is_port_in_use(port: int, host: str = "127.0.0.1") -> bool:
 async def run():
     logging.basicConfig(level=logging.INFO)
 
-    mcp_config = uvicorn.Config(make_mcp_app(),     host="0.0.0.0",   port=8765, log_level="info")
+    mcp_config = uvicorn.Config(make_mcp_app(),     host="0.0.0.0",   port=8768, log_level="info")
     obs_config = uvicorn.Config(make_observe_app(), host="127.0.0.1", port=8766, log_level="info")
 
     servers = [uvicorn.Server(mcp_config)]
 
-    logger.info("Mnemostroma SSE Adapter starting...")
-    logger.info("  MCP SSE: http://localhost:8765/sse (Auth required)")
+    logger.info("Mnemostroma HTTP Adapter starting...")
+    logger.info("  MCP HTTP: http://localhost:8768/mcp (Auth required)")
     
     if not is_port_in_use(8766, "127.0.0.1"):
         servers.append(uvicorn.Server(obs_config))

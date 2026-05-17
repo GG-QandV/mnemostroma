@@ -53,7 +53,15 @@ export const CAPTURE_MODE_DOM_ONLY       = 'dom_only';
 export const CAPTURE_MODE_TRANSPORT_FIRST = 'transport_first';
 export const CAPTURE_MODE_TRANSPORT_ONLY  = 'transport_only';
 
-export const DEFAULT_CAPTURE_MODE = CAPTURE_MODE_TRANSPORT_FIRST;
+// ─── RELEASE GUARD (STABILITY SHARDS) ─────────────────────────────────────────
+// Controls the availability of DOM-independent MCP network tunneling (Phase 3/4).
+// - Development/Beta (v2.1.5): Set to true (active for field tests & debug).
+// - Stable Production (v2.0.5): Must be set to false (disabled for public safety).
+export const IS_MCP_TUNNELING_ENABLED = false; 
+
+export const DEFAULT_CAPTURE_MODE = IS_MCP_TUNNELING_ENABLED 
+  ? CAPTURE_MODE_TRANSPORT_FIRST 
+  : CAPTURE_MODE_DOM_ONLY;
 
 // Kill-switch: localStorage key that forces dom_only regardless of DEFAULT_CAPTURE_MODE.
 // Set to any truthy string to activate.

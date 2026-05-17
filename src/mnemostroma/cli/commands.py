@@ -516,6 +516,11 @@ def _cmd_setup() -> None:
 
     # Tray and Watch are optional and should be started by user or via tray
     print("  ✓ Setup finished. Use 'mnemostroma on' to start if not already running.")
+    print("\n  📢 IMPORTANT NEXT STEP:")
+    print("  To capture chat sessions from Claude, Perplexity, ChatGPT, Gemini, etc. into Mnemostroma,")
+    print("  you MUST load the Mnemostroma browser extension into your browser.")
+    print("  Read the easy setup guide:")
+    print("  👉 src/extension/docs/INSTALL.md\n")
 
 from mnemostroma.version import __version__
 _BANNER = f"""
@@ -979,6 +984,16 @@ def dispatch(args_namespace: argparse.Namespace) -> None:
         except KeyboardInterrupt:
             pass
     elif command == "service": _cmd_service(cargs)
+    elif command == "tunnel":
+        import sys as _sys
+        _scripts = Path(__file__).parent.parent.parent.parent / "scripts"
+        _mgr = _scripts / "serveo_manager.py"
+        if not _mgr.exists():
+            print("❌ serveo_manager.py not found in scripts/")
+        else:
+            import runpy
+            _sys.argv = [str(_mgr)]
+            runpy.run_path(str(_mgr), run_name="__main__")
     elif command == "config": _handle_config(cargs)
     elif command == "tray":
         try:

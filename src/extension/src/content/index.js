@@ -15,6 +15,7 @@ import {
   CAPTURE_MODE_TRANSPORT_ONLY,
   DEFAULT_CAPTURE_MODE,
   CAPTURE_KILL_SWITCH_KEY,
+  IS_MCP_TUNNELING_ENABLED,
 } from '../shared/constants.js';
 import { generateSessionId, generateExchangeId, generateRegenerateId } from '../shared/session.js';
 import { extractArtifacts } from '../shared/artifacts.js';
@@ -130,6 +131,9 @@ function _buildTransportPayload({ userText, llmText }) {
 }
 
 function _readCaptureMode() {
+  // RELEASE GUARD: If MCP network tunneling is globally disabled, force DOM-only mode for stability.
+  if (!IS_MCP_TUNNELING_ENABLED) return CAPTURE_MODE_DOM_ONLY;
+
   if (localStorage.getItem(CAPTURE_KILL_SWITCH_KEY)) return CAPTURE_MODE_DOM_ONLY;
   const value = localStorage.getItem('mnemo_capture_mode');
   if (value === CAPTURE_MODE_DOM_ONLY || value === CAPTURE_MODE_TRANSPORT_FIRST || value === CAPTURE_MODE_TRANSPORT_ONLY) {

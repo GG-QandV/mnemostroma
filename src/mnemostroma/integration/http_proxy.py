@@ -322,7 +322,7 @@ async def _handle_stream(client, path, body, headers, sid, extra, provider) -> S
 async def health(request: Request) -> Response:
     try:
         await _pool.call("ctx_active", {})
-        return Response('{"status":"ok"}', media_type="application/json")
+        return Response('{"status":"ok", "mcpConfirmed": true}', media_type="application/json")
     except Exception as e:
         return Response(
             json.dumps({"status": "error", "detail": str(e)}),

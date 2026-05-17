@@ -138,7 +138,7 @@ The extension watches the claude.ai DOM and forwards messages to the local obser
 3. Click **Load unpacked**
 4. Select the directory:
    ```
-   /path/to/mnemostroma/src/mnemostroma/extension/
+   /path/to/mnemostroma/src/extension/
    ```
 
 ### Verify
