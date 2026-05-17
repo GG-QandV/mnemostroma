@@ -490,22 +490,32 @@ Registers a persistent task in the Windows Task Scheduler.
 
 ### Claude.ai (Web Interface) — Custom MCP Connector (Beta)
 
-Claude.ai supports connecting custom remote MCP servers via Server-Sent Events (SSE). This allows Claude in the web interface to directly call Mnemostroma's memory tools.
+Claude.ai supports connecting custom remote MCP servers. While Server-Sent Events (SSE) was the legacy transport, **Streamable HTTP** is the current, modern standard as of the latest MCP specifications. Mnemostroma fully supports both transports.
 
 To connect Mnemostroma as a Custom Connector in **Claude.ai → Settings → Integrations → Add Custom Connector** (or via `https://claude.ai/customize/connectors?modal=add-custom-connector`):
 
-1. **Start the SSE Adapter** in a separate terminal:
-   ```bash
-   mnemostroma sse
-   ```
-2. **Expose your SSE port (8765)** to the internet via Cloudflare Tunnel (recommended) or a similar secure tunneling service (e.g. Serveo), since Claude's servers require a publicly accessible HTTPS URL.
+1. **Start the appropriate adapter** in a separate terminal:
+   * **Streamable HTTP (Recommended, port 8768):** Started by default with the daemon. Or run manually: `python3 -m mnemostroma.integration.mcp_http_adapter`
+   * **SSE (Legacy, port 8765):** Run manually: `mnemostroma sse` (requires `pip install mnemostroma[sse]`)
+2. **Expose the local port** to the internet via Cloudflare Tunnel (recommended) or a similar secure tunneling service (e.g. Serveo), since Claude's servers require a publicly accessible HTTPS URL.
 3. **Fill the Add Custom Connector form** in Claude.ai with the following values:
 
+#### Option A: Streamable HTTP (Recommended)
 | Field | Value | Description |
 |---|---|---|
+| **Type / Transport** | `HTTP` or `Streamable HTTP` | Choose the modern HTTP transport |
 | **Name** | `mnemostroma` | Any identifier for the connector |
-| **Target URL** | `https://mnemo.yourdomain.com/sse` | Your public HTTPS endpoint pointing to port `8765` |
-| **Authorization Header** | `Bearer <your-sse-token>` | Retrieve your secure token: `cat ~/.mnemostroma/sse_token` |
+| **Target URL** | `https://mnemo.yourdomain.com/mcp` | Public HTTPS endpoint pointing to port `8768` (path `/mcp`) |
+| **Authorization Header** | `Bearer <your-token>` | Retrieve your secure token: `cat ~/.mnemostroma/sse_token` |
+| **OAuth Settings** | *Leave blank (optional)* | Not required for local deployment |
+
+#### Option B: SSE (Legacy)
+| Field | Value | Description |
+|---|---|---|
+| **Type / Transport** | `SSE` | Choose the Server-Sent Events transport |
+| **Name** | `mnemostroma` | Any identifier for the connector |
+| **Target URL** | `https://mnemo.yourdomain.com/sse` | Public HTTPS endpoint pointing to port `8765` (path `/sse`) |
+| **Authorization Header** | `Bearer <your-token>` | Retrieve your secure token: `cat ~/.mnemostroma/sse_token` |
 | **OAuth Settings** | *Leave blank (optional)* | Not required for local deployment |
 
 > For a complete, step-by-step walkthrough of setting up Cloudflare Tunnels, generating tokens, and testing your endpoint, see the dedicated [Claude.ai Setup Guide](./docs/CLAUDE_AI_SETUP.md).
