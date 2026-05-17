@@ -387,6 +387,37 @@ Core dependencies: `onnxruntime, tokenizers, numpy, lz4, aiosqlite`
 
 **Observer Principle:** You never call "save_memory". The Observer watches your conversation and handles everything in the background. Tools are for *reading* memory, not writing it.
 
+
+---
+
+## 🌐 Browser Integration (Mnemostroma Extension)
+
+<img src="https://raw.githubusercontent.com/GG-QandV/mnemostroma/main/src/extension/assets/head-circuit-256.png" width="100" align="right" />
+
+Mnemostroma includes a lightweight, secure browser extension that allows you to seamlessly feed chat contexts from leading LLM interfaces into your local memory layer.
+
+### Supported Chat Interfaces:
+- **Claude** (`claude.ai`)
+- **ChatGPT** (`chatgpt.com`)
+- **Gemini** (`gemini.google.com`)
+- **DeepSeek** (`chat.deepseek.com`)
+- **Perplexity** (`perplexity.ai`)
+- **Grok** (`x.ai` / `grok.com`)
+
+### ⚡ Quick Extension Installation:
+1. Open your browser extension settings (e.g. `chrome://extensions/` in Chrome or Edge, or `about:debugging` in Firefox).
+2. Enable **"Developer mode"** in the top right.
+3. Click **"Load unpacked"** and select the extension directory:
+   - Path: `src/extension` inside your Mnemostroma repository.
+4. The extension will automatically connect to your local Mnemostroma daemon (`http://127.0.0.1:8766`).
+
+### 🚦 Action Icon & Badge Indicators:
+The Mnemostroma icon in your extension bar is fully functional and uses colors + text badges to show real-time connectivity status:
+
+- 🟢 **Green (Clean Badge)**: Everything is perfect. The local daemon is active, global capture is enabled, and the last memory stream POST request was successful.
+- 🟡 **Yellow (`!` Badge)**: Warning status. The daemon is running, but either global memory capture is paused in the popup menu, the current site is disabled, or the last POST request failed.
+- 🔴 **Red (`X` Badge)**: Offline. The extension cannot connect to the Mnemostroma daemon. Make sure the daemon is running (`mnemostroma start` or universal script).
+
 ---
 
 ## Connecting to LLM (MCP)
@@ -446,9 +477,7 @@ Registers a persistent task in the Windows Task Scheduler.
 .\scripts\windows\install-daemon.ps1
 ```
 
-> **Architecture note:** Clients (VS Code, Claude Code, Cursor) will spawn lightweight adapter processes that connect to this central daemon via socket. The daemon persists to maintain cross-session memory; adapters are ephemeral.
-
-> **Architecture note:** Clients (VS Code, Claude Code, Cursor) will spawn lightweight adapter processes (~70 MB) that connect to this daemon via socket. The daemon persists; adapters are ephemeral.
+> **Architecture note:** Clients (VS Code, Claude Code, Cursor) will spawn lightweight adapter processes (~70 MB) that connect to this daemon via socket. The daemon persists to maintain cross-session memory; adapters are ephemeral.
 
 ---
 
