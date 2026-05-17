@@ -78,6 +78,7 @@ function Exit-WithError($status, $message) {
 # -- STEP 1: Ensure Python 3.12+ ----------------------------------------------
 
 function Test-PythonVersion($cmd) {
+    $local:ErrorActionPreference = "SilentlyContinue"
     try {
         $result = & $cmd -c "import sys; print(sys.version_info >= (3,12))" 2>$null
         return ($result -eq "True")
@@ -87,6 +88,7 @@ function Test-PythonVersion($cmd) {
 }
 
 function Find-Python {
+    $local:ErrorActionPreference = "SilentlyContinue"
     foreach ($cmd in @("py", "python3", "python")) {
         try {
             if (Get-Command $cmd -ErrorAction SilentlyContinue) {
