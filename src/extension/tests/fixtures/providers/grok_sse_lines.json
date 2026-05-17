@@ -1,0 +1,6 @@
+[
+  "{\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}",
+  "{\"choices\":[{\"delta\":{\"content\":\" from\"}}]}",
+  "{\"choices\":[{\"delta\":{\"content\":\" Grok\"}}]}",
+  "[DONE]"
+]

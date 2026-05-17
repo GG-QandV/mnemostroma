@@ -1,0 +1,5 @@
+[
+  "{\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"Hello \"}}",
+  "{\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"world\"}}",
+  "{\"type\":\"message_stop\"}"
+]
