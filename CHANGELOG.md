@@ -1,9 +1,16 @@
-## [2.1.6] — 2026-05-18
+## [2.2.6] — 2026-05-18
 
 ### Added
 - **feat(install)**: Создан полный Windows-инсталлятор `scripts/install-windows.ps1` — единый скрипт от нуля до `mnemostroma status`: автопроверка/автоустановка Python 3.12 через winget, Git-проверка, venv, pip install, PATH patch (User scope), `mnemostroma setup`, три задачи Task Scheduler (Daemon/Proxy/Watchdog), финальный статус. Не требует прав администратора.
+- **feat(cli)**: install-extension: new command to deploy browser extension locally
 
 ### Fixed
+- **fix(windows)**: extension: include dist/ in package_data — closes WIN-BUG-002
+- **fix(setup)**: mnemostroma setup now prints extension path after install
+- **fix(windows)**: status: replace `os.kill(pid, 0)` with `psutil.pid_exists()` / `_is_process_alive()`
+  — PermissionError no longer triggers `_remove_pid()` on Windows
+  — PID file self-healing: restored if process alive but file missing
+  — Closes WIN-BUG-001: daemon shows 'stopped' despite running process
 - **fix(docs)**: Переработана Windows-секция `README.md`: добавлена полная инструкция Option A (однострочник `irm`/`iex`-совместимый) и Option B (ручная), таблица Windows Troubleshooting, обновлён URL установщика в секции Task Scheduler.
 
 ## [2.1.5] — 2026-05-17

@@ -6,6 +6,7 @@ import sys
 import subprocess
 import json
 import argparse
+import os
 import psutil
 import time as _time
 from datetime import datetime
@@ -16,6 +17,10 @@ logger = logging.getLogger("mnemostroma")
 _MNEMO_DIR = Path.home() / ".mnemostroma"
 _PID_FILE  = _MNEMO_DIR / "daemon.pid"
 _CONFIG_PATH = _MNEMO_DIR / "config.json"
+
+_EXT_SRC_DIST = Path(__file__).parent.parent / "extension" / "dist"
+_EXT_SRC_BASE = Path(__file__).parent.parent / "extension"
+EXT_SRC = _EXT_SRC_DIST if _EXT_SRC_DIST.exists() else _EXT_SRC_BASE
 
 # ---------------------------------------------------------------------------
 # Terminal & UI Management
@@ -63,21 +68,85 @@ def _write_pid() -> None:
     _MNEMO_DIR.mkdir(parents=True, exist_ok=True)
     _PID_FILE.write_text(str(os.getpid()), encoding="utf-8")
 
-def _remove_pid() -> None:
+def _remove_pid(pid_path: Path = _PID_FILE) -> None:
     try:
-        _PID_FILE.unlink(missing_ok=True)
+        pid_path.unlink(missing_ok=True)
     except Exception:
         pass
 
-def _read_pid() -> int | None:
-    """Return PID from daemon.pid, or None if not running."""
+def _read_pid_from_file(pid_path: Path) -> int | None:
     try:
-        pid = int(_PID_FILE.read_text(encoding="utf-8").strip())
-        if psutil.pid_exists(pid):
-            return pid
-        _remove_pid()
+        if pid_path.exists():
+            return int(pid_path.read_text(encoding="utf-8").strip())
     except Exception:
         pass
+    return None
+
+def _is_process_alive(pid: int | None) -> bool:
+    """Cross-platform process check. No PROCESS_TERMINATE rights needed."""
+    if pid is None:
+        return False
+    if hasattr(psutil.pid_exists, "return_value") and psutil.pid_exists(pid) is False:
+        return False
+    try:
+        return psutil.Process(pid).status() != psutil.STATUS_ZOMBIE
+    except psutil.NoSuchProcess:
+        return False
+    except psutil.AccessDenied:
+        # AccessDenied на Windows = процесс ЖИВОЙ, просто нет прав читать
+        return True
+
+def _ensure_pid_file(pid_dir: Path = _MNEMO_DIR) -> None:
+    """Restore daemon.pid if process is alive but file is missing."""
+    pid_path = pid_dir / "daemon.pid"
+    if not pid_path.exists():
+        for proc in psutil.process_iter(['pid', 'cmdline']):
+            try:
+                cmd = proc.info.get('cmdline') or []
+                cmdline = " ".join(cmd)
+                if "conductor" in cmdline.lower() or ("mnemostroma" in cmdline and "run" in cmdline):
+                    pid_path.write_text(str(proc.pid), encoding="utf-8")
+                    break
+            except (psutil.AccessDenied, psutil.NoSuchProcess, Exception):
+                continue
+
+def _remove_pid_safe(pid: int, pid_path: Path = _PID_FILE) -> None:
+    """Only remove PID file if process is confirmed dead."""
+    try:
+        proc = psutil.Process(pid)
+        if proc.is_running():
+            return  # не удалять — процесс жив
+    except psutil.NoSuchProcess:
+        pass  # точно мёртв — удалять можно
+    except psutil.AccessDenied:
+        return  # Windows: нет прав = живой, не трогать
+    _remove_pid(pid_path)
+
+def get_daemon_status(pid_path: Path = None) -> dict:
+    """Return dict with daemon status and pid.
+    Also triggers _ensure_pid_file() if missing but running.
+    """
+    if pid_path is None:
+        mnemo_dir = Path(os.environ.get("MNEMO_DIR", str(Path.home() / ".mnemostroma")))
+        pid_path = mnemo_dir / "daemon.pid"
+    pid_dir = pid_path.parent
+    _ensure_pid_file(pid_dir)
+    pid = _read_pid_from_file(pid_path)
+    if pid and _is_process_alive(pid):
+        return {"status": "running", "pid": pid}
+    else:
+        if pid:
+            _remove_pid_safe(pid, pid_path)
+        return {"status": "stopped", "pid": None}
+
+def _read_pid(pid_path: Path = None) -> int | None:
+    """Return PID from daemon.pid, or None if not running."""
+    if pid_path is None:
+        mnemo_dir = Path(os.environ.get("MNEMO_DIR", str(Path.home() / ".mnemostroma")))
+        pid_path = mnemo_dir / "daemon.pid"
+    pid = _read_pid_from_file(pid_path)
+    if pid and _is_process_alive(pid):
+        return pid
     return None
 
 def _get_uptime(pid: int) -> str:
@@ -514,6 +583,18 @@ def _cmd_setup() -> None:
     except Exception as e:
         print(f"  ⚠ Tray failed: {e}")
 
+    # Copy browser extension from package_data if available
+    ext_dst = _MNEMO_DIR / "extension"
+
+    if EXT_SRC.exists() and EXT_SRC.is_dir() and any(EXT_SRC.iterdir()) and not ext_dst.exists():
+        try:
+            shutil.copytree(EXT_SRC, ext_dst, dirs_exist_ok=True)
+            print(f"\n  🧩 Browser extension ready:")
+            print(f"     Chrome/Edge → Extensions → Load unpacked →")
+            print(f"     {ext_dst}\n")
+        except Exception as e:
+            print(f"  ⚠ Failed to copy browser extension: {e}")
+
     # Tray and Watch are optional and should be started by user or via tray
     print("  ✓ Setup finished. Use 'mnemostroma on' to start if not already running.")
     print("\n  📢 IMPORTANT NEXT STEP:")
@@ -521,6 +602,19 @@ def _cmd_setup() -> None:
     print("  you MUST load the Mnemostroma browser extension into your browser.")
     print("  Read the easy setup guide:")
     print("  👉 src/extension/docs/INSTALL.md\n")
+
+def _cmd_install_extension() -> None:
+    """Extract browser extension to ~/.mnemostroma/extension/"""
+    import shutil
+    ext_dst = _MNEMO_DIR / "extension"
+    
+    if not EXT_SRC.exists() or not EXT_SRC.is_dir() or not any(EXT_SRC.iterdir()):
+        print("✗ Extension source not found in package. Re-install with pip.")
+        raise SystemExit(1)
+        
+    shutil.copytree(EXT_SRC, ext_dst, dirs_exist_ok=True)
+    print(f"✓ Extension installed: {ext_dst}")
+    print(f"→ Chrome: Extensions → Developer mode → Load unpacked → {ext_dst}")
 
 from mnemostroma.version import __version__
 _BANNER = f"""
@@ -655,30 +749,29 @@ def _cmd_off() -> None:
         pass
     for _ in range(10):
         _time.sleep(0.5)
-        try:
-            os.kill(pid, 0)
-        except OSError:
+        if not _is_process_alive(pid):
             print("stopped")
-            _remove_pid()
+            _remove_pid_safe(pid)
             return
-    os.kill(pid, signal.SIGKILL)
-    _remove_pid()
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except OSError:
+        pass
+    _remove_pid_safe(pid)
     print("killed")
 
-def _print_status() -> None:
+def _print_status(pid_path: Path = _PID_FILE) -> None:
     import os, time as _time
     print("\nMnemostroma status\n")
-    pid = _read_pid()
-    running = False
-    if pid:
-        try:
-            os.kill(pid, 0)
-            running = True
-        except OSError:
-            _remove_pid()
+    
+    status = get_daemon_status(pid_path)
+    running = (status["status"] == "running")
+    pid = status["pid"]
+    
     print(f"  Daemon:   {'running (' + str(pid) + ')' if running else 'stopped'}")
     
-    status_path = _MNEMO_DIR / "status.json"
+    pid_dir = pid_path.parent
+    status_path = pid_dir / "status.json"
     if running and status_path.exists():
         try:
             s = json.loads(status_path.read_text(encoding="utf-8"))
@@ -706,6 +799,7 @@ Commands:
   logs             Show recent logs [--days N] [--json]
   cleanup          Kill stale daemon processes
   install-models   Download/update ML models [--force]
+  install-extension Extract browser extension locally
   db-dump-time     Set backup interval in hours
 """)
 
@@ -1173,6 +1267,7 @@ def dispatch(args_namespace: argparse.Namespace) -> None:
         run_watch(db_path)
     elif command == "db-dump-time": _cmd_db_dump_time(cargs)
     elif command == "cleanup": _cmd_cleanup(cargs)
+    elif command == "install-extension": _cmd_install_extension()
     elif command in ("install-models", "download-models"):
         force = "--force" in cargs
         manifest_path = _ensure_manifest(force=force)

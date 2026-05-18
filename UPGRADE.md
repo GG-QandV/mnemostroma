@@ -1,4 +1,4 @@
-## Upgrading to v2.1.5 Beta (Current)
+## Upgrading to v2.2.6 Beta (Current)
 
 Hotfix release. No schema migrations. No configuration changes.
 
