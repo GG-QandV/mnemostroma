@@ -474,11 +474,18 @@ Mnemostroma includes a lightweight, secure browser extension that allows you to 
 - **Grok** (`x.ai` / `grok.com`)
 
 ### <img src="https://raw.githubusercontent.com/GG-QandV/mnemostroma/main/src/extension/assets/lightning-thin.svg" width="20" height="20" align="center" /> Quick Extension Installation:
-1. Open your browser extension settings (e.g. `chrome://extensions/` in Chrome or Edge, or `about:debugging` in Firefox).
-2. Enable **"Developer mode"** in the top right.
-3. Click **"Load unpacked"** and select the extension directory:
-   - Path: `src/extension` inside your Mnemostroma repository.
-4. The extension will automatically connect to your local Mnemostroma daemon (`http://127.0.0.1:8766`).
+
+For a detailed step-by-step guide with platform-specific instructions, see the dedicated [Browser Extension Installation Guide](./src/extension/docs/INSTALL.md#1-простая-установка-рекомендуется).
+
+1. **Prepare Extension Files**:
+   - **Simple Path (Recommended)**: Run `mnemostroma setup` (or use the Windows Clients Installer) to automatically extract the compiled extension to `~/.mnemostroma/extension`. **No Git or download required.**
+   - **Developer Path**: Clone this repository and use the `src/extension` directory directly.
+2. Open your browser extension settings page (e.g. `chrome://extensions/` in Chrome or Edge, or `about:debugging` in Firefox).
+3. Enable **"Developer mode"** in the top right.
+4. Click **"Load unpacked"** (or "Load Temporary Add-on" in Firefox) and select the extension directory:
+   - For **Simple Path**: Choose `~/.mnemostroma/extension` (Linux/macOS) or `%USERPROFILE%\.mnemostroma\extension` (Windows).
+   - For **Developer Path**: Choose `src/extension` inside your Mnemostroma repository.
+5. The extension will automatically connect to your local Mnemostroma daemon (`http://127.0.0.1:8766`).
 
 ### <img src="https://raw.githubusercontent.com/GG-QandV/mnemostroma/main/src/extension/assets/traffic-signal-thin.svg" width="20" height="20" align="center" /> Action Icon & Badge Indicators:
 The Mnemostroma icon in your extension bar is fully functional and uses colors + text badges to show real-time connectivity status:
