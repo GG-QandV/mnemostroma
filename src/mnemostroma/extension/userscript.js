@@ -19,7 +19,7 @@
 (() => {
   'use strict';
 
-  const CAPTURE_URL = 'https://localhost:8767/capture';
+  const CAPTURE_URL = 'https://127.0.0.1:8767/capture';
   const MIN_LENGTH   = 20; // фильтр мусора
 
   // ── Отправка в демон ──────────────────────────────────────────────────

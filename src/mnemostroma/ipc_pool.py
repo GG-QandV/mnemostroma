@@ -40,16 +40,30 @@ class _IPCConn:
 
     async def call(self, tool: str, args: dict) -> Any:
         async with self._lock:
-            if not self.alive:
-                await self.connect()
             payload = json.dumps(
                 {"id": _next_id(), "tool": tool, "args": args},
                 ensure_ascii=False,
             )
-            self._writer.write((payload + "\n").encode())
-            await self._writer.drain()
-            line = await asyncio.wait_for(self._reader.readline(), timeout=10.0)
+            try:
+                if not self.alive:
+                    await self.connect()
+                writer, reader = self._writer, self._reader
+                if writer is None or reader is None:
+                    raise ConnectionError("IPC connection unavailable after connect()")
+                writer.write((payload + "\n").encode())
+                await writer.drain()
+                line = await asyncio.wait_for(reader.readline(), timeout=10.0)
+            except asyncio.TimeoutError:
+                # Request was sent but response never arrived — protocol is desynced.
+                # Must close so the pool does not reuse this connection.
+                await self.close()
+                raise ConnectionError("Daemon response timeout — IPC connection reset")
+            except (ConnectionError, OSError) as exc:
+                await self.close()
+                raise ConnectionError(f"IPC transport error: {exc}") from exc
             if not line:
+                # Daemon closed the connection cleanly — mark it dead.
+                await self.close()
                 raise ConnectionError("Daemon closed connection")
             resp = json.loads(line.decode())
             if "error" in resp:

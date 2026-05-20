@@ -182,8 +182,10 @@ async def handle_health(request: Request):
 # ── Starlette App (Observe Receiver - Localhost only) ─────────────────
 
 async def handle_observe(request: Request):  # PATCH-2026-05-17
+    # Localhost (extension) or valid token required
     auth = request.headers.get("X-Mnemo-Token")
-    if not auth or auth != OBSERVE_TOKEN:
+    is_localhost = request.client.host in ("127.0.0.1", "localhost")
+    if not is_localhost and (not auth or auth != OBSERVE_TOKEN):
         return JSONResponse({"error": "unauthorized"}, status_code=401)
     try:
         data = await request.json()
@@ -207,7 +209,7 @@ async def handle_mcp_config(request: Request) -> JSONResponse:
         endpoint = f"{public_url}/mcp"
         headers = {"serveo-skip-browser-warning": "true"}
     else:
-        endpoint = "http://localhost:8768/mcp"
+        endpoint = "http://127.0.0.1:8768/mcp"
         headers = {}
     return JSONResponse({
         "mcpServers": {
@@ -255,7 +257,7 @@ async def run():
     servers = [uvicorn.Server(mcp_config)]
 
     logger.info("Mnemostroma HTTP Adapter starting...")
-    logger.info("  MCP HTTP: http://localhost:8768/mcp (Auth required)")
+    logger.info("  MCP HTTP: http://127.0.0.1:8768/mcp (Auth required)")
     
     if not is_port_in_use(8766, "127.0.0.1"):
         servers.append(uvicorn.Server(obs_config))

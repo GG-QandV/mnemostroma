@@ -33,7 +33,21 @@ from mnemostroma.core.bootstrap import bootstrap
 # Paths
 # ---------------------------------------------------------------------------
 _PROGRAMDATA = Path(os.environ.get("PROGRAMDATA", r"C:\ProgramData")) / "Mnemostroma"
-_MNEMO_DIR   = Path.home() / ".mnemostroma"
+
+# Handle LocalSystem SCM service context where home is systemprofile
+_home = Path.home()
+if "systemprofile" in str(_home).lower():
+    _MNEMO_DIR = _home / ".mnemostroma"  # Default fallback
+    _users_dir = Path("C:/Users")
+    if _users_dir.exists():
+        for _u in _users_dir.iterdir():
+            if _u.is_dir() and _u.name.lower() not in ("all users", "default", "default user", "public", "systemprofile"):
+                _candidate = _u / ".mnemostroma"
+                if _candidate.exists() and (_candidate / "config.json").exists():
+                    _MNEMO_DIR = _candidate
+                    break
+else:
+    _MNEMO_DIR = _home / ".mnemostroma"
 _PID_FILE    = _PROGRAMDATA / "service.pid"
 _STATUS_FILE = _PROGRAMDATA / "status.json"
 _LOG_FILE    = _PROGRAMDATA / "logs" / "service.log"

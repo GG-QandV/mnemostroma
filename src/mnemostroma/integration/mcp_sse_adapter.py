@@ -216,15 +216,17 @@ async def handle_health(request):
 async def handle_mcp_config(request):
     serveo_path = _MNEMO_DIR / "serveo_url"
     serveo_base = serveo_path.read_text(encoding="utf-8").strip() if serveo_path.exists() else None
-    local_url  = f"http://localhost:8765/sse?token={TOKEN}"
+    local_url  = f"http://127.0.0.1:8765/sse?token={TOKEN}"
     public_url = f"{serveo_base}/sse?token={TOKEN}" if serveo_base else None
     return JSONResponse({"local_url": local_url, "public_url": public_url})
 
 
 async def handle_observe(request):
     """Browser extension -> /observe endpoint."""
+    # Localhost (extension) or valid token required
     auth = request.headers.get("X-Mnemo-Token")
-    if not auth or auth != OBSERVE_TOKEN:
+    is_localhost = request.client.host in ("127.0.0.1", "localhost")
+    if not is_localhost and (not auth or auth != OBSERVE_TOKEN):
         return JSONResponse({"error": "unauthorized"}, status_code=401)
     try:
         data = await request.json()
@@ -282,7 +284,7 @@ async def run():
     servers = [uvicorn.Server(mcp_config)]
 
     logger.info("Mnemostroma SSE Adapter starting...")
-    logger.info("  MCP SSE: http://localhost:8765/sse (Auth required)")
+    logger.info("  MCP SSE: http://127.0.0.1:8765/sse (Auth required)")
     
     if not is_port_in_use(8766, "127.0.0.1"):
         servers.append(uvicorn.Server(obs_config))

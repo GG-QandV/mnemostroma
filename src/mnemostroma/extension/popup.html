@@ -10,6 +10,7 @@
     .ok  { color: #2a9d2a; }
     .err { color: #cc3333; }
     button { margin-top: 10px; font-size: 12px; width: 100%; cursor: pointer; padding: 4px; }
+    #mcp-url { width: 100%; font-size: 10px; margin-top: 4px; box-sizing: border-box; }
   </style>
 </head>
 <body>
@@ -17,6 +18,8 @@
   <div class="row"><span>Daemon</span><span id="daemon-status">…</span></div>
   <div class="row"><span>Queue</span><span id="queue-size">…</span></div>
   <button id="retry-btn">Retry queue now</button>
+  <div class="row" style="margin-top:10px"><span>MCP URL</span><button id="copy-btn" style="width:auto;margin:0;padding:2px 8px">Copy</button></div>
+  <input id="mcp-url" readonly placeholder="…">
   <script src="popup.js"></script>
 </body>
 </html>

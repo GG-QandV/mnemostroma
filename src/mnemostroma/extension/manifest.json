@@ -2,19 +2,40 @@
   "manifest_version": 3,
   "name": "Mnemostroma Connector",
   "version": "1.0.0",
-  "description": "Captured Claude.ai context for Mnemostroma Memory",
+  "description": "Capture conversations from Claude.ai, Perplexity, DeepSeek, ChatGPT, Grok for Mnemostroma Memory",
   "permissions": [
     "storage",
     "tabs"
   ],
   "host_permissions": [
     "https://claude.ai/*",
+    "https://www.perplexity.ai/*",
+    "https://www.deepseek.com/*",
+    "https://chatgpt.com/*",
+    "https://grok.x.com/*",
+    "http://127.0.0.1:8766/*",
     "http://localhost:8766/*"
   ],
   "content_scripts": [
     {
       "matches": ["https://claude.ai/*"],
-      "js": ["content_script.js"]
+      "js": ["content_script_claude.js"]
+    },
+    {
+      "matches": ["https://www.perplexity.ai/*"],
+      "js": ["content_script_perplexity.js"]
+    },
+    {
+      "matches": ["https://www.deepseek.com/*"],
+      "js": ["content_script_deepseek.js"]
+    },
+    {
+      "matches": ["https://chatgpt.com/*"],
+      "js": ["content_script_chatgpt.js"]
+    },
+    {
+      "matches": ["https://grok.x.com/*"],
+      "js": ["content_script_grok.js"]
     }
   ],
   "background": {

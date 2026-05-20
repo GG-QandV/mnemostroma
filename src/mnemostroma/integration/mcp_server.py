@@ -410,25 +410,48 @@ async def main() -> None:
         1. Conductor.start() — init DB, matrix search, models, workers
         2. stdio_server() — listen for JSON-RPC calls
         3. On exit — Conductor.stop() — flush and shutdown
+
+    Path resolution order for data files:
+        1. MNEMOSTROMA_DIR env var (set by IDE MCP config)
+        2. ~/.mnemostroma (default install location)
+        3. project root relative paths (legacy dev mode)
     """
     global _conductor
-
-    # parents[2]: mcp_server.py → integration/ → mnemostroma/ → project_root/
-    project_root = Path(__file__).resolve().parents[2]
-    os.chdir(project_root)
 
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(name)s %(levelname)s %(message)s"
     )
 
+    # Resolve data directory: prefer MNEMOSTROMA_DIR, fall back to ~/.mnemostroma,
+    # then project-root-relative paths for dev/legacy mode.
+    mnemo_dir_env = os.environ.get("MNEMOSTROMA_DIR", "")
+    if mnemo_dir_env:
+        mnemo_dir = Path(mnemo_dir_env).expanduser()
+    else:
+        mnemo_dir = Path.home() / ".mnemostroma"
+
+    if mnemo_dir.exists():
+        config_path = str(mnemo_dir / "config.json")
+        db_path = str(mnemo_dir / "mnemostroma.db")
+        model_dir = str(mnemo_dir / "models")
+        logger.info("MCP server using MNEMOSTROMA_DIR: %s", mnemo_dir)
+    else:
+        # Legacy dev mode: CWD must be project root
+        project_root = Path(__file__).resolve().parents[2]
+        os.chdir(project_root)
+        config_path = "config.json"
+        db_path = "mnemostroma.db"
+        model_dir = "models"
+        logger.info("MCP server using legacy project-root mode: %s", project_root)
+
     _conductor = Conductor()
     try:
         logger.info("Bootstrapping Mnemostroma for MCP...")
         await _conductor.start(  # init DB, matrix search, models, workers
-            config_path="config.json",
-            db_path="mnemostroma.db",
-            model_dir="models"
+            config_path=config_path,
+            db_path=db_path,
+            model_dir=model_dir,
         )
         logger.info("Mnemostroma ready. Starting MCP stdio transport.")
 

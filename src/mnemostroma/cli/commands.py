@@ -397,7 +397,6 @@ def _install_models(manifest_path: Path, force: bool = False):
                     subfolder=hf_subfolder,
                     filename=hf_filename,
                     local_dir=str(local_dir),
-                    local_dir_use_symlinks=False,
                 )
                 print("done")
             except Exception as e:
@@ -421,7 +420,7 @@ def _write_claude_wrapper(wrapper_path: Path, ca_cert: Path) -> None:
         "CLAUDE_BIN=$(command -v claude 2>/dev/null)\n"
         "if [ -z \"$CLAUDE_BIN\" ]; then echo 'mnemo: error: claude not found' >&2; exit 1; fi\n"
         "if (echo > /dev/tcp/127.0.0.1/8767) 2>/dev/null; then\n"
-        f"  export ANTHROPIC_BASE_URL=\"https://localhost:8767\"\n"
+        f"  export ANTHROPIC_BASE_URL=\"https://127.0.0.1:8767\"\n"
         f"  export NODE_EXTRA_CA_CERTS=\"{ca_cert}\"\n"
         "fi\n"
         "exec \"$CLAUDE_BIN\" \"$@\"\n",
@@ -1126,8 +1125,18 @@ def _cmd_tunnel(args: list) -> None:  # PATCH-2026-05-17
             )
             import time as _t; _t.sleep(2)
 
-        print(f"\n  MCP SSE URL : {mcp_url}")
+        print(f"\n✓ Public MCP endpoint : {mcp_url}")
         print(f"  Bearer Token: {token}")
+        print("  Verifying tunnel end-to-end...", end="", flush=True)
+        import urllib.request as _ur, urllib.error as _ue
+        try:
+            with _ur.urlopen(f"{public_url}/health", timeout=8) as _r:
+                _ct = _r.headers.get("Content-Type", "")
+                print(" ✓ Tunnel probe OK" if "text/html" not in _ct else f" ⚠ got HTML (serveo redirect?), Content-Type: {_ct}")
+        except _ue.HTTPError as _e:
+            print(f" ⚠ HTTP {_e.code}")
+        except Exception as _e:
+            print(f" ⚠ {_e}")
         print(f"\n  Add to claude.ai → Settings → Integrations:")
         print(f"    URL   : {mcp_url}")
         print(f"    Header: Authorization: Bearer {token}")
@@ -1166,7 +1175,6 @@ def _cmd_tunnel(args: list) -> None:  # PATCH-2026-05-17
                 if "ssh" in cmd and "serveo.net" in cmd:
                     active = True
                     print(f"  Tunnel process: PID {proc.pid} (active)")
-                    break
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 pass
         if not active:

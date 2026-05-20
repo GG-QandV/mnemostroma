@@ -9,6 +9,8 @@ Protocol: MCP 2024-11-05
 import asyncio
 import json
 import logging
+import os
+import stat
 import sys
 from datetime import date
 from pathlib import Path
@@ -263,25 +265,65 @@ async def main() -> None:
         sid = f"passthrough-{date.today().isoformat()}"
     _CURRENT_SESSION_FILE.write_text(sid, encoding="utf-8")
 
-    # Connect stdin/stdout as async streams
-    loop = asyncio.get_event_loop()
+    # Connect stdin/stdout as async streams.
+    # Use get_running_loop() — get_event_loop() is deprecated in Python 3.12.
+    #
+    # Pre-flight check: only use connect_read_pipe when stdin is an actual
+    # pipe or socket.  When an IDE (Antigravity, Cursor, etc.) launches the
+    # adapter with stdin redirected to /dev/null or a regular file the kernel
+    # refuses to epoll fd=0, raising PermissionError deep inside an asyncio
+    # callback — too late for try/except around the await to catch it.
+    loop = asyncio.get_running_loop()
     reader = asyncio.StreamReader()
-    await loop.connect_read_pipe(
-        lambda: asyncio.StreamReaderProtocol(reader), sys.stdin
-    )
+    try:
+        st = os.stat(sys.stdin.fileno())
+        _stdin_is_pipe = stat.S_ISFIFO(st.st_mode) or stat.S_ISSOCK(st.st_mode)
+    except Exception:
+        _stdin_is_pipe = False
 
-    async for raw in reader:
-        line = raw.strip()
-        if not line:
-            continue
+    if _stdin_is_pipe:
         try:
-            req = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        resp = await _handle(req)
-        if resp is not None:
-            sys.stdout.buffer.write(json.dumps(resp, ensure_ascii=False).encode() + b"\n")
-            sys.stdout.buffer.flush()
+            await loop.connect_read_pipe(
+                lambda: asyncio.StreamReaderProtocol(reader), sys.stdin
+            )
+            use_pipe = True
+        except (PermissionError, OSError) as exc:
+            logger.warning("connect_read_pipe failed (%s); falling back to blocking readline", exc)
+            use_pipe = False
+    else:
+        logger.debug("stdin is not a pipe/socket — using blocking readline fallback")
+        use_pipe = False
+
+    if use_pipe:
+        async for raw in reader:
+            line = raw.strip()
+            if not line:
+                continue
+            try:
+                req = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            resp = await _handle(req)
+            if resp is not None:
+                sys.stdout.buffer.write(json.dumps(resp, ensure_ascii=False).encode() + b"\n")
+                sys.stdout.buffer.flush()
+    else:
+        # Fallback: read stdin line-by-line via executor (blocking I/O off the loop)
+        while True:
+            raw = await loop.run_in_executor(None, sys.stdin.readline)
+            if not raw:
+                break
+            line = raw.strip()
+            if not line:
+                continue
+            try:
+                req = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            resp = await _handle(req)
+            if resp is not None:
+                sys.stdout.buffer.write(json.dumps(resp, ensure_ascii=False).encode() + b"\n")
+                sys.stdout.buffer.flush()
 
 
 if __name__ == "__main__":
