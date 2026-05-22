@@ -1,3 +1,56 @@
+## 2.3.0 — 2026-05-20
+
+### Added
+- feat[tunnel] `mnemostroma tunnel start/stop/status` — единая команда для запуска
+  Cloudflare Tunnel + MCP OAuth Adapter как фонового сервиса
+- feat[tunnel] `mcp_oauth_adapter.py` — Starlette шлюз на порту 8769, поддерживает
+  все 4 чата одновременно без ручной настройки
+- feat[tunnel] Phase 0 Perplexity — прокси без авторизации
+- feat[tunnel] Phase 1 Claude.ai — OAuth 2.0 + PKCE S256 + DCR (RFC 8414)
+- feat[tunnel] Phase 2 ChatGPT — OAuth 2.0 + PKCE S256 + DCR (RFC 8414 + RFC 9728)
+- feat[tunnel] Phase 3 Grok — статический Bearer token
+- feat[tunnel] `tunnel/providers/cloudflare.py` — авто-загрузка платформо-специфичного
+  `cloudflared` бинаря в `~/.mnemostroma/bin/` при первом запуске
+- feat[tunnel] `tunnel/token.py` — изолированный `tunnel_token` (отдельный от `ssetoken`,
+  права 0o600, 256 бит энтропии)
+- feat[install] `mnemostroma-tunnel.service` — systemd user unit, регистрируется через
+  `mnemostroma service install --component tunnel`
+- feat[pyproject] `tunnel = ["mnemostroma[sse]"]` optional extras alias
+
+### Removed
+- refactor[cli] Удалена legacy логика Serveo SSH из `commands.py`
+  (заменена Cloudflare Tunnel Manager)
+- refactor[install] `mnemostroma-serveo.service` заменён на `mnemostroma-tunnel.service`
+
+### Tests
+- 10 новых unit-тестов: `test_tunnel_token.py`, `test_mcp_oauth_adapter.py`,
+  `test_tunnel_manager.py`
+- 22 интеграционных теста MCP routing + SSE auth
+- Итого: 609 passed, 0 failed
+
+---
+
+## 2.2.7 — 2026-05-20
+
+### Fixed
+- fix[extension] Extension distribution: синхронизирован v1.0.5 (ES-модули, адаптер Grok,
+  Transport-First, badge health check) в пакет демона, заменяя legacy v1.0.0
+- fix[pyproject] Рекурсивный glob `extension/**/*` заменяет плоскую маску — все
+  поддиректории модульного расширения корректно упакованы в wheel
+- fix[extension] Создан полноценный ES-модульный адаптер `grok.js` для поддержки
+  Grok (xAI)
+
+### Added
+- feat[scripts] `scripts/sync_extension.py` — автоматическая синхронизация
+  `src/extension/ → src/mnemostroma/extension/` с исключением dev-артефактов
+- feat[install] Вызов `python scripts/sync_extension.py` добавлен в Sync A→C
+  pipeline (`GIT_RULES_v4.2.md`)
+- feat[security] Git pre-commit hook `.git/hooks/pre-commit` — блокирует попадание
+  приватных маркеров (`logevent`, `WATERMARK`, `INTERNAL`) в дистрибутив расширения
+
+### Tests
+- 577 passed, 0 failed (было 531 до релиза)
+
 ## [2.2.6] — 2026-05-18
 
 ### Added

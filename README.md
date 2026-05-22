@@ -2,14 +2,14 @@
 
 ### The memory layer for AI agents
 
-![Version](https://img.shields.io/badge/version-v2.2.6--beta-orange)
+![Version](https://img.shields.io/badge/version-v2.3.0--beta-orange)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue)
-![Tests](https://img.shields.io/badge/tests-531%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-609%20passing-brightgreen)
 ![License](https://img.shields.io/badge/license-FSL--1.1--MIT-lightgrey)
 
 > *μνήμη (mnḗmē, memory) + στρῶμα (strôma, layer) — the substrate everything rests on.*
 
-> **v2.2.6 Beta (Active Development).** Upgrading from v1.9.1 or earlier? → [See UPGRADE.md](./UPGRADE.md)
+> **v2.3.0 Beta (Active Development).** Upgrading from v1.9.1 or earlier? → [See UPGRADE.md](./UPGRADE.md)
 
 ---
 
@@ -164,24 +164,26 @@ This is not a database with TTL. This is how human memory works.
 
 ## Status
 
-**Current:** v2.2.6 Beta (Active Development) | 2026-05-20
+**Current:** v2.3.0 Beta (Active Development) | 2026-05-22
 
-| Component                                | Status                           |
-| ---------------------------------------- | -------------------------------- |
-| Core backend (Observer, Memory, Storage) | DONE Implemented, 531/531 tests  |
-| Golden Standard Launch (Shell Guards)    | DONE Implemented (v1.11.1)       |
-| Anchor Layer / Emotional Patterns        | DONE Implemented                 |
-| Implicit Feedback (v1.5)                 | DONE Implemented                 |
-| PersistenceLayer Split (Phase 9.2)       | DONE Implemented (v1.7.1)        |
-| CLI User Mode (setup/on/off/status)      | DONE Implemented (v1.7.1)        |
-| MCP Server (stdio + SSE)                 | DONE Implemented                 |
-| Continuation Detection & Mention Type    | DONE Implemented                 |
-| Decay Engine & Dreamer                   | DONE Implemented (Stage C/D)     |
-| Passthrough HTTPS Proxy (:8767)          | DONE Implemented (v1.7.5)        |
-| `mnemo` launcher with proxy failsafe     | DONE Implemented (v1.7.5)        |
-| Model install CLI                        | DONE Implemented                 |
-| **Daemon auto-start scripts**            | DONE Linux (systemd), macOS, Win |
-| **Hexagonal Storage Refactor**           | DONE Implemented (v1.8.0)        |
+| Component | Status |
+|---|---|
+| Core backend — Observer, Memory, Storage | ✅ DONE — 609 tests |
+| Golden Standard Launch (Shell Guards) | ✅ DONE — v1.11.1 |
+| Anchor Layer / Emotional Patterns | ✅ DONE |
+| Implicit Feedback (v1.5) | ✅ DONE |
+| PersistenceLayer Split (Phase 9.2) | ✅ DONE — v1.7.1 |
+| CLI User Mode (setup/on/off/status) | ✅ DONE — v1.7.1 |
+| MCP Server (stdio + SSE) | ✅ DONE |
+| Continuation Detection & Mention Type | ✅ DONE |
+| Decay Engine & Dreamer | ✅ DONE — Stage C/D |
+| Passthrough HTTPS Proxy (:8767) | ✅ DONE — v1.7.5 |
+| `mnemo` launcher with proxy failsafe | ✅ DONE — v1.7.5 |
+| Model install CLI | ✅ DONE |
+| **Daemon auto-start scripts** | ✅ DONE — Linux (systemd), macOS, Win |
+| **Hexagonal Storage Refactor** | ✅ DONE — v1.8.0 |
+| **Browser Extension v1.0.5** | ✅ DONE — v2.2.7, ES modules, 6 adapters |
+| **Remote MCP Tunnel — Cloudflare + OAuth** | ✅ DONE — v2.3.0 |
 
 ---
 
@@ -189,7 +191,7 @@ This is not a database with TTL. This is how human memory works.
 
 **Requires Python 3.12+**
 
-> **v2.2.6 Beta (Active Development).** Upgrading from v1.9.1 or earlier? → [See UPGRADE.md](./UPGRADE.md)
+> **v2.3.0 Beta (Active Development).** Upgrading from v1.9.1 or earlier? → [See UPGRADE.md](./UPGRADE.md)
 
 ---
 
@@ -516,12 +518,13 @@ bash scripts/install-daemon.sh
 
 #### Linux (systemd)
 
-The installer sets up **four** systemd user units:
+The installer sets up **five** systemd user units:
 
-- `mnemostroma-daemon.service` — Main daemon (Observer + Memory + Storage)
-- `mnemostroma-proxy.service` — HTTPS proxy & SSE Adapter (for claude.ai and Claude Code)
+- `mnemostroma-daemon.service` — Main daemon: Observer, Memory, Storage
+- `mnemostroma-proxy.service` — HTTPS proxy + SSE Adapter (Claude Code)
 - `mnemostroma-watchdog.service` — Automated health monitor and recovery
 - `mnemostroma-ui.service` — System tray status icon
+- `mnemostroma-tunnel.service` — Cloudflare Tunnel + MCP OAuth Adapter
 
 **Quick Commands (Linux):**
 
@@ -587,6 +590,87 @@ To connect Mnemostroma as a Custom Connector in **Claude.ai → Settings → Int
 | **OAuth Settings** | *Leave blank (optional)* | Not required for local deployment |
 
 > For a complete, step-by-step walkthrough of setting up Cloudflare Tunnels, generating tokens, and testing your endpoint, see the dedicated [Claude.ai Setup Guide](./docs/CLAUDE_AI_SETUP.md).
+
+---
+
+## ![tunnel](assets/plug-thin.svg) Remote MCP — Web Chat Integration
+
+Connect Mnemostroma to **Claude.ai**, **ChatGPT**, **Perplexity**, and **Grok**
+directly in the browser — no extension needed, no manual tunnel setup.
+
+> **How it works in plain language:**
+> Your Mnemostroma runs on your computer. Web chats (Claude.ai, ChatGPT etc.)
+> live on remote servers and can't reach `localhost`. The tunnel creates a
+> temporary secure public URL that points to your machine — the chat connects
+> to that URL, talks to Mnemostroma, and you get memory in your web browser
+> just like in Claude Code or VS Code.
+
+### Quick Start (3 steps)
+
+**Step 1.** Make sure the daemon is running:
+```bash
+mnemostroma on
+mnemostroma status   # daemon RUNNING ✓
+```
+
+**Step 2.** Start the tunnel:
+```bash
+mnemostroma tunnel start
+```
+
+On first run, `cloudflared` (~35 MB) is downloaded automatically. You will see:
+
+```
+  Downloading cloudflared...          ✓
+  Starting OAuth adapter :8769...     ✓
+  Starting Cloudflare tunnel...       ✓
+
+  ┌──────────────────────────────────────────────────────────┐
+  │  Your MCP URL:  https://abc123.trycloudflare.com         │
+  │  Bearer token:  cat ~/.mnemostroma/tunnel_token          │
+  └──────────────────────────────────────────────────────────┘
+```
+
+**Step 3.** Paste the URL into your chat:
+
+| Chat | Where to paste | Auth |
+|---|---|---|
+| **Perplexity** | Settings → AI Plugins → MCP URL | None — just paste URL |
+| **Claude.ai** | Settings → Integrations → Add Custom Connector | OAuth — happens automatically in browser |
+| **ChatGPT** | Settings → Connectors → Add | OAuth — happens automatically in browser |
+| **Grok** | Settings → MCP → Server URL + Bearer token | Paste URL + token from `cat ~/.mnemostroma/tunnel_token` |
+
+> **Note:** The public URL changes every time you restart the tunnel (free Cloudflare plan).
+> For a permanent URL, see [Permanent Tunnel Setup](docs/TUNNEL_SETUP.md#permanent-url).
+
+### Register as autostart service
+
+```bash
+mnemostroma service install --component tunnel
+```
+
+| OS | Backend |
+|---|---|
+| Linux | systemd user unit `mnemostroma-tunnel.service` |
+| macOS | launchd LaunchAgent `com.mnemostroma.tunnel.plist` |
+| Windows | Task Scheduler `MnemostromaTunnel` |
+
+### Tunnel CLI reference
+
+```bash
+mnemostroma tunnel start     # Start tunnel + adapter (foreground, Ctrl+C to stop)
+mnemostroma tunnel stop      # Stop background tunnel service
+mnemostroma tunnel status    # Show public URL and token
+```
+
+### Security notes
+
+- The tunnel uses a dedicated `~/.mnemostroma/tunnel_token` — isolated from
+  your local `ssetoken`. Revoking tunnel access doesn't affect local IDE connections.
+- All traffic between the chat and Mnemostroma is encrypted via Cloudflare HTTPS.
+- Claude.ai and ChatGPT use full OAuth 2.0 with PKCE — no manual token copy-paste needed.
+- Your conversation content is never stored by Cloudflare — only the MCP protocol
+  messages (tool calls and results) pass through the tunnel.
 
 ---
 
@@ -823,7 +907,7 @@ Cloud Sync, Subconscious Layer (personalized models), Shared Experience, and Tea
 ---
 
 *Mnemostroma — the memory layer for AI agents*
-*offline · ~650MB RAM (baseline) · ~20ms · 531 tests · v2.2.6 Beta*
+*offline · ~650MB RAM (baseline) · ~20ms · 577 tests · v2.3.0 Beta*
 
 # [mnemostroma-protocol]
 

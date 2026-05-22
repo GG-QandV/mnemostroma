@@ -141,12 +141,13 @@ def _make_mcp_server() -> Server:
 
 # ── Session Manager (replaces SseServerTransport) ─────────────────────
 
-session_manager = StreamableHTTPSessionManager(
-    app=_make_mcp_server(),
-    event_store=None,       # stateless — no session persistence needed
-    json_response=True,     # return JSON, not binary stream
-    stateless=True,         # crucial for cloudflared quick tunnel
-)
+def _get_session_manager():
+    return StreamableHTTPSessionManager(
+        app=_make_mcp_server(),
+        event_store=None,       # stateless — no session persistence needed
+        json_response=True,     # return JSON, not binary stream
+        stateless=True,         # crucial for cloudflared quick tunnel
+    )
 
 # ── Starlette App (MCP HTTP) ───────────────────────────────────────────
 
@@ -169,8 +170,9 @@ async def handle_mcp(scope, receive, send):  # PATCH-2026-05-17
         response = Response("Unauthorized", status_code=401)
         await response(scope, receive, send)
         return
-    async with session_manager.run():
-        await session_manager.handle_request(scope, receive, send)
+    sm = _get_session_manager()
+    async with sm.run():
+        await sm.handle_request(scope, receive, send)
 
 async def handle_health(request: Request):
     try:

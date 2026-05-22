@@ -1,28 +1,46 @@
-## Upgrading to v2.2.6 Beta (Current)
-
-Hotfix release. No schema migrations. No configuration changes.
+## Upgrading to v2.3.0 Beta (Current)
 
 ### What changed
-- `conductor.py`: missing `LogWriter` import — caused `NameError` and daemon
-  crash on startup after fresh GitHub install.
-- `scripts/update_version.py`: new script for automated version management
-  across README, UPGRADE, and CLI banner.
+- `mnemostroma tunnel` now uses **Cloudflare Tunnel** instead of Serveo SSH.
+  Serveo support is removed.
+- A new `mnemostroma-tunnel.service` systemd unit replaces `mnemostroma-serveo.service`.
+- New port **8769** for the MCP OAuth Adapter (does not conflict with existing ports).
 
-### Upgrade steps
+### Migration steps
 
+**If you used Serveo (`mnemostroma-serveo.service`):**
 ```bash
-~/.mnemostroma/venv/bin/pip install --upgrade \
-  "mnemostroma[all] @ git+https://github.com/GG-QandV/mnemostroma.git"
-mnemostroma off && mnemostroma on
+# Stop and disable the old unit
+systemctl --user stop mnemostroma-serveo
+systemctl --user disable mnemostroma-serveo
+
+# Install the new tunnel unit
+mnemostroma service install --component tunnel
+
+# Start
+mnemostroma tunnel start
 ```
 
-### Do I need `mnemostroma service install`?
+**If you didn't use Serveo** — no action needed. Run `bash scripts/update.sh` as usual.
 
-| Situation                                     | Required?                     |
-| --------------------------------------------- | ----------------------------- |
-| v1.11.1 daemon was working (patched manually) | ❌ Not required                |
-| v1.11.1 daemon was crashing on startup        | ❌ Not required — pip fixes it |
-| Fresh install                                 | ✅ Called automatically        |
+---
+
+## Upgrading to v2.2.7
+
+No breaking changes. The browser extension is automatically updated to v1.0.5
+during `mnemostroma setup` or via `mnemostroma install-extension`.
+
+**New in extension v1.0.5:**
+- Grok (xAI / grok.com) adapter added
+- ES modules architecture (replaces legacy bundle)
+- Improved badge health check
+
+If your extension was loaded from `~/.mnemostroma/extension/` (Simple Path),
+run:
+```bash
+mnemostroma install-extension
+# then reload the extension in your browser
+```
 
 ---
 

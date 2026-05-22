@@ -962,7 +962,7 @@ def _cmd_service_linux() -> None:
         "mnemostroma-watchdog.service",
         "mnemostroma-ui.service",
         "mnemostroma-sse.service",
-        "mnemostroma-serveo.service",  # PATCH-2026-05-17 — Serveo SSH tunnel unit
+        "mnemostroma-tunnel.service",  # Cloudflare Tunnel & OAuth Adapter
     ]
 
     try:
@@ -1006,10 +1006,10 @@ def _cmd_service_linux() -> None:
         print(f"  ⚠ daemon-reload failed: {result.stderr.strip()}")
 
     # Enable units (idempotent — safe if already enabled)
-    core_units = [u for u in installed if u not in (  # PATCH-2026-05-17
+    core_units = [u for u in installed if u not in (
         "mnemostroma-ui.service",
         "mnemostroma-sse.service",
-        "mnemostroma-serveo.service",  # не auto-enable — только по запросу
+        "mnemostroma-tunnel.service",  # не auto-enable — только по запросу
     )]
     failed_enable = []
     for unit in core_units:
@@ -1065,136 +1065,149 @@ def _cmd_service(args: list) -> None:
 # CLI Core
 # ---------------------------------------------------------------------------
 
-def _cmd_tunnel(args: list) -> None:  # PATCH-2026-05-17
-    """Управление Serveo SSH туннелем для MCP SSE адаптера.
+def _cmd_tunnel(args: list) -> None:
+    """Управление Cloudflare туннелем и OAuth адаптером для MCP.
 
     Subcommands:
-        start [--subdomain NAME]  — запустить туннель (systemd или foreground)
-        stop                      — остановить туннель
-        status                    — показать статус и URL
+        start                     — запустить туннель и адаптер (systemd или foreground)
+        stop                      — остановить туннель и адаптер
+        status                    — показать статус туннеля и URL
     """
     import shutil
+    from mnemostroma.integration.tunnel.manager import TUNNEL_URL_PATH, _print_connection_guide
+    from mnemostroma.integration.tunnel.token import get_or_create_tunnel_token, get_tunnel_token
 
     subcmd = args[0] if args else "start"
-    subdomain = "mnemostroma"
-    if "--subdomain" in args:
-        idx = args.index("--subdomain")
-        if idx + 1 < len(args):
-            subdomain = args[idx + 1]
-
-    token_path = _MNEMO_DIR / "sse_token"
-    token = token_path.read_text(encoding="utf-8").strip() if token_path.exists() else "<run mnemostroma on first>"
-    public_url = f"https://{subdomain}.serveo.net"
-    mcp_url = f"{public_url}/sse"
 
     if subcmd == "start":
-        # Записать текущий URL для /mcp-config эндпоинта
-        (_MNEMO_DIR / "serveo_url").write_text(public_url, encoding="utf-8")
-
+        foreground = "--foreground" in args
         use_systemd = False
-        if sys.platform == "linux" and shutil.which("systemctl"):
+        if not foreground and sys.platform == "linux" and shutil.which("systemctl"):
             result = subprocess.run(
-                ["systemctl", "--user", "is-enabled", "mnemostroma-serveo"],
+                ["systemctl", "--user", "is-enabled", "mnemostroma-tunnel"],
                 capture_output=True, text=True
             )
             use_systemd = result.returncode == 0
 
         if use_systemd:
-            subprocess.run(["systemctl", "--user", "start", "mnemostroma-serveo"])
-            print(f"✓ Serveo tunnel started via systemd")
+            subprocess.run(["systemctl", "--user", "start", "mnemostroma-tunnel"])
+            print("✓ Mnemostroma tunnel started via systemd")
+            # Ждем появления tunnel_url
+            for _ in range(20):
+                if TUNNEL_URL_PATH.exists():
+                    break
+                _time.sleep(0.5)
+            if TUNNEL_URL_PATH.exists():
+                url = TUNNEL_URL_PATH.read_text().strip()
+                _print_connection_guide(url, get_or_create_tunnel_token())
+            else:
+                print("⚠ Tunnel started, but URL is not available yet. Check status shortly.")
         else:
-            if not shutil.which("ssh"):
-                print("❌ ssh not found. Install OpenSSH.")
-                sys.exit(1)
-            ssh_cmd = [
-                "ssh",
-                "-o", "ServerAliveInterval=60",
-                "-o", "ServerAliveCountMax=3",
-                "-o", "ExitOnForwardFailure=yes",
-                "-o", "StrictHostKeyChecking=no",
-                "-R", f"{subdomain}:80:localhost:8765",
-                "serveo.net"
-            ]
-            print(f"Starting Serveo tunnel (foreground)...")
-            print(f"  Subdomain: {subdomain}")
-            subprocess.Popen(
-                ssh_cmd,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                start_new_session=True
-            )
-            import time as _t; _t.sleep(2)
-
-        print(f"\n✓ Public MCP endpoint : {mcp_url}")
-        print(f"  Bearer Token: {token}")
-        print("  Verifying tunnel end-to-end...", end="", flush=True)
-        import urllib.request as _ur, urllib.error as _ue
-        try:
-            with _ur.urlopen(f"{public_url}/health", timeout=8) as _r:
-                _ct = _r.headers.get("Content-Type", "")
-                print(" ✓ Tunnel probe OK" if "text/html" not in _ct else f" ⚠ got HTML (serveo redirect?), Content-Type: {_ct}")
-        except _ue.HTTPError as _e:
-            print(f" ⚠ HTTP {_e.code}")
-        except Exception as _e:
-            print(f" ⚠ {_e}")
-        print(f"\n  Add to claude.ai → Settings → Integrations:")
-        print(f"    URL   : {mcp_url}")
-        print(f"    Header: Authorization: Bearer {token}")
+            if foreground:
+                from mnemostroma.integration.tunnel import manager
+                try:
+                    asyncio.run(manager.run())
+                except KeyboardInterrupt:
+                    pass
+            else:
+                print("Starting Mnemostroma tunnel in background...")
+                cmd = [sys.executable, "-m", "mnemostroma", "tunnel", "start", "--foreground"]
+                subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True
+                )
+                for _ in range(20):
+                    if TUNNEL_URL_PATH.exists():
+                        break
+                    _time.sleep(0.5)
+                if TUNNEL_URL_PATH.exists():
+                    url = TUNNEL_URL_PATH.read_text().strip()
+                    _print_connection_guide(url, get_or_create_tunnel_token())
+                else:
+                    print("⚠ Tunnel is starting in background. Check 'mnemostroma tunnel status' shortly.")
 
     elif subcmd == "stop":
         use_systemd = False
         if sys.platform == "linux" and shutil.which("systemctl"):
             result = subprocess.run(
-                ["systemctl", "--user", "is-enabled", "mnemostroma-serveo"],
+                ["systemctl", "--user", "is-enabled", "mnemostroma-tunnel"],
                 capture_output=True, text=True
             )
             use_systemd = result.returncode == 0
 
         if use_systemd:
-            subprocess.run(["systemctl", "--user", "stop", "mnemostroma-serveo"])
-            print("✓ Serveo tunnel stopped (systemd)")
-        else:
-            for proc in psutil.process_iter(['pid', 'cmdline']):
-                try:
-                    cmd = proc.info.get('cmdline') or []
-                    if "ssh" in cmd and "serveo.net" in cmd:
-                        proc.kill()
-                        print(f"✓ Killed SSH tunnel PID {proc.pid}")
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    pass
+            subprocess.run(["systemctl", "--user", "stop", "mnemostroma-tunnel"])
+            print("✓ Mnemostroma tunnel stopped (systemd)")
 
-        serveo_url_file = _MNEMO_DIR / "serveo_url"
-        serveo_url_file.unlink(missing_ok=True)
-
-    elif subcmd == "status":
-        serveo_url_file = _MNEMO_DIR / "serveo_url"
-        active = False
-        for proc in psutil.process_iter(['pid', 'cmdline']):
+        # Убиваем локальные фоновые процессы, если они запущены в обход systemd
+        my_pid = os.getpid()
+        for proc in psutil.process_iter(['pid', 'cmdline', 'name']):
             try:
+                pid = proc.info.get('pid')
+                if pid == my_pid:
+                    continue
                 cmd = proc.info.get('cmdline') or []
-                if "ssh" in cmd and "serveo.net" in cmd:
-                    active = True
-                    print(f"  Tunnel process: PID {proc.pid} (active)")
+                name = (proc.info.get('name') or "").lower()
+
+                # 1. cloudflared
+                if "cloudflared" in name or any("cloudflared" in c for c in cmd):
+                    proc.kill()
+                    print(f"✓ Killed cloudflared process PID {pid}")
+
+                # 2. mcp_oauth_adapter
+                elif any("mcp_oauth_adapter" in c for c in cmd):
+                    proc.kill()
+                    print(f"✓ Killed mcp_oauth_adapter process PID {pid}")
+
+                # 3. mnemostroma tunnel foreground process
+                elif any("mnemostroma" in c for c in cmd) and any("tunnel" in c for c in cmd) and any("--foreground" in c for c in cmd):
+                    proc.kill()
+                    print(f"✓ Killed tunnel manager process PID {pid}")
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 pass
-        if not active:
-            if sys.platform == "linux" and shutil.which("systemctl"):
-                res = subprocess.run(
-                    ["systemctl", "--user", "is-active", "mnemostroma-serveo"],
-                    capture_output=True, text=True
-                )
-                if res.returncode == 0:
+
+        TUNNEL_URL_PATH.unlink(missing_ok=True)
+        print("✓ Tunnel stopped.")
+
+    elif subcmd == "status":
+        active = False
+        for proc in psutil.process_iter(['pid', 'cmdline', 'name']):
+            try:
+                cmd = proc.info.get('cmdline') or []
+                name = (proc.info.get('name') or "").lower()
+                if "cloudflared" in name or any("cloudflared" in c for c in cmd):
                     active = True
-                    print(f"  Tunnel: active (systemd)")
+                    print(f"  Tunnel process (cloudflared): PID {proc.pid} (active)")
+                elif any("mcp_oauth_adapter" in c for c in cmd):
+                    active = True
+                    print(f"  OAuth adapter process: PID {proc.pid} (active)")
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
+
+        if not active and sys.platform == "linux" and shutil.which("systemctl"):
+            res = subprocess.run(
+                ["systemctl", "--user", "is-active", "mnemostroma-tunnel"],
+                capture_output=True, text=True
+            )
+            if res.returncode == 0 or "active" in res.stdout:
+                active = True
+                print("  Tunnel service: active (systemd)")
+
         if not active:
             print("  Tunnel: stopped")
-        if serveo_url_file.exists():
-            url = serveo_url_file.read_text().strip()
-            print(f"  Public URL: {url}/sse")
-            print(f"  Token: {token}")
+        else:
+            print("  Tunnel: running")
+
+        if TUNNEL_URL_PATH.exists():
+            url = TUNNEL_URL_PATH.read_text().strip()
+            token = get_tunnel_token() or "<not generated>"
+            print(f"  Public URL: {url}")
+            print(f"  Static token: {token}")
     else:
         print(f"Unknown tunnel subcommand: {subcmd}")
-        print("Usage: mnemostroma tunnel [start|stop|status] [--subdomain NAME]")
+        print("Usage: mnemostroma tunnel [start|stop|status]")
 
 
 def build_cli() -> argparse.ArgumentParser:

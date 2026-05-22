@@ -1,6 +1,6 @@
 [project]
 name = "mnemostroma"
-version = "2.2.6"
+version = "2.3.0"
 description = "Autonomous memory layer for AI agents — offline, RAM-first, no cloud"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -54,6 +54,9 @@ sse = [
     "httpx>=0.27",
     "cryptography>=42.0",
 ]
+tunnel = [
+    "mnemostroma[sse]",
+]
 tray = [
     "PyQt6>=6.0",
     "pillow>=10.0",
@@ -86,8 +89,7 @@ mnemostroma = [
     "models_manifest.json",
     "py.typed",
     "service_templates/linux/*.service",
-    "extension/*",
-    "extension/dist/*",
+    "extension/**/*",
 ]
 
 [tool.pytest.ini_options]
@@ -122,4 +124,4 @@ forbidden_modules = [
 ]
 
 [tool.mnemostroma]
-previous_version = "2.2.6"
+previous_version = "2.3.0"
