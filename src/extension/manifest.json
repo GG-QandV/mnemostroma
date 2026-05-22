@@ -27,7 +27,7 @@
         "https://deepseek.com/*",
         "https://chat.deepseek.com/*",
         "https://grok.com/*",
-        "https://x.com/i/grok*"
+        "https://x.com/*"
       ],
       "js": ["src/content/bridge.js"],
       "run_at": "document_idle",
@@ -52,7 +52,7 @@
         "https://deepseek.com/*",
         "https://chat.deepseek.com/*",
         "https://grok.com/*",
-        "https://x.com/i/grok*"
+        "https://x.com/*"
       ]
     }
   ],
