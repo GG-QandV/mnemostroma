@@ -23,7 +23,19 @@ const HARDCODED_SELECTORS = {
     userMessage:       '[data-message-author-role="user"]',
     regenerateButton:  '[aria-label="Regenerate"]',
   },
+  'chat.openai.com': {
+    responseContainer: '[data-message-author-role="assistant"]',
+    stopButton:        '[aria-label="Stop streaming"]',
+    userMessage:       '[data-message-author-role="user"]',
+    regenerateButton:  '[aria-label="Regenerate"]',
+  },
   'perplexity.ai': {
+    responseContainer: '.prose',
+    stopButton:        '[data-status="streaming"]',
+    userMessage:       '.my-query',
+    regenerateButton:  '[aria-label="Rewrite"]',
+  },
+  'www.perplexity.ai': {
     responseContainer: '.prose',
     stopButton:        '[data-status="streaming"]',
     userMessage:       '.my-query',
@@ -41,7 +53,24 @@ const HARDCODED_SELECTORS = {
     userMessage:       '.fbb737a4',
     regenerateButton:  '[aria-label="Regenerate"]',
   },
-  // grok.com — v1.1
+  'chat.deepseek.com': {
+    responseContainer: '.ds-markdown',
+    stopButton:        '.stop-button',
+    userMessage:       '.fbb737a4',
+    regenerateButton:  '[aria-label="Regenerate"]',
+  },
+  'grok.com': {
+    responseContainer: '.message-bubble',
+    stopButton:        '[aria-label="Stop streaming"]',
+    userMessage:       '.user-message',
+    regenerateButton:  '[aria-label="Regenerate"]',
+  },
+  'x.com': {
+    responseContainer: '.message-bubble',
+    stopButton:        '[aria-label="Stop streaming"]',
+    userMessage:       '.user-message',
+    regenerateButton:  '[aria-label="Regenerate"]',
+  },
 };
 
 async function _loadFromCache(hostname) {
