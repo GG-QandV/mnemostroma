@@ -362,7 +362,12 @@ To update Mnemostroma to the latest version (including dependencies and services
 bash scripts/update.sh
 ```
 
-This script handles git pulling, dependency synchronization via `uv`, and service restoration.
+This script handles:
+- Gracefully shutting down all background services and killing zombie processes
+- Git pulling the latest changes
+- Syncing and unpacking the browser extension
+- Dependency synchronization via `uv` (or `pip`)
+- Service restoration and startup (including the Tunnel and UI)
 
 ---
 
