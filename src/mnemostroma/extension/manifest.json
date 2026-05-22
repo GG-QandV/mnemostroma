@@ -1,47 +1,75 @@
 {
   "manifest_version": 3,
-  "name": "Mnemostroma Connector",
-  "version": "1.0.0",
-  "description": "Capture conversations from Claude.ai, Perplexity, DeepSeek, ChatGPT, Grok for Mnemostroma Memory",
-  "permissions": [
-    "storage",
-    "tabs"
-  ],
+  "name": "Mnemostroma",
+  "version": "1.0.5",
+  "description": "Captures AI chat sessions into local Mnemostroma memory daemon.",
+
+  "permissions": ["storage", "alarms", "tabs"],
   "host_permissions": [
-    "https://claude.ai/*",
-    "https://www.perplexity.ai/*",
-    "https://www.deepseek.com/*",
-    "https://chatgpt.com/*",
-    "https://grok.x.com/*",
     "http://127.0.0.1:8766/*",
     "http://localhost:8766/*"
   ],
+
+  "background": {
+    "service_worker": "src/background/service_worker.js",
+    "type": "module"
+  },
+
   "content_scripts": [
     {
-      "matches": ["https://claude.ai/*"],
-      "js": ["content_script_claude.js"]
-    },
-    {
-      "matches": ["https://www.perplexity.ai/*"],
-      "js": ["content_script_perplexity.js"]
-    },
-    {
-      "matches": ["https://www.deepseek.com/*"],
-      "js": ["content_script_deepseek.js"]
-    },
-    {
-      "matches": ["https://chatgpt.com/*"],
-      "js": ["content_script_chatgpt.js"]
-    },
-    {
-      "matches": ["https://grok.x.com/*"],
-      "js": ["content_script_grok.js"]
+      "matches": [
+        "https://claude.ai/*",
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*",
+        "https://perplexity.ai/*",
+        "https://www.perplexity.ai/*",
+        "https://gemini.google.com/*",
+        "https://deepseek.com/*",
+        "https://chat.deepseek.com/*",
+        "https://grok.com/*",
+        "https://x.com/i/grok*"
+      ],
+      "js": ["src/content/bridge.js"],
+      "run_at": "document_idle",
+      "world": "ISOLATED"
     }
   ],
-  "background": {
-    "service_worker": "background.js"
-  },
+
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "src/content/index.js",
+        "src/content/adapters/*.js",
+        "src/shared/*.js"
+      ],
+      "matches": [
+        "https://claude.ai/*",
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*",
+        "https://perplexity.ai/*",
+        "https://www.perplexity.ai/*",
+        "https://gemini.google.com/*",
+        "https://deepseek.com/*",
+        "https://chat.deepseek.com/*",
+        "https://grok.com/*",
+        "https://x.com/i/grok*"
+      ]
+    }
+  ],
+
   "action": {
-    "default_popup": "popup.html"
+    "default_popup": "src/popup/popup.html",
+    "default_icon": {
+      "16":  "assets/icon-16.png",
+      "48":  "assets/icon-48.png",
+      "128": "assets/icon-128.png"
+    }
+  },
+
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "mnemostroma@mnemostroma.ai",
+      "strict_min_version": "109.0"
+    }
   }
 }

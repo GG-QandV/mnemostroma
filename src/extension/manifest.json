@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Mnemostroma",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Captures AI chat sessions into local Mnemostroma memory daemon.",
 
   "permissions": ["storage", "alarms", "tabs"],
@@ -20,10 +20,14 @@
       "matches": [
         "https://claude.ai/*",
         "https://chatgpt.com/*",
+        "https://chat.openai.com/*",
         "https://perplexity.ai/*",
+        "https://www.perplexity.ai/*",
         "https://gemini.google.com/*",
         "https://deepseek.com/*",
-        "https://grok.com/*"
+        "https://chat.deepseek.com/*",
+        "https://grok.com/*",
+        "https://x.com/i/grok*"
       ],
       "js": ["src/content/bridge.js"],
       "run_at": "document_idle",
@@ -41,10 +45,14 @@
       "matches": [
         "https://claude.ai/*",
         "https://chatgpt.com/*",
+        "https://chat.openai.com/*",
         "https://perplexity.ai/*",
+        "https://www.perplexity.ai/*",
         "https://gemini.google.com/*",
         "https://deepseek.com/*",
-        "https://grok.com/*"
+        "https://chat.deepseek.com/*",
+        "https://grok.com/*",
+        "https://x.com/i/grok*"
       ]
     }
   ],
