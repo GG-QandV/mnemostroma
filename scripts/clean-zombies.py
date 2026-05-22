@@ -29,7 +29,11 @@ def stop_systemd_services():
         "mnemostroma.service",
         "mnemostroma-daemon.service",
         "mnemostroma-proxy.service",
-        "mnemostroma-watchdog.service"
+        "mnemostroma-watchdog.service",
+        "mnemostroma-ui.service",
+        "mnemostroma-sse.service",
+        "mnemostroma-tunnel.service",
+        "mnemostroma-serveo.service"
     ]
     print("Stopping system services...")
     for svc in services:
@@ -37,7 +41,9 @@ def stop_systemd_services():
 
 def find_and_kill():
     targets = [
-        "mnemostroma",
+        "-m mnemostroma",
+        "bin/mnemostroma",
+        "mnemostroma.exe",
         "context-manager/mcp/server.js",
         "perplexity-mcp",
         "mcp_stdio_adapter"
