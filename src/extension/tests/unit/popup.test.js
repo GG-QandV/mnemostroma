@@ -5,142 +5,130 @@ import path from 'path';
 
 // Мокаем глобальные объекты chrome
 globalThis.chrome = {
+  runtime: {
+    getManifest: vi.fn(() => ({ version: '1.2.3' }))
+  },
+  tabs: {
+    query: vi.fn()
+  },
   storage: {
     local: {
       get: vi.fn(),
       set: vi.fn()
+    },
+    onChanged: {
+      addListener: vi.fn()
     }
-  },
-  alarms: {
-    create: vi.fn()
   }
 };
 
-// Мокаем navigator.clipboard
-globalThis.navigator = {
-  clipboard: {
-    writeText: vi.fn()
-  }
-};
-
-// Глобальный mock fetch
-globalThis.fetch = vi.fn();
-
-// Читаем и адаптируем код popup.js
-const popupCodePath = path.resolve(__dirname, '../../../mnemostroma/extension/popup.js');
-let popupCode = fs.readFileSync(popupCodePath, 'utf8');
-popupCode = popupCode.replace('async function refresh()', 'globalThis.refresh = async function refresh()');
+// Читаем код popup.js
+const popupCodePath = path.resolve(__dirname, '../../src/popup/popup.js');
+const popupCode = fs.readFileSync(popupCodePath, 'utf8');
 
 describe('popup.js unit tests', () => {
   beforeEach(() => {
+    // Создаем DOM-структуру, соответствующую реальному popup.html
     document.body.innerHTML = `
-      <span id="daemon-status"></span>
-      <span id="queue-size"></span>
-      <input id="mcp-url" />
-      <button id="copy-btn"></button>
-      <button id="retry-btn"></button>
+      <div id="status-dot" class="status-dot"></div>
+      <span id="status-text"></span>
+      <div id="mcp-warning"></div>
+      <input type="checkbox" id="toggle-global" />
+      <div id="sites-list"></div>
+      <span id="version"></span>
+      <span id="footer-version"></span>
+      <a id="docs-link"></a>
+      <a id="mcp-link"></a>
     `;
 
     vi.resetAllMocks();
 
-    // Дефолтный мок для chrome.storage.local.get
+    // Настройка дефолтных моков
+    chrome.runtime.getManifest.mockReturnValue({ version: '1.2.3' });
+    chrome.tabs.query.mockResolvedValue([{ url: 'https://claude.ai/chat/123' }]);
     chrome.storage.local.get.mockResolvedValue({
-      mnemo_queue: []
+      daemonAlive: true,
+      mcpConfirmed: true,
+      globalEnabled: true,
+      siteEnabled: { 'claude.ai': true }
+    });
+  });
+
+  it('инициализирует статические элементы и версию из манифеста', () => {
+    new Function('chrome', popupCode)(chrome);
+
+    const versionEl = document.getElementById('version');
+    const footerVerEl = document.getElementById('footer-version');
+    const docsLinkEl = document.getElementById('docs-link');
+    const mcpLinkEl = document.getElementById('mcp-link');
+
+    expect(versionEl.textContent).toBe('v1.2.3');
+    expect(footerVerEl.textContent).toBe('1.2.3');
+    expect(docsLinkEl.href).toContain('github.com');
+    expect(mcpLinkEl.href).toContain('SETUP-MCP.md');
+  });
+
+  it('корректно отображает статус "Daemon connected" при активном демоне и MCP', async () => {
+    new Function('chrome', popupCode)(chrome);
+
+    // Даем микротаску выполниться для асинхронного рендеринга
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+    const mcpWarning = document.getElementById('mcp-warning');
+
+    expect(statusDot.className).toBe('status-dot green');
+    expect(statusText.textContent).toBe('Daemon connected');
+    expect(mcpWarning.classList.contains('visible')).toBe(false);
+  });
+
+  it('показывает предупреждение MCP, если сайт поддерживает MCP, но он не подтвержден', async () => {
+    chrome.storage.local.get.mockResolvedValue({
+      daemonAlive: true,
+      mcpConfirmed: false,
+      globalEnabled: true,
+      siteEnabled: {}
     });
 
-    // Дефолтный успешный мок fetch
-    fetch.mockImplementation((url) => {
-      if (url.includes('/health')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ status: "ok" })
-        });
-      }
-      if (url.includes('/mcp-config')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({
-            local_url: "http://127.0.0.1:8765/sse?token=abc",
-            public_url: null
-          })
-        });
-      }
-      return Promise.reject(new Error("Unknown URL"));
-    });
+    new Function('chrome', popupCode)(chrome);
+    await new Promise(resolve => setTimeout(resolve, 0));
 
-    // Выполняем скрипт в контексте глобального окружения
-    new Function(popupCode)();
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+    const mcpWarning = document.getElementById('mcp-warning');
+
+    expect(statusDot.className).toBe('status-dot yellow');
+    expect(statusText.textContent).toBe('Daemon connected · MCP not detected');
+    expect(mcpWarning.classList.contains('visible')).toBe(true);
   });
 
-  it('показывает local_url если public_url null', async () => {
-    // Вызываем refresh() и ждем выполнения
-    await globalThis.refresh();
+  it('переключает глобальную активность и сохраняет состояние', async () => {
+    new Function('chrome', popupCode)(chrome);
+    await new Promise(resolve => setTimeout(resolve, 0));
 
-    const mcpUrlInput = document.getElementById('mcp-url');
-    expect(mcpUrlInput.value).toBe('http://127.0.0.1:8765/sse?token=abc');
+    const toggleGlobal = document.getElementById('toggle-global');
+    expect(toggleGlobal.checked).toBe(true);
 
-    const daemonStatus = document.getElementById('daemon-status');
-    expect(daemonStatus.textContent).toBe('● up');
-    expect(daemonStatus.className).toBe('ok');
+    // Имитируем переключение пользователем
+    toggleGlobal.checked = false;
+    toggleGlobal.dispatchEvent(new Event('change'));
+
+    expect(chrome.storage.local.set).toHaveBeenCalledWith({ globalEnabled: false });
   });
 
-  it('показывает public_url если есть', async () => {
-    fetch.mockImplementation((url) => {
-      if (url.includes('/health')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ status: "ok" })
-        });
-      }
-      if (url.includes('/mcp-config')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({
-            local_url: "http://127.0.0.1:8765/sse?token=abc",
-            public_url: "https://xyz.serveo.net/sse?token=abc"
-          })
-        });
-      }
-      return Promise.reject(new Error("Unknown URL"));
-    });
+  it('отрисовывает список сайтов с корректными чекбоксами', async () => {
+    new Function('chrome', popupCode)(chrome);
+    await new Promise(resolve => setTimeout(resolve, 0));
 
-    await globalThis.refresh();
-
-    const mcpUrlInput = document.getElementById('mcp-url');
-    expect(mcpUrlInput.value).toBe('https://xyz.serveo.net/sse?token=abc');
-  });
-
-  it('daemon not running если fetch упал', async () => {
-    fetch.mockRejectedValue(new Error('Network error'));
-
-    await globalThis.refresh();
-
-    const mcpUrlInput = document.getElementById('mcp-url');
-    expect(mcpUrlInput.value).toBe('daemon not running');
-
-    const daemonStatus = document.getElementById('daemon-status');
-    expect(daemonStatus.textContent).toBe('● down');
-    expect(daemonStatus.className).toBe('err');
-  });
-
-  it('копирует URL в буфер обмена при клике на copy-btn', async () => {
-    await globalThis.refresh();
-
-    const copyBtn = document.getElementById('copy-btn');
-    expect(copyBtn.onclick).toBeDefined();
-
-    // Имитируем клик
-    copyBtn.onclick();
-
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('http://127.0.0.1:8765/sse?token=abc');
-  });
-
-  it('триггерит retry при клике на retry-btn', () => {
-    const retryBtn = document.getElementById('retry-btn');
+    const sitesList = document.getElementById('sites-list');
+    const checkboxes = sitesList.querySelectorAll('input[type="checkbox"]');
     
-    // Клик на кнопку
-    retryBtn.click();
+    // В списке должно быть 5 поддерживаемых сайтов
+    expect(checkboxes.length).toBe(5);
 
-    expect(chrome.alarms.create).toHaveBeenCalledWith('mnemo-retry', { delayInMinutes: 0 });
+    const claudeCheckbox = Array.from(checkboxes).find(cb => cb.dataset.site === 'claude.ai');
+    expect(claudeCheckbox).toBeDefined();
+    expect(claudeCheckbox.checked).toBe(true);
   });
 });

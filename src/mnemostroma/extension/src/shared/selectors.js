@@ -31,13 +31,13 @@ const HARDCODED_SELECTORS = {
   },
   'perplexity.ai': {
     responseContainer: '.prose',
-    stopButton:        '[data-status="streaming"]',
+    stopButton:        '[data-status="streaming"], [aria-label="Stop"], [aria-label="Stop generating"]',
     userMessage:       '.my-query',
     regenerateButton:  '[aria-label="Rewrite"]',
   },
   'www.perplexity.ai': {
     responseContainer: '.prose',
-    stopButton:        '[data-status="streaming"]',
+    stopButton:        '[data-status="streaming"], [aria-label="Stop"], [aria-label="Stop generating"]',
     userMessage:       '.my-query',
     regenerateButton:  '[aria-label="Rewrite"]',
   },
