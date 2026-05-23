@@ -110,7 +110,8 @@
     "sqlite_archive_cutoff_years": 3,
     "async_flush_interval_sec": 5,
     "batch_flush_size": 50,
-    "backup_interval_hours": 3
+    "backup_interval_hours": 3,
+    "session_repo": "new"
   },
   "experience": {
     "layer_enabled": true,

@@ -273,6 +273,18 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         return [TextContent(type="text", text='{"error": "Mnemostroma not initialized"}')]
 
     ctx = _conductor.ctx
+    if ctx is not None and ctx.session_repo is None:
+        try:
+            from mnemostroma.adapters.sqlite.session_repo import SessionRepo
+            from mnemostroma.adapters.sqlite.precision_repo import PrecisionRepo
+            from mnemostroma.adapters.sqlite.anchor_repo import AnchorRepo
+            if hasattr(ctx, 'persistence') and ctx.persistence is not None:
+                ctx.session_repo = SessionRepo(ctx.persistence._manager)
+                ctx.precision_repo = PrecisionRepo(ctx.persistence._manager)
+                ctx.anchor_repo = AnchorRepo(ctx.persistence._manager)
+                logger.info("Dynamically healed SessionRepo and PrecisionRepo inside MCP session")
+        except Exception as e:
+            logger.warning(f"Failed dynamic SessionRepo healing: {e}")
 
     try:
         if name == "ctx_semantic":
