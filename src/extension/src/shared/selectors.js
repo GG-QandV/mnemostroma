@@ -12,9 +12,9 @@ import { SELECTORS_REMOTE_URL, SELECTORS_CACHE_TTL_MS } from './constants.js';
 
 const HARDCODED_SELECTORS = {
   'claude.ai': {
-    responseContainer: '.font-claude-message',
+    responseContainer: '.font-claude-response',
     stopButton:        '[aria-label="Stop Response"]',
-    userMessage:       '.font-user-message',
+    userMessage:       '.\\!font-user-message',
     regenerateButton:  '[aria-label="Retry"]',
   },
   'chatgpt.com': {
@@ -31,14 +31,14 @@ const HARDCODED_SELECTORS = {
   },
   'perplexity.ai': {
     responseContainer: '.prose',
-    stopButton:        '[data-status="streaming"], [aria-label="Stop"], [aria-label="Stop generating"]',
-    userMessage:       '.my-query',
+    stopButton:        '[data-status="streaming"], [aria-label*="Stop"], [aria-label*="Зупинити"], [aria-label*="Остановить"], [aria-label*="Detener"], [aria-label*="Stop generating"]',
+    userMessage:       '[contenteditable="true"]',
     regenerateButton:  '[aria-label="Rewrite"]',
   },
   'www.perplexity.ai': {
     responseContainer: '.prose',
-    stopButton:        '[data-status="streaming"], [aria-label="Stop"], [aria-label="Stop generating"]',
-    userMessage:       '.my-query',
+    stopButton:        '[data-status="streaming"], [aria-label*="Stop"], [aria-label*="Зупинити"], [aria-label*="Остановить"], [aria-label*="Detener"], [aria-label*="Stop generating"]',
+    userMessage:       '[contenteditable="true"]',
     regenerateButton:  '[aria-label="Rewrite"]',
   },
   'gemini.google.com': {
