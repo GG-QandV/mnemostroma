@@ -228,8 +228,10 @@ export function installFetchHook({
         if (parsed?.textDelta) {
           deltas.push(parsed.textDelta);
           core.addAssistantDelta(request_id, parsed.textDelta, getNavEpoch());
-        } else if (raw) {
-          // Non-stream fallback: try to preserve assistant text if parser doesn't map chunk model.
+        } else if (raw && !parsed?.control) {
+          // Non-stream fallback: preserve raw text only if parser made no explicit
+          // control decision (MISSING_FIELD, SCHEMA_DRIFT, etc.).
+          // If control is set the parser rejected this payload — do not write raw JSON.
           core.addAssistantDelta(request_id, raw, getNavEpoch());
           deltas.push(raw);
         }

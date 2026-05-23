@@ -226,9 +226,14 @@ async function _initSession() {
 // ─── Наблюдатель конца стрима ────────────────────────────────────────────────
 
 function _onStreamEnd(responseEl) {
-  const llmText  = adapter?.extractLlmResponse?.(responseEl) || responseEl.innerText || '';
+  const llmText  = adapter?.extractLlmResponse?.(responseEl) || responseEl?.innerText || '';
   const userText = pendingUserMessage ?? '';
   pendingUserMessage = null;
+
+  if (!llmText.trim()) {
+    console.warn('[Mnemostroma] Stream ended but text is empty, ignoring capture.');
+    return;
+  }
 
   exchangeCounter++;
   retryCounter = 0;
@@ -241,8 +246,13 @@ function _onStreamEnd(responseEl) {
 // ─── Regenerate ─────────────────────────────────────────────────────────────
 
 function _onRegenerateCallback(responseEl) {
-  const llmText  = adapter?.extractLlmResponse?.(responseEl) || responseEl.innerText || '';
+  const llmText  = adapter?.extractLlmResponse?.(responseEl) || responseEl?.innerText || '';
   const userText = pendingUserMessage ?? '';
+
+  if (!llmText.trim()) {
+    console.warn('[Mnemostroma] Regenerate ended but text is empty, ignoring capture.');
+    return;
+  }
 
   retryCounter++;
 
@@ -401,7 +411,6 @@ async function init() {
     adapter.onRegenerate(_onRegenerateCallback);
   }
 
-  // Патч #4: Grok — submit listener с STREAM_END_TIMEOUT_MS
   if (shortName === 'grok' && adapter?.initSubmitListener) {
     adapter.initSubmitListener(() => {
       _savePendingUserMessage();
@@ -413,6 +422,15 @@ async function init() {
         responseEl.dataset.mnemoCaptured = captureKey;
         _onStreamEnd(responseEl);
       }, STREAM_END_TIMEOUT_MS);
+    });
+  } else if (shortName === 'gemini' && adapter?.initSubmitListener) {
+    adapter.initSubmitListener((responseEl) => {
+      _savePendingUserMessage();
+      if (!responseEl) return;
+      const captureKey = `${sessionId}:${exchangeCounter}`;
+      if (responseEl.dataset.mnemoCaptured === captureKey) return;
+      responseEl.dataset.mnemoCaptured = captureKey;
+      _onStreamEnd(responseEl);
     });
   } else if (adapter?.initSubmitListener) {
     adapter.initSubmitListener(_savePendingUserMessage);

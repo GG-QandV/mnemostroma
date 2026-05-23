@@ -7,7 +7,7 @@ export default makeParser('chatgpt', '1.0.0', {
     methods: ['POST'],
   },
   matchRequest(meta) {
-    return meta.method === 'POST' && (meta.url.includes('/backend-api/conversation') || meta.url.includes('/v1/responses'));
+    return meta.method === 'POST' && (meta.url.includes('/backend-api/conversation') || meta.url.includes('/backend-api/f/conversation') || meta.url.includes('/v1/responses'));
   },
   extractUserInput(requestText) {
     const parsed = parseJsonSafe(requestText);
@@ -15,8 +15,11 @@ export default makeParser('chatgpt', '1.0.0', {
     if (typeof parsed.value?.input === 'string') return parsed.value.input;
     const msgs = parsed.value?.messages;
     if (!Array.isArray(msgs)) return null;
-    const user = [...msgs].reverse().find((m) => m?.role === 'user');
-    return typeof user?.content === 'string' ? user.content : null;
+    const user = [...msgs].reverse().find((m) => m?.role === 'user' || m?.author?.role === 'user');
+    if (!user) return null;
+    if (typeof user.content === 'string') return user.content;
+    if (user.content?.parts && Array.isArray(user.content.parts)) return user.content.parts.join('\n');
+    return null;
   },
   extractConversationId(_meta, payload) {
     return payload?.conversation_id ?? payload?.conversation?.id ?? null;

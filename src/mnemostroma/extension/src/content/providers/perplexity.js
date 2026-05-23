@@ -12,10 +12,19 @@ export default makeParser('perplexity', '1.0.0', {
   extractUserInput(requestText) {
     const parsed = parseJsonSafe(requestText);
     if (!parsed.ok) return null;
+    
+    // Поддержка формата Perplexity с полем query
+    if (typeof parsed.value?.query === 'string') {
+      return parsed.value.query;
+    }
+    
+    // Стандартный fallback-формат с messages
     const msgs = parsed.value?.messages;
-    if (!Array.isArray(msgs)) return null;
-    const user = [...msgs].reverse().find((m) => m?.role === 'user');
-    return typeof user?.content === 'string' ? user.content : null;
+    if (Array.isArray(msgs)) {
+      const user = [...msgs].reverse().find((m) => m?.role === 'user');
+      return typeof user?.content === 'string' ? user.content : null;
+    }
+    return null;
   },
   extractConversationId(_meta, payload) {
     return payload?.conversation_id ?? payload?.id ?? null;
@@ -25,9 +34,22 @@ export default makeParser('perplexity', '1.0.0', {
     const parsed = parseJsonSafe(dataLine);
     if (!parsed.ok) return { control: { type: 'MALFORMED_CHUNK' } };
     const ev = parsed.value;
-    const text = ev?.choices?.[0]?.delta?.content ?? '';
+
+    // Явный перехват: acknowledgement-ответы Perplexity содержат только request_id
+    // без choices/answer — это служебные пакеты, не несущие текста.
+    if (ev?.request_id && !ev?.choices && !ev?.answer) {
+      return { control: { type: 'ACK' } };
+    }
+
+    // Извлекаем текст из разных возможных структур запросов/ответов
+    const text = ev?.choices?.[0]?.delta?.content ??
+                 ev?.choices?.[0]?.message?.content ??
+                 ev?.choices?.[0]?.text ??
+                 ev?.answer ??
+                 '';
+
     if (text) return { textDelta: text };
-    return { control: { type: ev?.choices ? 'SCHEMA_DRIFT' : 'MISSING_FIELD' } };
+    return { control: { type: ev?.choices || ev?.answer ? 'SCHEMA_DRIFT' : 'MISSING_FIELD' } };
   },
   classifyTurn(payload = {}) {
     if (payload?.regenerate === true) return 'regenerate';
