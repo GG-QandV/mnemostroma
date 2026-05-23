@@ -33,25 +33,32 @@ export function initSubmitListener(_cb) {}
  * @param {string} _selector — не используется (stopButton вне responseContainer)
  * @param {() => void} cb
  */
-export function getStreamEndSignal(_selector, cb) {
-  let wasStreaming = false;
+export function getStreamEndSignal(selector, cb) {
+  let timer = null;
+  let lastText = '';
+  let isStreaming = false;
 
   const observer = new MutationObserver(() => {
-    const stopBtn = document.querySelector('[aria-label="Stop Response"]');
+    const responses = document.querySelectorAll(selector || '.font-claude-response');
+    if (responses.length === 0) return;
 
-    if (stopBtn) {
-      wasStreaming = true;
-      return;
-    }
+    const latestResponse = responses[responses.length - 1];
+    const currentText = latestResponse.textContent;
 
-    if (wasStreaming) {
-      wasStreaming = false;
-      setTimeout(cb, STREAM_END_SETTLE_MS);
-      // observer НЕ отключается — нужен для следующих exchanges
+    if (currentText !== lastText) {
+      lastText = currentText;
+      isStreaming = true;
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (isStreaming) {
+          isStreaming = false;
+          cb();
+        }
+      }, STREAM_END_SETTLE_MS);
     }
   });
 
-  observer.observe(document.body, { childList: true, subtree: true });
+  observer.observe(document.body, { childList: true, subtree: true, characterData: true });
 }
 
 /**
@@ -59,7 +66,7 @@ export function getStreamEndSignal(_selector, cb) {
  * @param {string} [selector]
  * @returns {string}
  */
-export function extractUserMessage(selector = '.font-user-message') {
+export function extractUserMessage(selector = '.\\!font-user-message') {
   try {
     const messages = document.querySelectorAll(selector);
     if (messages.length === 0) return '';

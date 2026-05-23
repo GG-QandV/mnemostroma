@@ -7,12 +7,13 @@ export default makeParser('claude', '1.0.0', {
     methods: ['POST'],
   },
   matchRequest(meta) {
-    return meta.url.includes('/v1/messages') && meta.method === 'POST';
+    return (meta.url.includes('/v1/messages') || meta.url.includes('/completion')) && meta.method === 'POST';
   },
   extractUserInput(requestText) {
     const parsed = parseJsonSafe(requestText);
     if (!parsed.ok) return null;
-    const msgs = parsed.value?.messages;
+    
+    const msgs = parsed.value?.messages || (parsed.value?.prompt ? [{role: 'user', content: parsed.value.prompt}] : null);
     if (!Array.isArray(msgs)) return null;
     const user = [...msgs].reverse().find((m) => m?.role === 'user');
     if (!user) return null;

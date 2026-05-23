@@ -26,8 +26,8 @@ describe('claude — extractChatId', () => {
 describe('claude — extractUserMessage', () => {
   it('returns last user message text', () => {
     document.body.innerHTML = `
-      <div class="font-user-message">first</div>
-      <div class="font-user-message">last message</div>
+      <div class="!font-user-message">first message</div>
+      <div class="!font-user-message">last message</div>
     `;
     expect(claudeExtractUserMessage()).toBe('last message');
   });
