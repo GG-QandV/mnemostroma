@@ -27,7 +27,7 @@ function _isVisible(el) {
 export function extractChatId(url) {
   try {
     const { pathname } = new URL(url);
-    const match = pathname.match(/\/chat\/([a-zA-Z0-9_-]+)/);
+    const match = pathname.match(/\/chat\/(?:s\/)?([a-zA-Z0-9_-]+)/);
     if (!match) return null;
     if (match[1] === 'new') return null;
     return match[1];
@@ -36,36 +36,18 @@ export function extractChatId(url) {
   }
 }
 
-/** No-op — только grok.js перехватывает submit. */
-export function initSubmitListener(_cb) {}
-
-/**
- * @param {string} _selector
- * @param {() => void} cb
- */
-export function getStreamEndSignal(_selector, cb) {
-  let wasStreaming = false;
-  let checkTimer  = null;
-
+export function initSubmitListener(cb) {
+  let settleTimer = null;
   const observer = new MutationObserver(() => {
-    if (checkTimer) return;
-    checkTimer = setTimeout(() => {
-      checkTimer = null;
-      const stopEl = document.querySelector(STOP_SELECTORS);
-
-      if (stopEl && _isVisible(stopEl)) {
-        wasStreaming = true;
-        return;
+    clearTimeout(settleTimer);
+    settleTimer = setTimeout(() => {
+      const all = document.querySelectorAll('.ds-markdown');
+      if (all.length > 0) {
+        cb(all[all.length - 1]);
       }
-
-      if (wasStreaming) {
-        wasStreaming = false;
-        setTimeout(cb, STREAM_END_SETTLE_MS);
-      }
-    }, 50);
+    }, 2500);
   });
-
-  observer.observe(document.body, { childList: true, subtree: true });
+  observer.observe(document.body, { childList: true, subtree: true, characterData: true });
 }
 
 /**

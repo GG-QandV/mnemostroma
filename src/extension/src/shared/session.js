@@ -35,9 +35,8 @@ export function extractChatIdFromUrl(url, hostname) {
       'claude.ai':     /\/chat\/([a-zA-Z0-9_-]+)/,
       'chatgpt.com':   /\/c\/([a-zA-Z0-9_-]+)/,
       'perplexity.ai': /\/search\/([a-zA-Z0-9_-]+)/,
-      'deepseek.com':  /\/chat\/([a-zA-Z0-9_-]+)/,
-      // gemini.google.com — no chat_id in URL, handled in adapter §9.4
-      // grok.com — v1.1
+      'deepseek.com':  /\/chat\/(?:s\/)?([a-zA-Z0-9_-]+)/,
+      'chat.deepseek.com': /\/chat\/(?:s\/)?([a-zA-Z0-9_-]+)/,
     };
 
     const regex = patterns[hostname];

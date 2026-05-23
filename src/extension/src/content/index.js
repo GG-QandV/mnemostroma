@@ -123,7 +123,7 @@ function _buildTransportPayload({ userText, llmText }) {
       chatId,
       exchangeId,
       url: window.location.href,
-      // TODO(restore): Раскомментировать когда бэкенд внутри готов раздельно обрабатывать промпт юзера
+      // TODO(restore): Раскомментировать когда бэкенд будет готов раздельно обрабатывать промпт юзера
       // text: `user: ${userText ?? ''}\nassistant: ${llmText ?? ''}`,
       text: llmText ?? '',
       timestamp: new Date().toISOString(),
@@ -423,7 +423,7 @@ async function init() {
         _onStreamEnd(responseEl);
       }, STREAM_END_TIMEOUT_MS);
     });
-  } else if (shortName === 'gemini' && adapter?.initSubmitListener) {
+  } else if ((shortName === 'gemini' || shortName === 'deepseek') && adapter?.initSubmitListener) {
     adapter.initSubmitListener((responseEl) => {
       _savePendingUserMessage();
       if (!responseEl) return;
