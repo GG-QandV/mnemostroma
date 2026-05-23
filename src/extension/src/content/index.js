@@ -102,7 +102,9 @@ function _buildPayload({ userText, llmText, responseEl, isRegenerate }) {
       chatId,
       exchangeId,
       url:         window.location.href,
-      text:        `user: ${userText ?? ''}\nassistant: ${llmText ?? ''}`,
+      // TODO(restore): Раскомментировать когда бэкенд будет готов раздельно обрабатывать промпт юзера
+      // text:        `user: ${userText ?? ''}\nassistant: ${llmText ?? ''}`,
+      text:        llmText ?? '',
       timestamp:   new Date().toISOString(),
       isRegenerate,
       capture_source: CAPTURE_SOURCE_DOM,
@@ -121,7 +123,9 @@ function _buildTransportPayload({ userText, llmText }) {
       chatId,
       exchangeId,
       url: window.location.href,
-      text: `user: ${userText ?? ''}\nassistant: ${llmText ?? ''}`,
+      // TODO(restore): Раскомментировать когда бэкенд внутри готов раздельно обрабатывать промпт юзера
+      // text: `user: ${userText ?? ''}\nassistant: ${llmText ?? ''}`,
+      text: llmText ?? '',
       timestamp: new Date().toISOString(),
       isRegenerate: false,
       capture_source: CAPTURE_SOURCE_TRANSPORT,
@@ -222,7 +226,7 @@ async function _initSession() {
 // ─── Наблюдатель конца стрима ────────────────────────────────────────────────
 
 function _onStreamEnd(responseEl) {
-  const llmText  = adapter?.extractLlmResponse?.(responseEl) ?? responseEl.innerText ?? '';
+  const llmText  = adapter?.extractLlmResponse?.(responseEl) || responseEl.innerText || '';
   const userText = pendingUserMessage ?? '';
   pendingUserMessage = null;
 
@@ -237,7 +241,7 @@ function _onStreamEnd(responseEl) {
 // ─── Regenerate ─────────────────────────────────────────────────────────────
 
 function _onRegenerateCallback(responseEl) {
-  const llmText  = adapter?.extractLlmResponse?.(responseEl) ?? responseEl.innerText ?? '';
+  const llmText  = adapter?.extractLlmResponse?.(responseEl) || responseEl.innerText || '';
   const userText = pendingUserMessage ?? '';
 
   retryCounter++;
@@ -275,7 +279,8 @@ function _observeContainer() {
 
       clearTimeout(_observeContainer._debounce);
       _observeContainer._debounce = setTimeout(() => {
-        const responseEl = containerEl.querySelector(responseSelector);
+        const allRes = containerEl.querySelectorAll(responseSelector);
+        const responseEl = allRes.length ? allRes[allRes.length - 1] : null;
         if (!responseEl) return;
 
         // Патч #8: разделитель в guard против дублирования
@@ -353,6 +358,9 @@ async function init() {
   }
 
   _captureMode = _readCaptureMode();
+  if (shortName === 'perplexity') {
+    _captureMode = CAPTURE_MODE_DOM_ONLY;
+  }
   if (_captureMode !== CAPTURE_MODE_DOM_ONLY) {
     _initTransportCore();
   }
@@ -415,7 +423,9 @@ async function init() {
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         const msgEl = document.querySelector(selectors.userMessage);
-        if (msgEl) pendingUserMessage = msgEl.innerText?.trim() ?? null;
+        if (msgEl) {
+          pendingUserMessage = msgEl.innerText?.trim() ?? null;
+        }
       }
     }, { capture: true });
   }

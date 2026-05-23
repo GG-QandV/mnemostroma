@@ -4,8 +4,11 @@ import { STREAM_END_SETTLE_MS } from '../../shared/constants.js';
 
 const STOP_SELECTORS = [
   '[data-status="streaming"]',
-  '[aria-label="Stop"]',
-  '[aria-label="Stop generating"]',
+  '[aria-label*="Stop"]',
+  '[aria-label*="Зупинити"]',
+  '[aria-label*="Остановить"]',
+  '[aria-label*="Detener"]',
+  '[aria-label*="Stop generating"]',
 ].join(', ');
 
 const REGENERATE_SELECTORS = [
@@ -29,8 +32,51 @@ export function extractChatId(url) {
   }
 }
 
-/** No-op — только grok.js перехватывает submit. */
-export function initSubmitListener(_cb) {}
+/**
+ * Устанавливает слушатель отправки запроса.
+ * Отслеживает нажатие Enter (без Shift) внутри [contenteditable="true"]
+ * и клики по кнопке отправки.
+ * @param {() => void} cb
+ */
+export function initSubmitListener(cb) {
+  let isSubmitting = false;
+
+  const handleSubmit = () => {
+    console.debug('[Mnemostroma-Perplexity-Debug] initSubmitListener: handleSubmit triggered, isSubmitting =', isSubmitting);
+    if (isSubmitting) return;
+    isSubmitting = true;
+    cb();
+    setTimeout(() => { isSubmitting = false; }, 1000);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      const activeEl = document.activeElement;
+      console.debug('[Mnemostroma-Perplexity-Debug] initSubmitListener: KeyDown Enter, activeElement =', activeEl);
+      if (activeEl && activeEl.matches('[contenteditable="true"]')) {
+        console.debug('[Mnemostroma-Perplexity-Debug] initSubmitListener: Matches [contenteditable="true"], text =', activeEl.textContent);
+        // Даем браузеру обработать событие, затем вызываем cb
+        setTimeout(handleSubmit, 0);
+      }
+    }
+  };
+
+  const handleClick = (e) => {
+    const button = e.target.closest('button[aria-label*="Отправить"], button[aria-label*="Надіслати"], button[aria-label*="Send"], button.bg-button-bg');
+    if (button) {
+      console.debug('[Mnemostroma-Perplexity-Debug] initSubmitListener: Click on submit button =', button);
+      handleSubmit();
+    }
+  };
+
+  document.addEventListener('keydown', handleKeyDown, true);
+  document.addEventListener('click', handleClick, true);
+
+  return () => {
+    document.removeEventListener('keydown', handleKeyDown, true);
+    document.removeEventListener('click', handleClick, true);
+  };
+}
 
 /**
  * Устанавливает постоянное наблюдение за концом стриминга.
@@ -70,15 +116,35 @@ export function getStreamEndSignal(_selector, cb) {
 }
 
 /**
+ * Извлекает последнее сообщение пользователя.
+ * Сначала пробует прочитать активное поле ввода div[contenteditable="true"],
+ * а если оно уже очищено — использует fallback на последний [class*="group/query"].
  * @param {string} [selector]
  * @returns {string}
  */
-export function extractUserMessage(selector = '.my-query') {
+export function extractUserMessage(selector = '[contenteditable="true"]') {
+  console.debug('[Mnemostroma-Perplexity-Debug] extractUserMessage called with selector =', selector);
   try {
-    const messages = document.querySelectorAll(selector);
-    if (messages.length === 0) return '';
-    return messages[messages.length - 1].textContent.trim();
-  } catch {
+    const activeInput = document.querySelector(selector);
+    console.debug('[Mnemostroma-Perplexity-Debug] extractUserMessage: activeInput =', activeInput);
+    if (activeInput) {
+      const text = activeInput.textContent.trim();
+      console.debug('[Mnemostroma-Perplexity-Debug] extractUserMessage: activeInput text =', text);
+      if (text) return text;
+    }
+
+    const sentMessages = document.querySelectorAll('[class*="group/query"]');
+    console.debug('[Mnemostroma-Perplexity-Debug] extractUserMessage: sentMessages found count =', sentMessages.length);
+    if (sentMessages.length > 0) {
+      const lastText = sentMessages[sentMessages.length - 1].textContent.trim();
+      console.debug('[Mnemostroma-Perplexity-Debug] extractUserMessage: sentMessages lastText =', lastText);
+      return lastText;
+    }
+
+    console.debug('[Mnemostroma-Perplexity-Debug] extractUserMessage: returning empty string');
+    return '';
+  } catch (err) {
+    console.error('[Mnemostroma-Perplexity-Debug] extractUserMessage error:', err);
     return '';
   }
 }
@@ -88,11 +154,16 @@ export function extractUserMessage(selector = '.my-query') {
  * @returns {string}
  */
 export function extractLlmResponse(selector) {
+  console.debug('[Mnemostroma-Perplexity-Debug] extractLlmResponse called with selector =', selector);
   try {
     const all = document.querySelectorAll(selector);
+    console.debug('[Mnemostroma-Perplexity-Debug] extractLlmResponse: elements found count =', all.length);
     if (all.length === 0) return '';
-    return all[all.length - 1].textContent.trim();
-  } catch {
+    const lastText = all[all.length - 1].textContent.trim();
+    console.debug('[Mnemostroma-Perplexity-Debug] extractLlmResponse: lastText =', lastText);
+    return lastText;
+  } catch (err) {
+    console.error('[Mnemostroma-Perplexity-Debug] extractLlmResponse error:', err);
     return '';
   }
 }

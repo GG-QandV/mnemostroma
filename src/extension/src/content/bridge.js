@@ -18,6 +18,7 @@ window.addEventListener('message', (event) => {
 
   const msg = event.data;
   if (!msg || msg.__mnemo !== true) return;
+  console.debug('[Mnemostroma-Bridge-Debug] bridge.js received message from MAIN world:', msg);
   if (!ALLOWED_TYPES.has(msg.type)) return;
 
   // Shape validation: COLLECT must have hostname (string) and payload (object).
@@ -28,23 +29,45 @@ window.addEventListener('message', (event) => {
 
   const { __mnemo, ...payload } = msg;
 
-  if (!api?.runtime) return;
+  if (!api?.runtime?.sendMessage) {
+    console.warn('[Mnemostroma] Extension context invalidated. Please refresh the page to reconnect.');
+    console.debug('[Mnemostroma-Bridge-Debug] api.runtime.sendMessage is UNDEFINED (context invalidated)!');
+    return;
+  }
 
   try {
-    api.runtime.sendMessage(payload)
-      .then(res => {
-        if (msg.id) {
-          window.postMessage({ __mnemo_reply: true, id: msg.id, res }, window.location.origin);
-        }
-      })
-      .catch(err =>
-        console.debug('[Mnemostroma] bridge: sendMessage failed:', err.message)
-      );
+    console.debug('[Mnemostroma-Bridge-Debug] bridge.js calling api.runtime.sendMessage for payload:', payload);
+    const promise = api.runtime.sendMessage(payload);
+    if (promise && typeof promise.then === 'function') {
+      promise
+        .then(res => {
+          if (msg.id) {
+            window.postMessage({ __mnemo_reply: true, id: msg.id, res }, window.location.origin);
+          }
+        })
+        .catch(err => {
+          const errMsg = err?.message || String(err || '');
+          if (msg.id) {
+            window.postMessage({ __mnemo_reply: true, id: msg.id, error: errMsg }, window.location.origin);
+          }
+          if (errMsg.includes('context invalidated') || errMsg.includes('Extension context invalidated')) {
+            console.warn('[Mnemostroma] Extension updated. Please refresh the page to reconnect.');
+          } else {
+            console.debug('[Mnemostroma] bridge: sendMessage failed:', errMsg);
+          }
+        });
+    } else {
+      console.debug('[Mnemostroma] bridge: sendMessage did not return a promise');
+    }
   } catch (err) {
-    if (err.message.includes('context invalidated')) {
+    const errMsg = err?.message || String(err || '');
+    if (msg.id) {
+      window.postMessage({ __mnemo_reply: true, id: msg.id, error: errMsg }, window.location.origin);
+    }
+    if (errMsg.includes('context invalidated') || errMsg.includes('Extension context invalidated')) {
       console.warn('[Mnemostroma] Extension updated. Please refresh the page to reconnect.');
     } else {
-      console.warn('[Mnemostroma] bridge: sync error:', err.message);
+      console.warn('[Mnemostroma] bridge: sync error:', errMsg);
     }
   }
 });
