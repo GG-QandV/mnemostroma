@@ -2,14 +2,14 @@
 
 ### The memory layer for AI agents
 
-![Version](https://img.shields.io/badge/version-v2.3.0--beta-orange)
+![Version](https://img.shields.io/badge/version-v2.3.0-blue)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue)
 ![Tests](https://img.shields.io/badge/tests-609%20passing-brightgreen)
 ![License](https://img.shields.io/badge/license-FSL--1.1--MIT-lightgrey)
 
 > *μνήμη (mnḗmē, memory) + στρῶμα (strôma, layer) — the substrate everything rests on.*
 
-> **v2.3.0 Beta (Active Development).** Upgrading from v1.9.1 or earlier? → [See UPGRADE.md](./UPGRADE.md)
+> **v2.3.0 is stable.** Upgrading from v1.9.1 or earlier? → [See UPGRADE.md](./UPGRADE.md)
 
 ---
 
@@ -164,7 +164,7 @@ This is not a database with TTL. This is how human memory works.
 
 ## Status
 
-**Current:** v2.3.0 Beta (Active Development) | 2026-05-22
+**Current:** v2.3.0 | 2026-05-23
 
 | Component | Status |
 |---|---|
@@ -191,7 +191,7 @@ This is not a database with TTL. This is how human memory works.
 
 **Requires Python 3.12+**
 
-> **v2.3.0 Beta (Active Development).** Upgrading from v1.9.1 or earlier? → [See UPGRADE.md](./UPGRADE.md)
+> **v2.3.0 is stable.** Upgrading from v1.9.1 or earlier? → [See UPGRADE.md](./UPGRADE.md)
 
 ---
 
@@ -912,7 +912,7 @@ Cloud Sync, Subconscious Layer (personalized models), Shared Experience, and Tea
 ---
 
 *Mnemostroma — the memory layer for AI agents*
-*offline · ~650MB RAM (baseline) · ~20ms · 577 tests · v2.3.0 Beta*
+*offline · ~650MB RAM (baseline) · ~20ms · 577 tests · v2.3.0*
 
 # [mnemostroma-protocol]
 
