@@ -83,3 +83,4 @@ src/extension/node_modules/
 npm-debug.log*
 .vite/
 .vitest/
+release/*.exe
