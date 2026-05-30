@@ -6,7 +6,7 @@ const api = typeof browser !== 'undefined' ? browser : chrome;
 
 const SUPPORTED_SITES = [
   'claude.ai', 'chatgpt.com', 'perplexity.ai',
-  'gemini.google.com', 'deepseek.com',
+  'gemini.google.com', 'deepseek.com', 'grok.com',
 ];
 const MCP_SITES = ['claude.ai', 'chatgpt.com', 'perplexity.ai'];
 
@@ -161,3 +161,185 @@ api.storage.onChanged.addListener((changes) => {
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 
 render();
+
+// ─── Tunnel ───────────────────────────────────────────────────────────────────
+
+const OBSERVE_PORT_PRIMARY = 8769;   // OAuth adapter (новый)
+const OBSERVE_PORT_LEGACY   = 8766;  // Legacy adapter (старый)
+const OBSERVE_TIMEOUT_MS    = 1500;  // Таймаут на все запросы к Observe API
+const TUNNEL_POLL_MS        = 1500;
+
+let _tunnelPolling = null;
+
+function _tunnelShowState(state) {
+  // state: "stopped" | "starting" | "running"
+  document.getElementById("tunnel-stopped") .classList.toggle("hidden", state !== "stopped");
+  document.getElementById("tunnel-starting").classList.toggle("hidden", state !== "starting");
+  document.getElementById("tunnel-running") .classList.toggle("hidden", state !== "running");
+}
+
+async function observeFetch(path, options = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), OBSERVE_TIMEOUT_MS);
+  try {
+    const res = await fetch(
+      `http://127.0.0.1:${OBSERVE_PORT_PRIMARY}${path}`,
+      { ...options, signal: controller.signal }
+    );
+    return res;
+  } catch (e) {
+    if (e.name === "AbortError") {
+      throw new Error("Observe API timeout");
+    }
+    const legacyController = new AbortController();
+    const legacyTimer = setTimeout(() => legacyController.abort(), OBSERVE_TIMEOUT_MS);
+    try {
+      const res2 = await fetch(
+        `http://127.0.0.1:${OBSERVE_PORT_LEGACY}${path}`,
+        { ...options, signal: legacyController.signal }
+      );
+      return res2;
+    } catch (err) {
+      throw new Error("Observe API unreachable on both ports");
+    } finally {
+      clearTimeout(legacyTimer);
+    }
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function _fetchTunnelStatus() {
+  try {
+    const r = await observeFetch("/tunnel/status");
+    return r.ok ? await r.json() : null;
+  } catch {
+    return null;
+  }
+}
+
+function _escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function _copyAndFlash(text, message) {
+  if (!text) return;
+  navigator.clipboard.writeText(text)
+    .then(() => {
+      const hint = document.getElementById("copy-hint");
+      if (!hint) return;
+      hint.textContent = message;
+      hint.classList.remove("hidden");
+      setTimeout(() => hint.classList.add("hidden"), 2500);
+    })
+    .catch(err => console.warn("clipboard write failed:", err));
+}
+
+function _renderTunnelChats(chats) {
+  const container = document.getElementById("tunnel-chats-container");
+  if (!container) return;
+
+  // Заменяем ноду целиком — сбрасывает все старые event listeners
+  const fresh = container.cloneNode(false);
+  container.parentNode.replaceChild(fresh, container);
+
+  chats.forEach(chat => {
+    const row = document.createElement("div");
+    row.className = "chat-row";
+
+    const tokenBtn = chat.needs_token
+      ? `<button class="btn-copy-token btn-small"
+                 data-token="${_escapeHtml(chat.token ?? "")}"
+                 title="Copy token for ${_escapeHtml(chat.label)}">📋 Token</button>`
+      : "";
+
+    row.innerHTML = `
+      <div class="chat-label">${chat.icon} ${_escapeHtml(chat.label)}</div>
+      <div class="chat-url-text" title="${_escapeHtml(chat.full_url)}">${_escapeHtml(chat.full_url)}</div>
+      <div class="chat-actions">
+        <button class="btn-copy-url btn-small"
+                data-url="${_escapeHtml(chat.full_url)}"
+                title="Copy URL for ${_escapeHtml(chat.label)}">📋 Copy URL</button>
+        ${tokenBtn}
+      </div>
+      <div class="chat-hint">${_escapeHtml(chat.hint)}</div>
+    `;
+    fresh.appendChild(row);
+  });
+
+  // Один delegated listener на контейнер
+  fresh.addEventListener("click", e => {
+    const u = e.target.closest(".btn-copy-url");
+    const t = e.target.closest(".btn-copy-token");
+    if (u) _copyAndFlash(u.dataset.url,   "✓ URL copied!");
+    if (t) _copyAndFlash(t.dataset.token, "✓ Token copied!");
+  });
+}
+
+function _stopPolling() {
+  if (_tunnelPolling) { clearInterval(_tunnelPolling); _tunnelPolling = null; }
+}
+
+async function _refreshTunnel() {
+  const data = await _fetchTunnelStatus();
+  const tunnelRing = document.getElementById('tunnel-ring');
+
+  if (!data) {
+    if (tunnelRing) tunnelRing.className = 'tunnel-ring';
+    _tunnelShowState("stopped");
+    return;
+  }
+
+  // Обновление классов ободка (Часть 3.4 спецификации)
+  if (tunnelRing) {
+    if (data.active && data.url) {
+      tunnelRing.className = 'tunnel-ring active';
+    } else if (data.pid) {
+      tunnelRing.className = 'tunnel-ring stale';
+    } else {
+      tunnelRing.className = 'tunnel-ring';
+    }
+  }
+
+  if (data.running) {
+    const display = document.getElementById("tunnel-url-display");
+    if (display) {
+      const url   = data.url || "";
+      const short = url.replace("https://", "").slice(0, 38);
+      display.textContent = short + (url.length > 42 ? "…" : "");
+      display.title = url;
+    }
+    _renderTunnelChats(data.chats || []);
+    _tunnelShowState("running");
+  } else {
+    _tunnelShowState("stopped");
+  }
+}
+
+document.getElementById("btn-start-tunnel")?.addEventListener("click", async () => {
+  try {
+    await observeFetch("/tunnel/start", { method: "POST" });
+  } catch { /* ignore — polling покажет результат */ }
+  _tunnelShowState("starting");
+  if (!_tunnelPolling) _tunnelPolling = setInterval(_refreshTunnel, TUNNEL_POLL_MS);
+});
+
+document.getElementById("btn-stop-tunnel")?.addEventListener("click", async () => {
+  try {
+    await observeFetch("/tunnel/stop", { method: "POST" });
+  } catch { /* ignore */ }
+  // При остановке сразу сбрасываем ободок в дефолт
+  const tunnelRing = document.getElementById('tunnel-ring');
+  if (tunnelRing) tunnelRing.className = 'tunnel-ring';
+  
+  _stopPolling();
+  _tunnelShowState("stopped");
+});
+
+window.addEventListener("unload", _stopPolling);
+
+// Запускаем непрерывный опрос, пока открыт popup, чтобы ободок обновлялся динамически
+_refreshTunnel();
+_tunnelPolling = setInterval(_refreshTunnel, TUNNEL_POLL_MS);

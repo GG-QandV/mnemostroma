@@ -24,7 +24,14 @@ from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
 from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor
 from PyQt6.QtCore import QTimer, QSize
 
-from mnemostroma.integration.tunnel.state import get_tunnel_url, get_tunnel_token
+from mnemostroma.integration.tunnel.state import (
+    get_tunnel_url,
+    get_tunnel_token,
+    TunnelState,
+    TunnelSnapshot,
+    read_snapshot,
+    force_kill_tunnel
+)
 from mnemostroma.integration.tunnel.ui_meta import get_meta
 
 logger = logging.getLogger("mnemostroma.tray")
@@ -214,7 +221,21 @@ class DaemonTrayApp(QApplication):
             self.current_status = status
             if self.tray_icon:
                 self.tray_icon.setIcon(self._create_icon(status))
-                self.tray_icon.setToolTip(_LABELS[status])
+        
+        # Update tooltip with daemon status and tunnel status dynamically
+        if self.tray_icon:
+            daemon_label = _LABELS[self.current_status]
+            snap = read_snapshot()
+            s = snap.state
+            tooltip = f"{daemon_label}\nTunnel: {s.value.upper()}"
+            if snap.url:
+                tooltip += f"\n{snap.url}"
+
+            MAX_TOOLTIP_WIN = 127
+            if sys.platform == "win32" and len(tooltip) > MAX_TOOLTIP_WIN:
+                tooltip = tooltip[:MAX_TOOLTIP_WIN - 1] + "…"
+            self.tray_icon.setToolTip(tooltip)
+
         if hasattr(self, "_tunnel_watcher"):
             self._tunnel_watcher.check()
 
@@ -291,15 +312,28 @@ class DaemonTrayApp(QApplication):
         """Пересобирает tunnel submenu при каждом открытии (aboutToShow — нет кэша)."""
         self._tunnel_submenu.clear()
 
-        url   = get_tunnel_url()
+        snap = read_snapshot()
+        s = snap.state
+        url = snap.url
         token = get_tunnel_token()
 
-        if url:
-            short = url.replace("https://", "").replace("http://", "")[:40]
-            s = self._tunnel_submenu.addAction(f"● {short}")
-            s.setEnabled(False)
-            self._tunnel_submenu.addSeparator()
+        # --- Строка статуса (не кликабельна, только инфо) ---
+        if s == TunnelState.ACTIVE:
+            label = f"Tunnel: ACTIVE"
+            if url:
+                short = url.replace("https://", "").replace("http://", "")[:35]
+                label += f" ({short})"
+        elif s == TunnelState.STALE:
+            label = "Tunnel: Starting… (stale)"
+        else:
+            label = "Tunnel: Off"
 
+        status_action = self._tunnel_submenu.addAction(label)
+        status_action.setEnabled(False)
+        self._tunnel_submenu.addSeparator()
+
+        # --- Per-chat submenu (показываем только если ACTIVE) ---
+        if s == TunnelState.ACTIVE and url:
             try:
                 from mnemostroma.integration.mcp_oauth_adapter import load_route_config
                 routes = load_route_config().routes
@@ -330,28 +364,99 @@ class DaemonTrayApp(QApplication):
                 hint_action.setEnabled(False)
 
             self._tunnel_submenu.addSeparator()
-            stop = self._tunnel_submenu.addAction("⏹  Stop Tunnel")
-            stop.triggered.connect(self._stop_tunnel_with_feedback)
 
-        else:
-            start = self._tunnel_submenu.addAction("▶  Start Tunnel")
-            start.triggered.connect(lambda: _run_tunnel("start"))
+        # --- Кнопки управления ---
+        start = self._tunnel_submenu.addAction("▶  Start Tunnel")
+        start.setEnabled(s == TunnelState.DEAD)
+        start.triggered.connect(self._on_tunnel_start)
 
-            info = QMenu("ℹ️ After start:", self._tunnel_submenu)
-            for label in ["Perplexity (no auth)", "Claude.ai / ChatGPT (OAuth)", "Grok (Bearer token)"]:
-                a = info.addAction(label)
-                a.setEnabled(False)
-            self._tunnel_submenu.addMenu(info)
+        stop = self._tunnel_submenu.addAction("■  Stop Tunnel")
+        stop.setEnabled(s in (TunnelState.ACTIVE, TunnelState.STALE))
+        stop.triggered.connect(self._on_tunnel_stop)
 
-    def _stop_tunnel_with_feedback(self) -> None:
-        _run_tunnel("stop")
+        restart = self._tunnel_submenu.addAction("↺  Restart Tunnel")
+        restart.setEnabled(True)
+        restart.triggered.connect(self._on_tunnel_restart)
+
+        self._tunnel_submenu.addSeparator()
+
+        kill = self._tunnel_submenu.addAction("✕  Force Kill Tunnel (Emergency)")
+        kill.setEnabled(True)
+        kill.triggered.connect(self._on_tunnel_force_kill)
+
+    def _on_tunnel_start(self) -> None:
+        self.tray_icon.showMessage(
+            "Tunnel",
+            "Starting tunnel…",
+            QSystemTrayIcon.MessageIcon.Information,
+            2000,
+        )
+        from mnemostroma.integration.tunnel.resolve import resolve_mnemostroma_executable
+        cmd = resolve_mnemostroma_executable() + ["tunnel", "start", "--background"]
+        self._run_tunnel_cmd(cmd)
+
+    def _on_tunnel_stop(self) -> None:
         self.tray_icon.showMessage(
             "Tunnel",
             "Stopping tunnel…",
             QSystemTrayIcon.MessageIcon.Information,
-            3000,
+            2000,
         )
-        QTimer.singleShot(2500, self._populate_tunnel_submenu)
+        from mnemostroma.integration.tunnel.resolve import resolve_mnemostroma_executable
+        cmd = resolve_mnemostroma_executable() + ["tunnel", "stop"]
+        self._run_tunnel_cmd(cmd)
+
+    def _on_tunnel_restart(self) -> None:
+        """Force kill → пауза 1.5 сек → start. Запускается в фоне."""
+        self.tray_icon.showMessage(
+            "Tunnel",
+            "Restarting tunnel…",
+            QSystemTrayIcon.MessageIcon.Information,
+            2000,
+        )
+        def _do():
+            force_kill_tunnel()
+            time.sleep(1.5)
+            from mnemostroma.integration.tunnel.resolve import resolve_mnemostroma_executable
+            cmd = resolve_mnemostroma_executable() + ["tunnel", "start", "--background"]
+            self._run_tunnel_cmd(cmd)
+
+        thread = threading.Thread(target=_do, daemon=True)
+        thread.start()
+
+    def _on_tunnel_force_kill(self) -> None:
+        killed = force_kill_tunnel()
+        msg = "Tunnel process killed." if killed else "No tunnel process found."
+        self.tray_icon.showMessage(
+            "Tunnel Force Kill",
+            msg,
+            QSystemTrayIcon.MessageIcon.Information,
+            2000
+        )
+
+    def _run_tunnel_cmd(self, cmd: list[str]) -> None:
+        """Запускает команду туннеля в фоновом режиме."""
+        kwargs: dict = {
+            "stdout": subprocess.DEVNULL,
+            "stderr": subprocess.DEVNULL,
+        }
+        if sys.platform == "win32":
+            kwargs["creationflags"] = (
+                subprocess.CREATE_NEW_PROCESS_GROUP |
+                subprocess.DETACHED_PROCESS
+            )
+        else:
+            kwargs["start_new_session"] = True
+        try:
+            subprocess.Popen(cmd, **kwargs)
+        except Exception as e:
+            logger.error("Failed to run tunnel cmd %s: %s", cmd, e)
+            self.tray_icon.showMessage(
+                "Tunnel Error",
+                str(e),
+                QSystemTrayIcon.MessageIcon.Critical,
+                4000
+            )
 
     def _init_tray(self):
         """Initialize system tray icon and menu."""

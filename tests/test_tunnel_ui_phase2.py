@@ -3,6 +3,130 @@
 Sprint+4 — Tunnel UI Phase 2 tests.
 27 тестов в 5 классах согласно спеке SPEC Tunnel UI - Consolidated.md.
 """
+import sys
+from unittest.mock import MagicMock
+
+# Mock PyQt6 before imports
+class DummyQApplication:
+    def __init__(self, *args, **kwargs):
+        pass
+    @staticmethod
+    def instance():
+        return None
+    @staticmethod
+    def clipboard():
+        return MagicMock()
+
+class DummyQSystemTrayIcon:
+    MessageIcon = MagicMock()
+    def __init__(self, *args, **kwargs):
+        pass
+    def setContextMenu(self, menu):
+        pass
+    def setIcon(self, icon):
+        pass
+    def setToolTip(self, text):
+        pass
+    def showMessage(self, *args, **kwargs):
+        pass
+
+class DummySignal:
+    def __init__(self):
+        self._handlers = []
+    def connect(self, handler):
+        self._handlers.append(handler)
+    def emit(self, *args):
+        for h in self._handlers:
+            h(*args)
+
+class DummyQAction:
+    def __init__(self, text="", parent=None):
+        self._text = text
+        self._enabled = True
+        self.triggered = DummySignal()
+        self._menu = None
+    def text(self):
+        return self._text
+    def setEnabled(self, val):
+        self._enabled = val
+    def isEnabled(self):
+        return self._enabled
+    def menu(self):
+        return self._menu
+    def setMenu(self, menu):
+        self._menu = menu
+    def trigger(self):
+        self.triggered.emit(True)
+
+class DummyQMenu:
+    def __init__(self, title="", parent=None):
+        self._title = title
+        self._actions = []
+    def addAction(self, *args, **kwargs):
+        text = ""
+        if args:
+            text = args[-1]
+        action = DummyQAction(text)
+        self._actions.append(action)
+        return action
+    def addMenu(self, *args, **kwargs):
+        title = args[0] if args else ""
+        sub_menu = DummyQMenu(title)
+        action = DummyQAction(title)
+        action.setMenu(sub_menu)
+        self._actions.append(action)
+        return sub_menu
+    def addSeparator(self):
+        pass
+    def clear(self):
+        self._actions.clear()
+    def actions(self):
+        return self._actions
+
+class DummyQIcon:
+    def __init__(self, *args, **kwargs):
+        pass
+
+class DummyQPixmap:
+    def __init__(self, *args, **kwargs):
+        pass
+
+class DummyQPainter:
+    def __init__(self, *args, **kwargs):
+        pass
+
+class DummyQColor:
+    def __init__(self, *args, **kwargs):
+        pass
+
+class DummyQTimer:
+    def __init__(self, *args, **kwargs):
+        pass
+
+class DummyQSize:
+    def __init__(self, *args, **kwargs):
+        pass
+
+class DummyQtWidgets:
+    QApplication = DummyQApplication
+    QSystemTrayIcon = DummyQSystemTrayIcon
+    QMenu = DummyQMenu
+
+class DummyQtGui:
+    QIcon = DummyQIcon
+    QPixmap = DummyQPixmap
+    QPainter = DummyQPainter
+    QColor = DummyQColor
+
+class DummyQtCore:
+    QTimer = DummyQTimer
+    QSize = DummyQSize
+
+sys.modules["PyQt6"] = MagicMock()
+sys.modules["PyQt6.QtWidgets"] = DummyQtWidgets
+sys.modules["PyQt6.QtGui"] = DummyQtGui
+sys.modules["PyQt6.QtCore"] = DummyQtCore
+
 import asyncio
 import os
 import stat
@@ -36,14 +160,18 @@ class TestTunnelState:
         from mnemostroma.integration.tunnel import state
         url_file = tmp_mnemo / "tunnel_url"
         url_file.write_text("https://mnemo-abc123.serveo.net", encoding="utf-8")
-        monkeypatch.setattr(state, "_TUNNEL_URL_FILE", url_file)
+        monkeypatch.setattr(state, "_URL_FILE", url_file)
+        
+        pid_file = tmp_mnemo / "cloudflared.pid"
+        pid_file.write_text(str(os.getpid()), encoding="utf-8")
+        monkeypatch.setattr(state, "_PID_FILE", pid_file)
 
         assert state.get_tunnel_url() == "https://mnemo-abc123.serveo.net"
 
     def test_get_url_file_not_found(self, tmp_mnemo, monkeypatch):
         """Файл tunnel_url не существует → None."""
         from mnemostroma.integration.tunnel import state
-        monkeypatch.setattr(state, "_TUNNEL_URL_FILE", tmp_mnemo / "tunnel_url")
+        monkeypatch.setattr(state, "_URL_FILE", tmp_mnemo / "tunnel_url")
 
         assert state.get_tunnel_url() is None
 
@@ -52,7 +180,7 @@ class TestTunnelState:
         from mnemostroma.integration.tunnel import state
         url_file = tmp_mnemo / "tunnel_url"
         url_file.write_text("   \n", encoding="utf-8")
-        monkeypatch.setattr(state, "_TUNNEL_URL_FILE", url_file)
+        monkeypatch.setattr(state, "_URL_FILE", url_file)
 
         assert state.get_tunnel_url() is None
 
@@ -62,7 +190,11 @@ class TestTunnelState:
         url_file = tmp_mnemo / "tunnel_url"
         url_file.write_text("https://mnemo-abc.serveo.net", encoding="utf-8")
         url_file.chmod(0o000)
-        monkeypatch.setattr(state, "_TUNNEL_URL_FILE", url_file)
+        monkeypatch.setattr(state, "_URL_FILE", url_file)
+
+        pid_file = tmp_mnemo / "cloudflared.pid"
+        pid_file.write_text(str(os.getpid()), encoding="utf-8")
+        monkeypatch.setattr(state, "_PID_FILE", pid_file)
 
         try:
             result = state.get_tunnel_url()
@@ -392,6 +524,20 @@ class TestTrayTunnelMenu:
         import mnemostroma.tools.tray_pyqt as tray_mod
         from PyQt6.QtWidgets import QMenu
 
+        from mnemostroma.integration.tunnel.state import TunnelState, TunnelSnapshot
+        if url:
+            monkeypatch.setattr(
+                tray_mod,
+                "read_snapshot",
+                lambda: TunnelSnapshot(TunnelState.ACTIVE, url, 12345)
+            )
+        else:
+            monkeypatch.setattr(
+                tray_mod,
+                "read_snapshot",
+                lambda: TunnelSnapshot(TunnelState.DEAD, None, None)
+            )
+
         monkeypatch.setattr(tray_mod, "get_tunnel_url", lambda: url)
         monkeypatch.setattr(tray_mod, "get_tunnel_token", lambda: token)
 
@@ -406,6 +552,14 @@ class TestTrayTunnelMenu:
         class _Stub:
             _tunnel_submenu = QMenu("🌐 Tunnel")
             def _stop_tunnel_with_feedback(self):
+                pass
+            def _on_tunnel_start(self):
+                pass
+            def _on_tunnel_stop(self):
+                pass
+            def _on_tunnel_restart(self):
+                pass
+            def _on_tunnel_force_kill(self):
                 pass
 
         return _Stub()

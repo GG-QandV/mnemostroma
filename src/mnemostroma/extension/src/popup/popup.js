@@ -284,10 +284,26 @@ function _stopPolling() {
 
 async function _refreshTunnel() {
   const data = await _fetchTunnelStatus();
-  if (!data) return;
+  const tunnelRing = document.getElementById('tunnel-ring');
+
+  if (!data) {
+    if (tunnelRing) tunnelRing.className = 'tunnel-ring';
+    _tunnelShowState("stopped");
+    return;
+  }
+
+  // Обновление классов ободка (Часть 3.4 спецификации)
+  if (tunnelRing) {
+    if (data.active && data.url) {
+      tunnelRing.className = 'tunnel-ring active';
+    } else if (data.pid) {
+      tunnelRing.className = 'tunnel-ring stale';
+    } else {
+      tunnelRing.className = 'tunnel-ring';
+    }
+  }
 
   if (data.running) {
-    _stopPolling();
     const display = document.getElementById("tunnel-url-display");
     if (display) {
       const url   = data.url || "";
@@ -314,10 +330,16 @@ document.getElementById("btn-stop-tunnel")?.addEventListener("click", async () =
   try {
     await observeFetch("/tunnel/stop", { method: "POST" });
   } catch { /* ignore */ }
+  // При остановке сразу сбрасываем ободок в дефолт
+  const tunnelRing = document.getElementById('tunnel-ring');
+  if (tunnelRing) tunnelRing.className = 'tunnel-ring';
+  
   _stopPolling();
   _tunnelShowState("stopped");
 });
 
 window.addEventListener("unload", _stopPolling);
 
+// Запускаем непрерывный опрос, пока открыт popup, чтобы ободок обновлялся динамически
 _refreshTunnel();
+_tunnelPolling = setInterval(_refreshTunnel, TUNNEL_POLL_MS);
