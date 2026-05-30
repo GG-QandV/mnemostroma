@@ -355,6 +355,11 @@ async function _tunnelAction(action) {
 document.getElementById("btn-start-tunnel")?.addEventListener("click", () => _tunnelAction("start"));
 document.getElementById("btn-stop-tunnel")?.addEventListener("click", () => _tunnelAction("stop"));
 
+document.getElementById("btn-copy-tunnel-url")?.addEventListener("click", () => {
+  const el = document.getElementById("tunnel-url-display");
+  if (el && el.title) _copyAndFlash(el.title, "✓ URL copied!");
+});
+
 window.addEventListener("unload", _stopPolling);
 
 // Запускаем непрерывный опрос, пока открыт popup, чтобы ободок обновлялся динамически
