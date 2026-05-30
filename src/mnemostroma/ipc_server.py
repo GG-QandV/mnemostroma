@@ -63,19 +63,37 @@ class IPCServer:
     async def serve(self) -> None:
         """Start the socket server and run until cancelled."""
         if sys.platform == "win32":
-            self._server = await asyncio.start_server(
-                self._handle_client,
-                pipe=PIPE_NAME,
-            )
-            logger.info(f"IPC server listening on {PIPE_NAME}")
+            try:
+                self._server = await asyncio.start_server(
+                    self._handle_client,
+                    pipe=PIPE_NAME,
+                )
+                logger.info(f"IPC server listening on {PIPE_NAME}")
+            except OSError as e:
+                # TCP fallback if Named Pipe fails
+                self._server = await asyncio.start_server(
+                    self._handle_client,
+                    host="127.0.0.1",
+                    port=8767,
+                )
+                logger.info(f"IPC server listening on TCP 127.0.0.1:8767 (pipe failed: {e})")
         else:
             SOCKET_PATH.parent.mkdir(parents=True, exist_ok=True)
             SOCKET_PATH.unlink(missing_ok=True)
-            self._server = await asyncio.start_unix_server(
-                self._handle_client,
-                path=str(SOCKET_PATH),
-            )
-            logger.info(f"IPC server listening on {SOCKET_PATH}")
+            try:
+                self._server = await asyncio.start_unix_server(
+                    self._handle_client,
+                    path=str(SOCKET_PATH),
+                )
+                logger.info(f"IPC server listening on {SOCKET_PATH}")
+            except OSError as e:
+                # TCP fallback for Unix as well
+                self._server = await asyncio.start_server(
+                    self._handle_client,
+                    host="127.0.0.1",
+                    port=8767,
+                )
+                logger.info(f"IPC server listening on TCP 127.0.0.1:8767 (unix socket failed: {e})")
 
         async with self._server:
             await self._server.serve_forever()

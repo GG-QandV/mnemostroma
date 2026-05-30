@@ -14,6 +14,8 @@ from __future__ import annotations
 import argparse
 import asyncio
 import base64
+import os
+import sys
 import hashlib
 import inspect
 import json
@@ -117,7 +119,7 @@ def load_route_config(path: Path | None = None) -> FullRouteConfig:
     routes_path = path or (_MNEMO_DIR / "routes.json")
     if not routes_path.exists():
         return FullRouteConfig(routes=dict(DEFAULT_ROUTES), watcher=WatcherConfig())
-    data = json.loads(routes_path.read_text())
+    data = json.loads(routes_path.read_text(encoding="utf-8"))
     _validate_route_config(data)
     wc = data.get("watcher", {})
     watcher = WatcherConfig(
@@ -424,6 +426,14 @@ async def register(request: Request) -> JSONResponse:
 
 # ── /authorize — PKCE S256 ──────────────────────────────────────────────────
 
+def _is_headless() -> bool:
+    if os.environ.get("MNEMOSTROMA_NO_BROWSER", "").lower() in ("1", "true", "yes"):
+        return True
+    if sys.platform == "win32":
+        return os.environ.get("SESSIONNAME", "") == ""
+    return os.environ.get("DISPLAY", "") == ""
+
+
 async def authorize(request: Request) -> Response:
     p: dict[str, str] = dict(request.query_params)
     required: set[str] = {"client_id", "redirect_uri", "code_challenge", "response_type"}
@@ -454,10 +464,11 @@ async def authorize(request: Request) -> Response:
     </body></html>"""
     
     # Пытаемся открыть браузер для удобства локального пользователя
-    try:
-        webbrowser.open(f"{base}/authorize?client_id={client_id}&redirect_uri={redirect_uri}&code_challenge={code_challenge}&response_type=code&state={state}")
-    except Exception as e:
-        logger.warning(f"Failed to open web browser: {e}")
+    if not _is_headless():
+        try:
+            webbrowser.open(f"{base}/authorize?client_id={client_id}&redirect_uri={redirect_uri}&code_challenge={code_challenge}&response_type=code&state={state}")
+        except Exception as e:
+            logger.warning(f"Failed to open web browser: {e}")
 
     return Response(html, media_type="text/html")
 
@@ -793,10 +804,19 @@ class PollingBackend:
 
 def _make_watch_backend_from_config(config: WatcherConfig) -> WatchBackend:
     if config.backend == "inotify":
+        if sys.platform == "win32":
+            logger.warning(
+                "InotifyBackend недоступен на Windows — "
+                "используется PollingBackend. "
+                "Установите 'backend': 'polling' в routes.json."
+            )
+            return PollingBackend()
         return InotifyBackend()
     elif config.backend == "polling":
         return PollingBackend()
-    else:
+    else:  # "auto"
+        if sys.platform == "win32":
+            return PollingBackend()
         try:
             return InotifyBackend()
         except RuntimeError:

@@ -103,6 +103,20 @@ _msg_id_counter = itertools.count(1)
 def _next_id() -> int:
     return next(_msg_id_counter)
 
+_IPC_TCP_PORT: int = 8767
+
+def _unix_socket_available() -> bool:
+    """AF_UNIX is available starting from Windows 10 Build 17063."""
+    if sys.platform != "win32":
+        return True
+    try:
+        import socket
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.close()
+        return True
+    except (AttributeError, OSError):
+        return False
+
 if sys.platform == "win32":
     async def _open_pipe() -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
         """Open Windows Named Pipe connection using Proactor loop."""
@@ -121,18 +135,39 @@ async def safe_ipc_call(tool: str, args: dict[str, Any], timeout: float = 5.0) -
     
     Returns Any to accommodate diverse dynamic JSON return types.
     """
-    if sys.platform == "win32":
+    reader = None
+    writer = None
+    use_tcp = sys.platform == "win32" and not _unix_socket_available()
+
+    if use_tcp:
         try:
-            reader, writer = await _open_pipe()
+            reader, writer = await asyncio.open_connection("127.0.0.1", _IPC_TCP_PORT)
         except OSError as e:
             raise ConnectionError(
-                f"Mnemostroma daemon not running (pipe unavailable): {e}\n"
+                f"Mnemostroma daemon not running (TCP fallback failed): {e}\n"
                 "Start with: mnemostroma start"
             ) from e
+    elif sys.platform == "win32":
+        try:
+            reader, writer = await _open_pipe()
+        except OSError as pipe_err:
+            try:
+                reader, writer = await asyncio.open_connection("127.0.0.1", _IPC_TCP_PORT)
+            except OSError:
+                raise ConnectionError(
+                    f"Mnemostroma daemon not running (pipe and TCP failed): {pipe_err}\n"
+                    "Start with: mnemostroma start"
+                ) from pipe_err
     else:
         if not _SOCKET_PATH.exists():
             raise ConnectionError("Mnemostroma daemon not running.")
-        reader, writer = await asyncio.open_unix_connection(str(_SOCKET_PATH))
+        try:
+            reader, writer = await asyncio.open_unix_connection(str(_SOCKET_PATH))
+        except OSError as sock_err:
+            try:
+                reader, writer = await asyncio.open_connection("127.0.0.1", _IPC_TCP_PORT)
+            except OSError:
+                raise ConnectionError(f"Mnemostroma daemon not running: {sock_err}") from sock_err
 
     try:
         msg_id: int = _next_id()
