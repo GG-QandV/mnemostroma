@@ -84,3 +84,6 @@ npm-debug.log*
 .vite/
 .vitest/
 release/*.exe
+identify_leak.py
+issue_build.py
+scp_to_windows.py
