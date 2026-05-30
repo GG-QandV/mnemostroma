@@ -1,14 +1,15 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
-import aiosqlite
 import json
-import numpy as np
 import logging
-from typing import Optional, Any
+
+import aiosqlite
+import numpy as np
+
 from ..memory.session_index import SessionBrief
 
 logger = logging.getLogger("mnemostroma.lazy_loader")
 
-async def lazy_load_session(session_id: str, db: aiosqlite.Connection) -> Optional[SessionBrief]:
+async def lazy_load_session(session_id: str, db: aiosqlite.Connection) -> SessionBrief | None:
     """Load a session from SQLite and convert it to a SessionBrief.
     
     Args:

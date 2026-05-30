@@ -7,7 +7,6 @@ Provides build_search_response to select response mode based on result count:
 - Compact (>50): only id/brief/created_at/exact_time_str, warning + hint
 """
 
-from typing import Optional
 
 SOFT_LIMIT = 30
 HARD_LIMIT = 50

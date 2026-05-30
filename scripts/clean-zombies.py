@@ -57,8 +57,8 @@ def find_and_kill():
             cmdline = p.info['cmdline'] or []
             cmd_str = " ".join(cmdline)
             
-            # Prevent suicide and do not kill the IDE layer
-            if "clean-zombies.py" in cmd_str:
+            # Prevent suicide and do not kill the IDE layer or tray UI
+            if any(k in cmd_str for k in ["clean-zombies.py", "tray_pyqt", "tray.py", "tray_old_pystray"]):
                 continue
             if "language_server" in cmd_str or "Code" in cmd_str or "antigravity" in cmd_str:
                 continue
@@ -95,5 +95,11 @@ def find_and_kill():
         print("\nNo zombie instances found. RAM is clean.")
 
 if __name__ == "__main__":
-    stop_systemd_services()
-    find_and_kill()
+    try:
+        # Try to use integrated package cleanup first
+        from mnemostroma.tools.cleanup import emergency_cleanup
+        emergency_cleanup(restart_services=True)
+    except ImportError:
+        # Fallback to local script logic
+        stop_systemd_services()
+        find_and_kill()

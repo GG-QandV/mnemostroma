@@ -1,15 +1,14 @@
-from mnemostroma.storage.log_writer import LogWriter
 # SPDX-License-Identifier: FSL-1.1-MIT
 import asyncio
 import logging
 import os as _os
 import threading
-import time
 import time as _time
-import numpy as np
-import sys
 from pathlib import Path
-from typing import Optional, Any
+from typing import Any
+
+import numpy as np
+
 
 _SESS_DIAG_KEY_ = ""  # watermark anchor — injected per-tester by issue_build.py
 
@@ -18,17 +17,18 @@ _HEARTBEAT_INTERVAL = 1.0   # seconds
 _LOOP_DRIFT_LIMIT   = 5.0   # seconds — loop_monitor threshold
 
 from .config import Config
-from .core import SystemContext, ModelRegistry
-from .storage.sqlite import init_db, DatabaseManager, check_anchor_schema
-from .storage.persistence import PersistenceLayer
-from .storage.content_manager import ContentManager
-from .memory.hnsw import init_session_index, init_content_index
-from .memory.dissolver import Dissolver
-from .memory.consolidation import ConsolidationWorker
-from .memory.daemon_metrics import PulseWriter, StatusWriter
+from .core import ModelRegistry, SystemContext
+
 # Model loaders now managed by ModelRegistry
 from .feedback.implicit import ImplicitFeedbackTracker
 from .integration.proxy import ConductorProxy, MemoryBlock
+from .memory.consolidation import ConsolidationWorker
+from .memory.daemon_metrics import PulseWriter, StatusWriter
+from .memory.dissolver import Dissolver
+from .memory.hnsw import init_content_index, init_session_index
+from .storage.content_manager import ContentManager
+from .storage.persistence import PersistenceLayer
+from .storage.sqlite import DatabaseManager, check_anchor_schema, init_db
 
 logger = logging.getLogger("mnemostroma.conductor")
 
@@ -38,13 +38,13 @@ class Conductor:
     Handles startup, shutdown, piping interactions, and wiring of all components.
     """
     def __init__(self):
-        self.ctx: Optional[SystemContext] = None
-        self.proxy: Optional[ConductorProxy] = None
+        self.ctx: SystemContext | None = None
+        self.proxy: ConductorProxy | None = None
         self._last_observe_at: float = 0.0
-        self._dreamer_task: Optional[asyncio.Task] = None
-        self._pulse_writer: Optional[PulseWriter] = None
-        self._status_writer: Optional[StatusWriter] = None
-        self._backup_worker: Optional[Any] = None
+        self._dreamer_task: asyncio.Task | None = None
+        self._pulse_writer: PulseWriter | None = None
+        self._status_writer: StatusWriter | None = None
+        self._backup_worker: Any | None = None
         self._stopping: bool = False
 
     async def start(
@@ -117,9 +117,9 @@ class Conductor:
         # Phase 2: SessionRepo Wiring
         repo_mode = config.storage.session_repo
         if repo_mode in ("new", "shadow"):
-            from .adapters.sqlite.session_repo import SessionRepo
-            from .adapters.sqlite.precision_repo import PrecisionRepo
             from .adapters.sqlite.anchor_repo import AnchorRepo
+            from .adapters.sqlite.precision_repo import PrecisionRepo
+            from .adapters.sqlite.session_repo import SessionRepo
             self.ctx.session_repo = SessionRepo(db_manager)
             self.ctx.precision_repo = PrecisionRepo(db_manager)
             self.ctx.anchor_repo = AnchorRepo(db_manager)
@@ -233,7 +233,9 @@ class Conductor:
 
         # B03: Health Check Log (v1.0 spec — Point #17)
         try:
-            import psutil, os
+            import os
+
+            import psutil
             _rss = psutil.Process(os.getpid()).memory_info().rss
             _ram_mb = round(_rss / 1024 / 1024, 2)
         except Exception:
@@ -328,7 +330,6 @@ class Conductor:
             logger.info("Anchor warmup skipped: no embedder available.")
             return
 
-        import numpy as np
         vectors: dict = {}
         for label, anchor_text in ANCHORS.items():
             try:
@@ -361,7 +362,9 @@ class Conductor:
         # F-1: conductor.shutdown telemetry — fired before teardown sequence
         import time as _t_stop
         try:
-            import psutil as _ps, os as _ps_os
+            import os as _ps_os
+
+            import psutil as _ps
             _ram_mb_stop = round(
                 _ps.Process(_ps_os.getpid()).memory_info().rss / 1024 / 1024, 2
             )

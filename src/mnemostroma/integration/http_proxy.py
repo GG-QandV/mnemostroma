@@ -19,19 +19,19 @@ import os
 import socket
 import sys
 import uuid
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import AsyncIterator
 
 import httpx
+import uvicorn
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import Response, StreamingResponse
 from starlette.routing import Route
-import uvicorn
 
-from mnemostroma.ipc_pool import IPCPool
 from mnemostroma.circuit_breaker import CircuitBreaker
+from mnemostroma.ipc_pool import IPCPool
 
 logger     = logging.getLogger("mnemostroma.http_proxy")
 _ANTHROPIC = "https://api.anthropic.com"

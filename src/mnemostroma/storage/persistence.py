@@ -15,7 +15,7 @@ Also provides:
 """
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .sqlite import DatabaseManager
@@ -122,7 +122,7 @@ class PersistenceLayer:
         """
         await self._db.flush()
 
-    async def sync(self, checkpoint_mode: str = "PASSIVE") -> Dict[str, Any]:
+    async def sync(self, checkpoint_mode: str = "PASSIVE") -> dict[str, Any]:
         """Force-flush queue then WAL checkpoint.
 
         Steps:
@@ -135,7 +135,7 @@ class PersistenceLayer:
         queue_size_before = self._db.queue.qsize()
         try:
             await asyncio.wait_for(self._db.queue.join(), timeout=10.0)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("PersistenceLayer.sync: queue drain timed out after 10s (partial flush)")
 
         wal_pages = -1
@@ -161,23 +161,23 @@ class PersistenceLayer:
     # Hydration reads — startup only (WorkingMemory bootstrap)
     # ------------------------------------------------------------------
 
-    async def get_all_session_briefs(self) -> List[Any]:
+    async def get_all_session_briefs(self) -> list[Any]:
         """Load all session metadata for ram_index hydration."""
         return await self._db.get_all_session_briefs()
 
-    async def get_all_embeddings(self, expected_dim: int) -> List[Any]:
+    async def get_all_embeddings(self, expected_dim: int) -> list[Any]:
         """Load all session embeddings for MatrixSearch hydration."""
         return await self._db.get_all_embeddings(expected_dim)
 
-    async def get_all_content_embeddings(self, expected_dim: int) -> List[Any]:
+    async def get_all_content_embeddings(self, expected_dim: int) -> list[Any]:
         """Load all content embeddings for content_index hydration."""
         return await self._db.get_all_content_embeddings(expected_dim)
 
-    async def load_anchors(self, limit: int = 1000) -> List[Any]:
+    async def load_anchors(self, limit: int = 1000) -> list[Any]:
         """Load most-recently-accessed anchors for anchor_index hydration."""
         return await self._db.load_anchors(limit)
 
-    async def load_experience(self) -> List[dict]:
+    async def load_experience(self) -> list[dict]:
         """Load all experience clusters for ExperienceIndex hydration."""
         return await self._db.load_experience()
 
@@ -185,11 +185,11 @@ class PersistenceLayer:
     # Point reads — on-demand cold load
     # ------------------------------------------------------------------
 
-    async def get_session_by_id(self, session_id: str) -> Optional[Any]:
+    async def get_session_by_id(self, session_id: str) -> Any | None:
         """Cold-load a single session from SQLite (ctx.load() path)."""
         return await self._db.get_session_by_id(session_id)
 
-    async def get_anchor(self, anchor_id: str) -> Optional[Any]:
+    async def get_anchor(self, anchor_id: str) -> Any | None:
         """Load a single anchor by ID."""
         return await self._db.get_anchor(anchor_id)
 

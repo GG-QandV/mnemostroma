@@ -6,7 +6,8 @@ Results delivered via ctx_active() surfaced field — no agent tool call needed.
 Zero extra ONNX calls: reuses the embedding computed at Observer Step 1.
 """
 import logging
-from typing import List, Dict, Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+
 import numpy as np
 
 if TYPE_CHECKING:
@@ -21,7 +22,7 @@ async def associative_scan(
     anchor_threshold: float = 0.75,
     session_threshold: float = 0.78,
     max_results: int = 3,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Scan anchor and session indices for associatively related items.
 
     Reuses pre-computed embedding — zero extra ONNX calls.
@@ -34,7 +35,7 @@ async def associative_scan(
         session_threshold: Cosine threshold for session matches.
         max_results: Maximum items to surface.
     """
-    results: List[Dict[str, Any]] = []
+    results: list[dict[str, Any]] = []
 
     # 1. Scan AnchorIndex
     if ctx.anchor_index is not None:
@@ -70,7 +71,7 @@ async def associative_scan(
     # 3. Sort by similarity desc, deduplicate, limit
     results.sort(key=lambda x: x["similarity"], reverse=True)
     seen: set = set()
-    deduped: List[Dict[str, Any]] = []
+    deduped: list[dict[str, Any]] = []
     for r in results:
         rid = r["id"]
         if rid not in seen:
@@ -80,7 +81,7 @@ async def associative_scan(
     return deduped[:max_results]
 
 
-def _keyword_surface(text: str, ctx: "SystemContext") -> List[Dict[str, Any]]:
+def _keyword_surface(text: str, ctx: "SystemContext") -> list[dict[str, Any]]:
     """Layer 1: fast keyword match of anchor briefs against incoming text.
 
     Catches obvious surfacing triggers in the same turn.
@@ -91,7 +92,7 @@ def _keyword_surface(text: str, ctx: "SystemContext") -> List[Dict[str, Any]]:
         return []
 
     text_lower = text.lower()
-    hits: List[Dict[str, Any]] = []
+    hits: list[dict[str, Any]] = []
 
     for anchor in anchor_index.anchors.values():
         if anchor.anchor_type not in ("constraint", "principle", "decision"):

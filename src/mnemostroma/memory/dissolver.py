@@ -1,10 +1,12 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
 import asyncio
 import logging
-import time
 import os
+import time
+from typing import Any
+
 import psutil
-from typing import Dict, Any, List, Optional
+
 from ..core import SystemContext
 
 logger = logging.getLogger("mnemostroma.dissolver")
@@ -158,8 +160,9 @@ def can_evict(sb: Any, ctx: Any) -> bool:
     - Conflict flag: keep in RAM for resolution.
     - Critical: protect unless RAM > 90% of hard limit.
     """
-    import time
     import os
+    import time
+
     import psutil
 
     if sb.importance == "principle":

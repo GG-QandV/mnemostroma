@@ -2,12 +2,14 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
 from __future__ import annotations
 
-import time
 import logging
-import numpy as np
+import time
 from typing import TYPE_CHECKING
-from .base import PipelineContext
+
+import numpy as np
+
 from ...memory.scoring import calculate_score, get_importance_weight
+from .base import PipelineContext
 
 if TYPE_CHECKING:
     pass

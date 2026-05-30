@@ -8,19 +8,25 @@ Basis: docs/MEMORY_SPEC_v2.md §§ 2–5, 9
 """
 from __future__ import annotations
 
-import re
 import logging
-from typing import TYPE_CHECKING, List, Optional
+import re
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from .entities import (
-    Entity, EntityType, SourceType, ResultType,
-    Emotion, EmotionCharge,
     Atmosphere,
-    TemporalMarker, TemporalRelations,
-    TimeRef, Explicitness,
-    MarkerResult, MarkerAction,
+    Emotion,
+    EmotionCharge,
+    Entity,
+    EntityType,
+    Explicitness,
+    MarkerAction,
+    MarkerResult,
+    SourceType,
+    TemporalMarker,
+    TemporalRelations,
+    TimeRef,
 )
 
 if TYPE_CHECKING:
@@ -82,7 +88,7 @@ _NEGATIVE_WORDS = re.compile(
 # Temporal inference  (spec § 4)
 # ---------------------------------------------------------------------------
 
-def infer_temporal(text: str, chain: List[Entity]) -> TemporalMarker:
+def infer_temporal(text: str, chain: list[Entity]) -> TemporalMarker:
     """Infer time reference from text and conversation chain position.
 
     Language-agnostic: grammar rules vary, chain position is universal.
@@ -106,13 +112,13 @@ def infer_temporal(text: str, chain: List[Entity]) -> TemporalMarker:
     return TemporalMarker(TimeRef.UNKNOWN, TimeRef.UNKNOWN, Explicitness.LOST, 0.3)
 
 
-def _pending_entity_expected(chain: List[Entity]) -> bool:
+def _pending_entity_expected(chain: list[Entity]) -> bool:
     """True if chain has pending emotions or atmospheres — entity is expected ahead."""
     # Placeholder: can be extended when pending state is tracked in ctx
     return False
 
 
-def _build_t_rel(temp: TemporalMarker, chain: List[Entity]) -> TemporalRelations:
+def _build_t_rel(temp: TemporalMarker, chain: list[Entity]) -> TemporalRelations:
     """Infer TemporalRelations from temporal marker and chain position (spec § 5.1).
 
     Rules:
@@ -142,7 +148,7 @@ def _build_t_rel(temp: TemporalMarker, chain: List[Entity]) -> TemporalRelations
 # Emotion binding  (spec § 5)
 # ---------------------------------------------------------------------------
 
-def bind_emotion(emotion: Emotion, chain: List[Entity]) -> Emotion:
+def bind_emotion(emotion: Emotion, chain: list[Entity]) -> Emotion:
     """Attach emotion to the most recent entity in chain (agent → user → tool).
 
     If no entity found, mark as pending (will be resolved when next entity appears).
@@ -159,7 +165,7 @@ def bind_emotion(emotion: Emotion, chain: List[Entity]) -> Emotion:
     return emotion
 
 
-def resolve_pending_emotions(new_entity: Entity, pending: List[Emotion]) -> None:
+def resolve_pending_emotions(new_entity: Entity, pending: list[Emotion]) -> None:
     """Bind all pending emotions to the newly appeared entity (spec § 5).
 
     Mutates each Emotion in-place; caller should clear the pending list afterward.
@@ -174,7 +180,7 @@ def resolve_pending_emotions(new_entity: Entity, pending: List[Emotion]) -> None
 # Anchor vector helpers
 # ---------------------------------------------------------------------------
 
-def _get_anchor_vectors(ctx: "SystemContext") -> dict[str, np.ndarray]:
+def _get_anchor_vectors(ctx: SystemContext) -> dict[str, np.ndarray]:
     """Return anchor vectors from ctx (pre-warmed at bootstrap by conductor)."""
     return getattr(ctx, 'anchor_vectors', {})
 
@@ -241,10 +247,10 @@ async def marker(
     text: str,
     role: SourceType,
     session_id: str,
-    ctx: "SystemContext",
-    chain: Optional[List[Entity]] = None,
-    pending_emotions: Optional[List[Emotion]] = None,
-    embedding: Optional[np.ndarray] = None,
+    ctx: SystemContext,
+    chain: list[Entity] | None = None,
+    pending_emotions: list[Emotion] | None = None,
+    embedding: np.ndarray | None = None,
 ) -> MarkerResult:
     """Replace deterministic_filter: marks what to save rather than discarding.
 

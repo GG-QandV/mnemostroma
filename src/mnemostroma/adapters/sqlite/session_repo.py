@@ -1,7 +1,9 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
 from __future__ import annotations
+
 from typing import TYPE_CHECKING
-from mnemostroma.domain.types import ok, err, StorageError, NotFoundError
+
+from mnemostroma.domain.types import NotFoundError, StorageError, err, ok
 
 if TYPE_CHECKING:
     from mnemostroma.domain.types import Result

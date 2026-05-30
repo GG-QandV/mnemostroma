@@ -2,6 +2,7 @@
 """Content embedding model using BGE-M3 (ONNX)."""
 import logging
 import os
+
 import numpy as np
 
 logger = logging.getLogger(__name__)

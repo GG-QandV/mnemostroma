@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
-import time
 import logging
-from typing import List, Dict, Any, Optional
+import time
+from typing import Any
+
 from ..core import SystemContext
 
 logger = logging.getLogger("mnemostroma.tools.write")
@@ -24,7 +25,7 @@ async def save_content(
 async def ctx_urgent(
     ctx: SystemContext, 
     hours_ahead: float = 72.0
-) -> List[Any]:
+) -> list[Any]:
     """Return all active urgent items within the next N hours."""
     now = time.time()
     cutoff = now + hours_ahead * 3600

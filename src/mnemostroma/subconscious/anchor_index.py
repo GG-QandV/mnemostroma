@@ -6,13 +6,14 @@ Evicted anchors remain in SQLite forever.
 """
 import logging
 import time
-from typing import Dict, List, Optional, Any
+from typing import Any
+
 from .anchor import Anchor
 
 logger = logging.getLogger("mnemostroma.subconscious.anchor_index")
 
 # Fact priority for key_facts selection
-FACT_PRIORITY: Dict[str, int] = {
+FACT_PRIORITY: dict[str, int] = {
     "decision": 1,
     "решение": 1,
     "prohibition": 1,
@@ -44,7 +45,7 @@ class AnchorIndex:
     """
     
     def __init__(self, max_capacity: int = DEFAULT_MAX_CAPACITY):
-        self._anchors: Dict[str, Anchor] = {}  # anchor_id → Anchor
+        self._anchors: dict[str, Anchor] = {}  # anchor_id → Anchor
         self._max_capacity = max_capacity
     
     def __len__(self) -> int:
@@ -54,22 +55,22 @@ class AnchorIndex:
         return anchor_id in self._anchors
     
     @property
-    def anchors(self) -> Dict[str, Anchor]:
+    def anchors(self) -> dict[str, Anchor]:
         """Public read-only view of internal anchor map."""
         return self._anchors
 
-    def get(self, anchor_id: str) -> Optional[Anchor]:
+    def get(self, anchor_id: str) -> Anchor | None:
         """Get anchor by id. Does NOT count as access (read ≠ resurface)."""
         return self._anchors.get(anchor_id)
     
-    def resurface(self, anchor_id: str) -> Optional[Anchor]:
+    def resurface(self, anchor_id: str) -> Anchor | None:
         """Get anchor AND record access (pulled from silt)."""
         anchor = self._anchors.get(anchor_id)
         if anchor:
             anchor.touch()
         return anchor
     
-    def put(self, anchor: Anchor) -> Optional[Anchor]:
+    def put(self, anchor: Anchor) -> Anchor | None:
         """Add anchor to index.
         
         Returns:
@@ -87,21 +88,21 @@ class AnchorIndex:
         self._anchors[anchor.anchor_id] = anchor
         return evicted
     
-    def query_by_type(self, anchor_type: str) -> List[Anchor]:
+    def query_by_type(self, anchor_type: str) -> list[Anchor]:
         """Get all anchors of given type. For ctx.anchors(type)."""
         return [
             a for a in self._anchors.values() 
             if a.anchor_type == anchor_type
         ]
     
-    def query_by_flag(self, flag_name: str, flag_value: Any = True) -> List[Anchor]:
+    def query_by_flag(self, flag_name: str, flag_value: Any = True) -> list[Anchor]:
         """Get anchors by flag value."""
         return [
             a for a in self._anchors.values()
             if a.flags.get(flag_name) == flag_value
         ]
     
-    def all(self) -> List[Anchor]:
+    def all(self) -> list[Anchor]:
         """All anchors in RAM. For Dreamer iteration."""
         return list(self._anchors.values())
     
@@ -126,9 +127,9 @@ class AnchorIndex:
     
     @staticmethod
     def build_key_facts(
-        entities: List[Dict[str, Any]], 
+        entities: list[dict[str, Any]], 
         max_facts: int = 5
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Select key facts from entities, ranked by type priority.
         
         At creation time we keep up to max_facts.
@@ -152,7 +153,7 @@ class AnchorIndex:
     @staticmethod
     def infer_anchor_type(
         importance: str, 
-        entities: List[Dict[str, Any]]
+        entities: list[dict[str, Any]]
     ) -> str:
         """Determine anchor type from importance + entities."""
         entity_types = {e.get("type", "") for e in entities}

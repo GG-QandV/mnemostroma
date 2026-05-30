@@ -8,7 +8,8 @@ Anchors are never deleted, only their surrounding context decays.
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional
+from typing import Any
+
 import numpy as np
 
 logger = logging.getLogger("mnemostroma.subconscious.anchor")
@@ -28,11 +29,11 @@ class Anchor:
     
     # Key facts from entities — sorted by priority, max stored at creation
     # Decay will reduce this list over time, but minimum 1-2 remain forever
-    key_facts: List[Dict[str, Any]] = field(default_factory=list)
+    key_facts: list[dict[str, Any]] = field(default_factory=list)
     # Each fact: {"type": str, "value": str, "score": float, "priority": int}
     
     # Primary flags — set by Observer at creation, reassessed by Dreamer later
-    flags: Dict[str, Any] = field(default_factory=lambda: {
+    flags: dict[str, Any] = field(default_factory=lambda: {
         "is_new_entity": True,        # new or continuation of previous
         "continuation_of": None,      # session_id if continuation
         "continuation_depth": 0,      # how many sessions deep
@@ -49,7 +50,7 @@ class Anchor:
     
     # Temporal relation graph — directed links to other anchor/entity IDs
     # {"after": [...], "before": [...], "caused_by": [...], "during": [...]}
-    t_rel: Dict[str, Any] = field(default_factory=lambda: {
+    t_rel: dict[str, Any] = field(default_factory=lambda: {
         "after": [], "before": [], "caused_by": [], "during": []
     })
 
@@ -60,7 +61,7 @@ class Anchor:
     # Embedding for semantic search (Guardian, Surfacing) — not persisted in to_dict()
     # Set at creation time from Observer Step 1 embedding. Rehydrated on load_anchors()
     # from sessions table JOIN (anchor_id == session_id).
-    embedding: Optional[np.ndarray] = field(default=None, repr=False, compare=False)
+    embedding: np.ndarray | None = field(default=None, repr=False, compare=False)
     
     def touch(self) -> None:
         """Record an access (resurface from silt)."""
@@ -68,7 +69,7 @@ class Anchor:
         self.last_accessed_at = int(time.time())
         self.updated_at = self.last_accessed_at
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize for SQLite JSON fields."""
         return {
             "anchor_id": self.anchor_id,
@@ -86,7 +87,7 @@ class Anchor:
         }
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Anchor":
+    def from_dict(cls, data: dict[str, Any]) -> "Anchor":
         """Deserialize from SQLite row."""
         if "t_rel" not in data:
             data = {**data, "t_rel": {"after": [], "before": [], "caused_by": [], "during": []}}

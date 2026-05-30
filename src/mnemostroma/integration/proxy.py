@@ -1,18 +1,19 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
 import time
 from dataclasses import dataclass, field
-from typing import Dict, Any, List, Optional
-from datetime import datetime
+from datetime import UTC, datetime
+from typing import Any
 
 from ..core import SystemContext
 from ..tools.read import ctx_semantic
+
 
 @dataclass
 class MemoryBlock:
     """Represents the memory context injected into the LLM prompt."""
     context: str
-    tools: List[Dict[str, Any]] = field(default_factory=list)
-    stats: Dict[str, Any] = field(default_factory=dict)
+    tools: list[dict[str, Any]] = field(default_factory=list)
+    stats: dict[str, Any] = field(default_factory=dict)
 
 PROTOCOL_BLOCK = (
     "<agent_protocol>\n"
@@ -153,8 +154,7 @@ class ConductorProxy:
                     cluster = self.ctx.experience_index.get(s["tag"])
 
         # 3. Assemble Full XML
-        from datetime import timezone
-        now_str = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        now_str = datetime.now(UTC).isoformat().replace("+00:00", "Z")
         if not self._static_cache and not relevant_xml:
             context_string = f'<memory_context updated="{now_str}">\n<status>First session. Memory is empty — learning from this conversation.</status>\n</memory_context>'
         else:
@@ -186,7 +186,7 @@ class ConductorProxy:
             }
         )
         
-    def _get_tool_definitions(self) -> List[Dict[str, Any]]:
+    def _get_tool_definitions(self) -> list[dict[str, Any]]:
         """Return the MCP JSON tool schemas supported by Mnemostroma Context Manager."""
         return [
             {

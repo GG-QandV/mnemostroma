@@ -14,12 +14,10 @@ Colour legend:
 Install extras: pip install mnemostroma[tray]
 Usage:          mnemostroma tray [--db logs.db] [--interval 3]
 """
-import json
 import sqlite3
 import threading
 import time
 from pathlib import Path
-from typing import Optional
 
 # ── Status constants ────────────────────────────────────────────
 _ST_PROCESSING = "processing"
@@ -169,7 +167,7 @@ def run_tray(db_path: Path, interval: int = 3):
     def _restart_daemon(icon, item):
         """Restart Mnemostroma services in a cascade."""
         try:
-            from mnemostroma.tools.cleanup import stop_services, start_services
+            from mnemostroma.tools.cleanup import start_services, stop_services
             def run_restart():
                 try:
                     stop_services()

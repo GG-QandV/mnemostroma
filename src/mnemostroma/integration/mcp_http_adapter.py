@@ -3,22 +3,18 @@ import asyncio
 import json
 import logging
 import os
-import secrets
-import sys
 from pathlib import Path
-from typing import Any
 
-from starlette.applications import Starlette
-from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
-from starlette.routing import Route, Mount
-from starlette.middleware import Middleware
-from starlette.middleware.cors import CORSMiddleware
 import uvicorn
-
 from mcp.server import Server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
-from mcp.types import Tool, TextContent
+from mcp.types import TextContent, Tool
+from starlette.applications import Starlette
+from starlette.middleware import Middleware
+from starlette.middleware.cors import CORSMiddleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
+from starlette.routing import Route
 
 logger = logging.getLogger("mnemostroma.http_adapter")
 
@@ -28,15 +24,14 @@ _PIPE_NAME = r"\\.\pipe\mnemostroma"
 _TOKEN_PATH = _MNEMO_DIR / "sse_token"
 
 from .common import (
-    TOKEN,
     OBSERVE_TOKEN,
-    safe_ipc_call,
-    check_localhost,
+    TOKEN,
     PrivateNetworkAccessMiddleware,
+    check_localhost,
+    safe_ipc_call,
 )
 
 # ── Tool list (keep in sync with mcp_stdio_adapter.py) ──────────────
-
 from .mcp_stdio_adapter import _TOOLS  # Reuse tools definition from stdio adapter
 
 # ── MCP Server factory ────────────────────────────────────────────────
@@ -118,8 +113,8 @@ async def handle_health(request: Request):
 # ── Starlette App (Observe Receiver - Localhost only) ─────────────────
 
 from mnemostroma.integration.tunnel.observe_handlers import (
-    handle_tunnel_status,
     handle_tunnel_start,
+    handle_tunnel_status,
     handle_tunnel_stop,
 )
 
@@ -163,6 +158,7 @@ async def handle_mcp_config(request: Request) -> JSONResponse:
     })
 
 from contextlib import asynccontextmanager
+
 
 @asynccontextmanager
 async def lifespan(app):
@@ -208,6 +204,7 @@ def make_observe_app():
     )
 
 import socket
+
 
 def is_port_in_use(port: int, host: str = "127.0.0.1") -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:

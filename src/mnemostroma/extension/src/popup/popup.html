@@ -192,6 +192,7 @@
     .chat-hint { font-size: 10px; color: #475569; }
 
     .copy-hint { font-size: 11px; color: #22c55e; margin-top: 4px; text-align: center; }
+    .tunnel-error { font-size: 11px; color: #fca5a5; padding: 4px 8px; background: rgba(220,38,38,0.15); border-radius: 4px; margin-top: 4px; }
 
     .spinner {
       width: 14px; height: 14px;
@@ -320,6 +321,9 @@
       <div id="tunnel-chats-container"></div>
       <div id="copy-hint" class="copy-hint hidden" role="status" aria-live="polite"></div>
     </div>
+
+    <!-- Error banner (hidden by default) -->
+    <div id="tunnel-error" class="tunnel-error hidden" role="alert" aria-live="assertive"></div>
   </div>
 
   <!-- Footer -->

@@ -5,13 +5,12 @@ Basis: docs/MEMORY_SPEC_v2.md, docs/MEMORY_MODEL_v2.md
 """
 from __future__ import annotations
 
-import uuid
 import time
+import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
-import numpy as np
 
+import numpy as np
 
 # ---------------------------------------------------------------------------
 # Enums
@@ -79,7 +78,7 @@ class TemporalMarker:
     confidence:   float        # 0.0–1.0
 
     @classmethod
-    def unknown(cls) -> "TemporalMarker":
+    def unknown(cls) -> TemporalMarker:
         return cls(TimeRef.UNKNOWN, TimeRef.UNKNOWN, Explicitness.LOST, 0.3)
 
 
@@ -117,10 +116,10 @@ class Entity:
     t_rel: TemporalRelations = field(default_factory=TemporalRelations)
 
     # Optional
-    result:     Optional[ResultType]   = None
-    atmosphere: Optional[str]         = None   # surrounding context snippet
+    result:     ResultType | None   = None
+    atmosphere: str | None         = None   # surrounding context snippet
     importance: float                 = 0.5    # 0.0–1.0, reduced by decay
-    embedding:  Optional[np.ndarray]  = field(default=None, repr=False)
+    embedding:  np.ndarray | None  = field(default=None, repr=False)
 
     # Access tracking for decay
     last_accessed: int = field(default_factory=lambda: int(time.time() * 1000))
@@ -131,9 +130,9 @@ class Entity:
         what: str,
         entity_type: EntityType,
         source: SourceType,
-        temp: Optional[TemporalMarker] = None,
+        temp: TemporalMarker | None = None,
         **kwargs,
-    ) -> "Entity":
+    ) -> Entity:
         now_ms = int(time.time() * 1000)
         return cls(
             id=str(uuid.uuid4()),
@@ -157,8 +156,8 @@ class Emotion:
     t_abs:     int           # unix ms
 
     # Entity binding
-    ref_entity_id: Optional[str]        = None  # entity id (backward link)
-    ref_source:    Optional[SourceType] = None  # whose entity
+    ref_entity_id: str | None        = None  # entity id (backward link)
+    ref_source:    SourceType | None = None  # whose entity
     pending:       bool                 = False  # True = waiting for entity ahead
 
     @classmethod
@@ -166,10 +165,10 @@ class Emotion:
         cls,
         charge: EmotionCharge,
         intensity: float,
-        ref_entity_id: Optional[str] = None,
-        ref_source: Optional[SourceType] = None,
+        ref_entity_id: str | None = None,
+        ref_source: SourceType | None = None,
         pending: bool = False,
-    ) -> "Emotion":
+    ) -> Emotion:
         return cls(
             id=str(uuid.uuid4()),
             charge=charge,
@@ -184,14 +183,14 @@ class Emotion:
 @dataclass
 class Atmosphere:
     """Context placeholder — co-occurring signals without a primary entity yet."""
-    entity_id:   Optional[str]  # null until bound to an entity
+    entity_id:   str | None  # null until bound to an entity
     signals:     list[str]      # co-occurring words / topics
     noise_level: float          # 0.0–1.0
     pending:     bool           # True = waiting for entity
     t_abs:       int            # unix ms
 
     @classmethod
-    def create(cls, signals: list[str], noise_level: float = 0.5) -> "Atmosphere":
+    def create(cls, signals: list[str], noise_level: float = 0.5) -> Atmosphere:
         return cls(
             entity_id=None,
             signals=signals,
@@ -209,11 +208,11 @@ class Atmosphere:
 class MarkerResult:
     """Return value of the marker() function (Phase 2.2)."""
     action:     MarkerAction
-    entity:     Optional[Entity]    = None
-    emotion:    Optional[Emotion]   = None
-    atmosphere: Optional[Atmosphere] = None
+    entity:     Entity | None    = None
+    emotion:    Emotion | None   = None
+    atmosphere: Atmosphere | None = None
     confidence: float               = 1.0
 
     @classmethod
-    def discard(cls) -> "MarkerResult":
+    def discard(cls) -> MarkerResult:
         return cls(action=MarkerAction.DISCARD, confidence=1.0)

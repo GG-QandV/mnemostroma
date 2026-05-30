@@ -1,10 +1,11 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
 import asyncio
 import json
-import time
-import aiosqlite
 import logging
-from typing import Any, Optional
+import time
+from typing import Any
+
+import aiosqlite
 
 logger = logging.getLogger("mnemostroma.logging")
 
@@ -14,8 +15,8 @@ class LogWriter:
     def __init__(self, db_path: str, queue_size: int = 1000):
         self.db_path = db_path
         self.queue: asyncio.Queue = asyncio.Queue(maxsize=queue_size)
-        self._db: Optional[aiosqlite.Connection] = None
-        self._task: Optional[asyncio.Task] = None
+        self._db: aiosqlite.Connection | None = None
+        self._task: asyncio.Task | None = None
         self._running = False
 
     async def start(self):
@@ -67,7 +68,7 @@ class LogWriter:
         event: str,
         data: dict,
         latency_ms: float = 0.0,
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
         level: str = "INFO",
     ):
         """Put log entry into queue — sync, never blocks."""
@@ -104,7 +105,7 @@ class LogWriter:
                             batch.append(self.queue.get_nowait())
                         except asyncio.QueueEmpty:
                             break
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     if not self._running:
                         break
                     continue
@@ -175,7 +176,7 @@ class LogWriter:
         if self._task:
             try:
                 await asyncio.wait_for(self._task, timeout=5.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.warning("LogWriter: flush loop did not exit in time, cancelling.")
                 self._task.cancel()
                 try:
@@ -211,7 +212,7 @@ async def log_event(
     event: str,
     data: dict,
     latency_ms: float = 0.0,
-    session_id: Optional[str] = None,
+    session_id: str | None = None,
     level: str = "INFO",
 ):
     """Global helper for fire-and-forget structured logging.

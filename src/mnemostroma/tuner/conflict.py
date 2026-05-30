@@ -1,15 +1,17 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
-import numpy as np
+import difflib
 import logging
 import time
-import difflib
-from typing import Dict, List, Set, Any
+from typing import Any
+
+import numpy as np
+
 from ..core import SystemContext
 from ..memory.session_index import SessionBrief
 
 logger = logging.getLogger("mnemostroma.tuner")
 
-def extract_key_entities(text: str) -> Set[str]:
+def extract_key_entities(text: str) -> set[str]:
     """Simplified NER: extracts potential nouns and named entities."""
     import re
     return set(re.sub(r'[^\w]', '', t).lower()

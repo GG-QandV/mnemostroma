@@ -1,24 +1,21 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
 import asyncio
-import time
 import logging
-from typing import Dict, Any, List, Optional
+import time
+
 import numpy as np
 
+from ..core import SystemContext
+from ..memory.session_index import SessionBrief
+from .entities import MarkerAction, SourceType
+from .filter import CONFLICT, detect_urgency
+from .marker import marker as _marker
 from .steps.base import IOEvent, PipelineContext
+from .steps.embed_step import EmbedStep
 from .steps.filter_step import FilterStep
 from .steps.ner_step import NERStep
-from .steps.embed_step import EmbedStep
-from .steps.score_step import ScoreStep
 from .steps.persist_step import PersistStep
-
-from .filter import detect_urgency, CONFLICT
-from .marker import marker as _marker
-from .entities import SourceType, MarkerAction
-from ..memory.scoring import calculate_score
-from .utils import compress_text
-from ..memory.session_index import SessionBrief
-from ..core import SystemContext
+from .steps.score_step import ScoreStep
 
 logger = logging.getLogger("mnemostroma.observer")
 
@@ -38,8 +35,8 @@ async def observer_pipeline(
     text: str, 
     session_id: str, 
     ctx: SystemContext,
-    intent_vector: Optional[np.ndarray] = None
-) -> Optional[SessionBrief]:
+    intent_vector: np.ndarray | None = None
+) -> SessionBrief | None:
     """Process agent output through the modular StepChain.
     
     Budget: 40ms. Parallel NER/Embed preserved via asyncio.gather.

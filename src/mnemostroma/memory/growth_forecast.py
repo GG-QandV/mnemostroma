@@ -8,7 +8,6 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 import numpy as np
 
@@ -43,7 +42,7 @@ class GrowthForecast:
 
     MIN_POINTS = 3  # require at least 3 snapshots for a meaningful fit
 
-    def __init__(self, history: List[Tuple[int, float]]) -> None:
+    def __init__(self, history: list[tuple[int, float]]) -> None:
         """
         Args:
             history: list of (unix_timestamp_seconds, total_size_mb) tuples,
@@ -146,9 +145,9 @@ class GrowthForecast:
 
     @staticmethod
     async def load_history(
-        logs_db_path: Optional[Path] = None,
+        logs_db_path: Path | None = None,
         days_back: int = 30,
-    ) -> List[Tuple[int, float]]:
+    ) -> list[tuple[int, float]]:
         """
         Load (ts, total_size_mb) rows from db_snapshots in logs.db.
         Returns list sorted ascending by ts.

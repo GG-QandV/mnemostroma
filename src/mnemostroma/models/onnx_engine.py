@@ -3,12 +3,12 @@
 import asyncio
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
 import numpy as np
 import onnxruntime as ort
 from tokenizers import Tokenizer
-from pathlib import Path
-from typing import Optional
-from concurrent.futures import ThreadPoolExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +77,7 @@ class ONNXEmbeddingEngine:
     def dim(self) -> int:
         return self._dim
     
-    def encode(self, text: str, max_length: Optional[int] = None) -> np.ndarray:
+    def encode(self, text: str, max_length: int | None = None) -> np.ndarray:
         """Encode text → normalized float16 vector (dim,).
         
         Attention-masked mean pooling (B04 fix).
@@ -135,7 +135,7 @@ class ONNXEmbeddingEngine:
         
         return result
     
-    async def aencode(self, text: str, max_length: Optional[int] = None) -> np.ndarray:
+    async def aencode(self, text: str, max_length: int | None = None) -> np.ndarray:
         """Non-blocking async encode."""
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(

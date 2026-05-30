@@ -5,6 +5,7 @@ Main entry point. Logic extracted to cli/commands.py for modularity.
 """
 from mnemostroma.cli.commands import build_cli, dispatch
 
+
 def main():
     parser = build_cli()
     args = parser.parse_args()

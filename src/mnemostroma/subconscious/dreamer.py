@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import TYPE_CHECKING, Any, List, Optional
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from ..core import SystemContext
@@ -27,11 +27,11 @@ class Dreamer:
     polling `conductor.is_idle()`. When idle, runs one reassessment cycle.
     """
 
-    def __init__(self, conductor: "object", ctx: "SystemContext"):
+    def __init__(self, conductor: object, ctx: SystemContext):
         self._conductor = conductor
         self._ctx = ctx
         self._running = False
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
         # Phase 2 — disk scan state (RAM-only, resets to 0 on daemon restart — intentional)
         self._disk_offset: int = 0
         self._disk_window: int = 1000
@@ -218,7 +218,7 @@ class Dreamer:
     # Outcome reassessment (stub — extended by Phase 5+)
     # ------------------------------------------------------------------
 
-    def _reassess_outcome(self, anchor: "Anchor") -> bool:
+    def _reassess_outcome(self, anchor: Anchor) -> bool:
         """Check if outcome can be resolved from current RAM context.
 
         Returns True if the anchor was modified.
@@ -258,7 +258,7 @@ class AutoBridgeWorker:
     race conditions (asyncio.shield), empty sessions (guard).
     """
 
-    def __init__(self, conductor: object, ctx: "SystemContext") -> None:
+    def __init__(self, conductor: object, ctx: SystemContext) -> None:
         self._conductor = conductor
         self._ctx = ctx
         self._cooldown_sec: int = 1800       # from config: session_closure.cooldown_sec

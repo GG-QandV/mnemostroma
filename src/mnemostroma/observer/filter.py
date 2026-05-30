@@ -9,7 +9,7 @@ Importance is derived in priority order:
   5. Default: background
 """
 import re
-from typing import Dict, List, Tuple, Any, Optional
+from typing import Any
 
 # ── Structural / language-agnostic precision patterns ───────────────────────
 PRECISION_PATTERNS = {
@@ -123,7 +123,7 @@ def _has_structural_importance(text: str, precision_items: list) -> bool:
     return False
 
 
-def parse_deadline(text: str, level: str) -> Optional[int]:
+def parse_deadline(text: str, level: str) -> int | None:
     import time
     now = int(time.time())
     if level == "deadline_h":
@@ -138,7 +138,7 @@ def parse_deadline(text: str, level: str) -> Optional[int]:
     return None
 
 
-def detect_urgency(text: str) -> Tuple[str, Optional[int]]:
+def detect_urgency(text: str) -> tuple[str, int | None]:
     t = text.lower()
     for level in ("deadline_h", "deadline_d", "deadline_w"):
         if any(sig in t for sig in URGENCY_SIGNALS[level]):
@@ -154,7 +154,7 @@ def detect_principle(text: str) -> bool:
     return any(sig in t for sig in PRINCIPLE_SIGNALS)
 
 
-def deterministic_filter(text: str) -> Dict[str, Any]:
+def deterministic_filter(text: str) -> dict[str, Any]:
     """Classify text. Language-agnostic structural signals take priority.
 
     Returns:
@@ -176,10 +176,7 @@ def deterministic_filter(text: str) -> Dict[str, Any]:
     elif any(w in t for w in CRITICAL):
         importance = "critical"
     # 4. Important keywords (multilingual)
-    elif any(w in t for w in IMPORTANT):
-        importance = "important"
-    # 5. Structural signals — no keyword match but has precision/code/length
-    elif _has_structural_importance(text, precision_items):
+    elif any(w in t for w in IMPORTANT) or _has_structural_importance(text, precision_items):
         importance = "important"
     else:
         importance = "background"

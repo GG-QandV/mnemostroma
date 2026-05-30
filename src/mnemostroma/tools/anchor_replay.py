@@ -5,10 +5,14 @@ import asyncio
 import csv
 import json
 import logging
+from collections.abc import Awaitable, Callable, Sequence
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field, is_dataclass
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Dict, Iterable, List, Optional, Protocol, Sequence
+from typing import (
+    Any,
+    Protocol,
+)
 
 logger = logging.getLogger("mnemostroma.tools.anchor_replay")
 
@@ -19,9 +23,9 @@ logger = logging.getLogger("mnemostroma.tools.anchor_replay")
 
 # Real imports from repo
 import time
-from mnemostroma.config import Config
-from mnemostroma.core import SystemContext, ModelRegistry
+
 from mnemostroma.conductor import Conductor
+from mnemostroma.core import SystemContext
 from mnemostroma.observer.pipeline import observer_pipeline
 from mnemostroma.subconscious.anchor import Anchor
 from mnemostroma.subconscious.anchor_index import AnchorIndex
@@ -49,10 +53,10 @@ class AnchorLike(Protocol):
 
 @dataclass(slots=True)
 class ReplayHooks:
-    build_context: Callable[[Optional[str]], Awaitable[Any]]
-    load_session_ids: Callable[[Any, Optional[Path], Optional[int]], Awaitable[List[str]]]
+    build_context: Callable[[str | None], Awaitable[Any]]
+    load_session_ids: Callable[[Any, Path | None, int | None], Awaitable[list[str]]]
     load_session: Callable[[Any, str], Awaitable[Any]]
-    clone_context_for_variant: Callable[[Any, Dict[str, Any]], Awaitable[Any]]
+    clone_context_for_variant: Callable[[Any, dict[str, Any]], Awaitable[Any]]
     run_observer_pipeline: Callable[[Any, Any], Awaitable[Any]]
     build_anchor_from_observer: Callable[[Any, Any, Any], Awaitable[Any]]
     persist_anchor_if_needed: Callable[[Any, Any, Any], Awaitable[None]]
@@ -60,7 +64,7 @@ class ReplayHooks:
 
 # ===== Adapter implementations =====
 
-async def build_context(config_path: Optional[str]) -> SystemContext:
+async def build_context(config_path: str | None) -> SystemContext:
     """Build SystemContext from config."""
     conductor = Conductor()
     config_file = Path(config_path) if config_path else Path.home() / ".mnemostroma" / "config.json"
@@ -69,7 +73,7 @@ async def build_context(config_path: Optional[str]) -> SystemContext:
     return ctx
 
 
-async def load_session_ids(ctx: SystemContext, sessions_file: Optional[Path], limit: Optional[int]) -> List[str]:
+async def load_session_ids(ctx: SystemContext, sessions_file: Path | None, limit: int | None) -> list[str]:
     """Load session ids from file or persistence."""
     if sessions_file:
         ids = [line.strip() for line in sessions_file.read_text().splitlines() if line.strip()]
@@ -98,14 +102,13 @@ async def load_session(ctx: SystemContext, session_id: str) -> Any:
     return session
 
 
-async def clone_context_for_variant(ctx: Any, overrides: Dict[str, Any]) -> Any:
+async def clone_context_for_variant(ctx: Any, overrides: dict[str, Any]) -> Any:
     """Robust config override для frozen dataclasses."""
     import copy
     import json
-    import tempfile
     import shutil
+    import tempfile
     from pathlib import Path
-    from mnemostroma.config import Config
     
     # 1. Базовый config как dict
     # Примечание: используем to_dict() если есть, или __dict__
@@ -115,7 +118,7 @@ async def clone_context_for_variant(ctx: Any, overrides: Dict[str, Any]) -> Any:
         base_config = copy.deepcopy(ctx.config.__dict__)
     
     # 2. Deep merge overrides
-    def deep_merge(target: Dict, source: Dict) -> Dict:
+    def deep_merge(target: dict, source: dict) -> dict:
         for key, value in source.items():
             if isinstance(value, dict) and key in target and isinstance(target[key], dict):
                 deep_merge(target[key], value)
@@ -162,7 +165,7 @@ async def run_observer_pipeline(ctx: SystemContext, session: Any) -> Any:
         # Fallback to brief if full content not available
         text = getattr(session, 'brief', '') or session.get('brief', '')
         if not text:
-            logger.warning(f"No content_full or brief available for session")
+            logger.warning("No content_full or brief available for session")
             return None
 
     session_id = session.session_id if hasattr(session, 'session_id') else str(session.get('session_id', ''))
@@ -256,16 +259,16 @@ DEFAULT_HOOKS = ReplayHooks(
 @dataclass(slots=True)
 class ReplayVariant:
     name: str
-    overrides: Dict[str, Any] = field(default_factory=dict)
+    overrides: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
 class ReplayConfig:
     output_dir: Path
-    config_path: Optional[str] = None
-    sessions_file: Optional[Path] = None
-    limit: Optional[int] = None
-    variants: List[ReplayVariant] = field(default_factory=list)
+    config_path: str | None = None
+    sessions_file: Path | None = None
+    limit: int | None = None
+    variants: list[ReplayVariant] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -418,8 +421,8 @@ def _write_csv(path: Path, rows: Sequence[Any]) -> None:
 
 
 
-def _summarize_variant(rows: Sequence[AnchorSnapshot]) -> Dict[str, Any]:
-    type_counts: Dict[str, int] = {}
+def _summarize_variant(rows: Sequence[AnchorSnapshot]) -> dict[str, Any]:
+    type_counts: dict[str, int] = {}
     for row in rows:
         type_counts[row.anchor_type] = type_counts.get(row.anchor_type, 0) + 1
     return {
@@ -434,11 +437,11 @@ def _summarize_variant(rows: Sequence[AnchorSnapshot]) -> Dict[str, Any]:
 def _build_session_diffs(
     baseline_rows: Sequence[AnchorSnapshot],
     variant_rows: Sequence[AnchorSnapshot],
-) -> List[SessionDiff]:
+) -> list[SessionDiff]:
     baseline_map = {row.session_id: row for row in baseline_rows}
     variant_map = {row.session_id: row for row in variant_rows}
     session_ids = sorted(set(baseline_map) | set(variant_map))
-    diffs: List[SessionDiff] = []
+    diffs: list[SessionDiff] = []
     for session_id in session_ids:
         base = baseline_map.get(session_id)
         var = variant_map.get(session_id)
@@ -480,14 +483,14 @@ async def run_variant(
     base_context: Any,
     session_ids: Sequence[str],
     variant: ReplayVariant,
-) -> List[AnchorSnapshot]:
+) -> list[AnchorSnapshot]:
     logger.info("Running variant '%s' on %d sessions", variant.name, len(session_ids))
     if variant.name == "baseline":
         ctx = base_context
     else:
         ctx = await hooks.clone_context_for_variant(base_context, deepcopy(variant.overrides))
 
-    snapshots: List[AnchorSnapshot] = []
+    snapshots: list[AnchorSnapshot] = []
     for session_id in session_ids:
         session = await hooks.load_session(ctx, session_id)
         observer_output = await hooks.run_observer_pipeline(ctx, session)
@@ -497,14 +500,14 @@ async def run_variant(
     return snapshots
 
 
-async def run_replay(config: ReplayConfig, hooks: ReplayHooks = DEFAULT_HOOKS) -> Dict[str, Any]:
+async def run_replay(config: ReplayConfig, hooks: ReplayHooks = DEFAULT_HOOKS) -> dict[str, Any]:
     config.output_dir.mkdir(parents=True, exist_ok=True)
     base_context = await hooks.build_context(config.config_path)
     session_ids = await hooks.load_session_ids(base_context, config.sessions_file, config.limit)
     if not session_ids:
         raise ValueError("No session ids provided or loaded for replay")
 
-    variant_rows: Dict[str, List[AnchorSnapshot]] = {}
+    variant_rows: dict[str, list[AnchorSnapshot]] = {}
     for variant in config.variants:
         rows = await run_variant(hooks, base_context, session_ids, variant)
         variant_rows[variant.name] = rows
@@ -512,7 +515,7 @@ async def run_replay(config: ReplayConfig, hooks: ReplayHooks = DEFAULT_HOOKS) -
 
     baseline_name = config.variants[0].name
     baseline_rows = variant_rows[baseline_name]
-    summary: Dict[str, Any] = {
+    summary: dict[str, Any] = {
         "baseline": _summarize_variant(baseline_rows),
         "variants": {},
     }

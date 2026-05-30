@@ -4,7 +4,7 @@ import json
 import signal
 import sys
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from .providers.serveo import ServeoTunnelManager
 from .token import get_or_create_tunnel_token
@@ -29,7 +29,7 @@ def _save_tunnel_config(config: dict[str, Any]) -> None:
     TUNNEL_CONFIG_PATH.write_text(json.dumps(config, indent=2), encoding="utf-8")
 
 
-def _get_or_ask_subdomain() -> Optional[str]:
+def _get_or_ask_subdomain() -> str | None:
     """Read subdomain from config, or ask user on first run in interactive mode."""
     from mnemostroma.integration.tunnel.resolve import _is_headless
     config = _load_tunnel_config()
@@ -56,7 +56,7 @@ def _get_or_ask_subdomain() -> Optional[str]:
     return subdomain
 
 
-def _save_tunnel_url(subdomain: Optional[str], public_url: str) -> None:
+def _save_tunnel_url(subdomain: str | None, public_url: str) -> None:
     """
     Save PUBLIC_URL:
     1. Каноническое хранилище: tunnel_urls/user-{subdomain}.txt
@@ -72,7 +72,7 @@ def _save_tunnel_url(subdomain: Optional[str], public_url: str) -> None:
     tmp.replace(flat)
 
 
-def _save_tunnel_token(subdomain: Optional[str], token: str) -> None:
+def _save_tunnel_token(subdomain: str | None, token: str) -> None:
     """Save token to ~/.mnemostroma/tunnel_tokens/user-{subdomain}.txt."""
     TUNNEL_TOKENS_DIR.mkdir(parents=True, exist_ok=True)
     filename = f"user-{subdomain}.txt" if subdomain else "user-anonymous.txt"
@@ -82,7 +82,7 @@ def _save_tunnel_token(subdomain: Optional[str], token: str) -> None:
 
 async def run(provider: str = "serveo") -> None:
     token: str = get_or_create_tunnel_token()
-    subdomain: Optional[str] = _get_or_ask_subdomain()
+    subdomain: str | None = _get_or_ask_subdomain()
 
     # 1. Запустить Serveo туннель ПЕРВЫМ (чтобы получить PUBLIC_URL)
     print("  Starting Serveo tunnel...", end=" ", flush=True)

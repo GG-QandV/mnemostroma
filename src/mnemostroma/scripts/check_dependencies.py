@@ -1,6 +1,6 @@
-import os
-import sys
 import subprocess
+import sys
+
 
 def run_linter():
     print("Running import-linter for Architectural isolation...")

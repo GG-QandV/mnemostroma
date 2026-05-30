@@ -6,8 +6,9 @@ import logging
 import os
 import secrets
 import sys
+from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Any, Callable, Awaitable
+from typing import Any
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -182,7 +183,7 @@ async def safe_ipc_call(tool: str, args: dict[str, Any], timeout: float = 5.0) -
         if "error" in response:
             raise RuntimeError(response["error"])
         return response.get("result")
-    except asyncio.TimeoutError as te:
+    except TimeoutError as te:
         raise TimeoutError(f"Mnemostroma daemon IPC call timed out after {timeout} seconds") from te
     finally:
         try:

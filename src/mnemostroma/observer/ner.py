@@ -1,9 +1,10 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
-import numpy as np
+from pathlib import Path
+from typing import Any
+
 import onnxruntime as ort
 from tokenizers import Tokenizer
-from pathlib import Path
-from typing import List, Dict, Any
+
 
 class GLiNER:
     """GLiNER ONNX wrapper for zero-shot Named Entity Recognition."""
@@ -15,7 +16,7 @@ class GLiNER:
             "concept", "question", "person", "product"
         ]
 
-    async def extract_entities(self, text: str, threshold: float = 0.7) -> List[Dict[str, Any]]:
+    async def extract_entities(self, text: str, threshold: float = 0.7) -> list[dict[str, Any]]:
         """Extract entities from text using zero-shot NER.
         
         Args:

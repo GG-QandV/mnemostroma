@@ -6,7 +6,7 @@ what to inspect further (raw text, history, diff). No snippets, no RAG.
 """
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 
@@ -19,10 +19,10 @@ logger = logging.getLogger("mnemostroma.tools.content")
 async def content_search(
     query: str,
     ctx: SystemContext,
-    project_id: Optional[str] = None,
+    project_id: str | None = None,
     status: str = "active",
     top_k: int = 5,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Semantic search over content blocks using MatrixSearch + content_embedder.
 
     Returns full ContentBlock metadata (no raw text). Agent requests content_raw
@@ -75,7 +75,7 @@ async def content_search(
     placeholders = ",".join("?" * len(candidates))
     status_filter = "" if status == "all" else f"AND cv.status = '{status}'"
     if project_id:
-        proj_filter = f"AND cb.project_id = ?"
+        proj_filter = "AND cb.project_id = ?"
         params = candidates + [project_id]
     else:
         proj_filter = ""
@@ -131,8 +131,8 @@ async def content_search(
 async def content_get(
     content_id: str,
     ctx: SystemContext,
-    version: Optional[int] = None,
-) -> Optional[Dict[str, Any]]:
+    version: int | None = None,
+) -> dict[str, Any] | None:
     """Get ContentBlock metadata. version=None → latest active version.
 
     Returns metadata only (no raw text). Use content_raw for exact content.
@@ -214,8 +214,8 @@ async def content_get(
 async def content_raw(
     content_id: str,
     ctx: SystemContext,
-    version: Optional[int] = None,
-) -> Optional[str]:
+    version: int | None = None,
+) -> str | None:
     """Decompress and return raw content text from SQLite.
 
     version=None → latest active version. Expensive — use only when
@@ -265,7 +265,7 @@ async def content_raw(
 async def content_history(
     content_id: str,
     ctx: SystemContext,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """List all versions of a content block — metadata only, no raw text.
 
     Includes rejected versions so the agent can understand why past

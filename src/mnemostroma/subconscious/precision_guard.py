@@ -8,9 +8,9 @@ precision_warnings field appears in ctx_active() next turn.
 Zero ONNX calls. Pure regex. Runs synchronously at Observer Step 0.5.
 One-turn lag by design (same pattern as Guardian/Open Loop).
 """
-import re
 import logging
-from typing import List, Dict, Any, Optional, Tuple, TYPE_CHECKING
+import re
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from ..core import SystemContext
@@ -20,10 +20,10 @@ logger = logging.getLogger("mnemostroma.subconscious.precision_guard")
 # Reuse patterns from filter.py — precision-relevant types (expanded)
 _CHECK_TYPES = ("link", "version", "number", "hash", "ip", "port", "uuid", "api", "config")
 
-_COMPILED: Dict[str, re.Pattern] = {}
+_COMPILED: dict[str, re.Pattern] = {}
 
 
-def _get_compiled() -> Dict[str, re.Pattern]:
+def _get_compiled() -> dict[str, re.Pattern]:
     """Lazy-compile patterns from filter.py to avoid circular import at module load."""
     global _COMPILED
     if not _COMPILED:
@@ -36,7 +36,7 @@ def _get_compiled() -> Dict[str, re.Pattern]:
     return _COMPILED
 
 
-def precision_extract(text: str) -> List[Dict[str, Any]]:
+def precision_extract(text: str) -> list[dict[str, Any]]:
     """Extract precision artifacts from text.
 
     Returns list of {type, value, raw} for link/version/number types only.
@@ -52,7 +52,7 @@ def precision_extract(text: str) -> List[Dict[str, Any]]:
     return results
 
 
-def _derive_context_tag(artifact: Dict[str, Any], text: str) -> str:
+def _derive_context_tag(artifact: dict[str, Any], text: str) -> str:
     """Heuristic: extract the last meaningful word before the artifact in text.
 
     Used as a grouping key: same artifact type + same context → same slot.
@@ -133,7 +133,7 @@ def precision_guard(text: str, ctx: "SystemContext") -> None:
     artifacts = precision_extract(text)
     for artifact in artifacts:
         ctx_tag = _derive_context_tag(artifact, text)
-        key: Tuple[str, str] = (artifact["type"], ctx_tag)
+        key: tuple[str, str] = (artifact["type"], ctx_tag)
         stored = precision_ram.get(key)
         if stored and not _same_value(artifact["value"], stored["value"], artifact["type"]):
             precision_warnings.append({

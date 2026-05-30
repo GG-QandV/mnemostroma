@@ -2,22 +2,28 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
 from __future__ import annotations
 
+import asyncio
+import logging
 import re
 import time
-import logging
-import asyncio
-import numpy as np
 from typing import TYPE_CHECKING
-from .base import PipelineContext
+
+import numpy as np
+
 from ...memory.session_index import SessionBrief
-from ..utils import compress_text
 from ...subconscious.anchor import Anchor
 from ...subconscious.anchor_index import AnchorIndex
-from ..flag_detector import detect_all_flags, detect_mention_type_embedding, detect_mention_type
-from ..continuation_detector import detect_continuation
+from ...subconscious.precision_guard import _derive_context_tag, precision_extract
 from ...tuner.conflict import tuner_check
-from ...subconscious.precision_guard import precision_extract, _derive_context_tag
+from ..continuation_detector import detect_continuation
+from ..flag_detector import (
+    detect_all_flags,
+    detect_mention_type,
+    detect_mention_type_embedding,
+)
 from ..session_classifier import classify_session_type
+from ..utils import compress_text
+from .base import PipelineContext
 
 if TYPE_CHECKING:
     pass

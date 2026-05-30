@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
 import time
-import numpy as np
 from typing import Any
+
+import numpy as np
 
 
 def get_importance_weight(importance: str, ctx: Any) -> float:

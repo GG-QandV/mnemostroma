@@ -7,10 +7,6 @@ argmax. Used by PersistStep to decide whether to route to ContentManager.
 """
 from __future__ import annotations
 
-import re
-from typing import Optional
-
-
 # ── Keyword sets (tuned for typical agent session content) ───────────────────
 
 _CONTENT_KEYWORDS: frozenset[str] = frozenset({
@@ -36,7 +32,7 @@ _CONTEXT_KEYWORDS: frozenset[str] = frozenset({
 _MIN_SCORE: int = 2
 
 
-def classify_session_type(text: str) -> Optional[str]:
+def classify_session_type(text: str) -> str | None:
     """Classify session text into content / research / context category.
 
     Returns None if no keyword set reaches _MIN_SCORE (unclassified).

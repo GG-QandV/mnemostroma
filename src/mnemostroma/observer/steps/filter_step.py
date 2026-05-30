@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING
-from .base import PipelineContext
-from ..marker import structural_prefilter
+
 from ...subconscious.precision_guard import precision_guard
+from ..marker import structural_prefilter
+from .base import PipelineContext
 
 if TYPE_CHECKING:
     pass

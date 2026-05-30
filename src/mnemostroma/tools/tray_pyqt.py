@@ -11,7 +11,6 @@ Colour legend:
   Yellow #FFC107  — warning (WARNING-level log in last 60s)
   Red    #E53935  — error / daemon not responding
 """
-import json
 import logging
 import sqlite3
 import subprocess
@@ -20,21 +19,27 @@ import threading
 import time
 from pathlib import Path
 
-from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
-from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor
-from PyQt6.QtCore import QTimer, QSize
+from PyQt6.QtCore import QSize, QTimer
+from PyQt6.QtGui import QColor, QIcon, QPainter, QPixmap
+from PyQt6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 from mnemostroma.integration.tunnel.state import (
-    get_tunnel_url,
-    get_tunnel_token,
     TunnelState,
-    TunnelSnapshot,
+    _kill_port_occupants,
+    force_kill_tunnel,
+    get_tunnel_token,
+    get_tunnel_url,
+    kill_orphan_tunnel_processes,
     read_snapshot,
-    force_kill_tunnel
 )
 from mnemostroma.integration.tunnel.ui_meta import get_meta
 
 logger = logging.getLogger("mnemostroma.tray")
+
+
+OAUTH_PORT = 8769
+_ADAPTER_READY_TIMEOUT = 8.0
+_ADAPTER_POLL_INTERVAL = 0.5
 
 
 def _copy(text: str) -> None:
@@ -44,21 +49,40 @@ def _copy(text: str) -> None:
         logger.warning("clipboard copy failed: %s", e)
 
 
-def _run_tunnel(action: str) -> None:
-    from mnemostroma.integration.tunnel.resolve import resolve_mnemostroma_executable
+def _run_headless(cmd: list[str]) -> None:
     kwargs: dict = {
         "stdout": subprocess.DEVNULL,
         "stderr": subprocess.DEVNULL,
     }
     if sys.platform == "win32":
-        kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+        kwargs["creationflags"] = (
+            subprocess.CREATE_NEW_PROCESS_GROUP |
+            subprocess.DETACHED_PROCESS
+        )
     else:
         kwargs["start_new_session"] = True
     try:
-        cmd = resolve_mnemostroma_executable() + ["tunnel", action]
         subprocess.Popen(cmd, **kwargs)
     except Exception as e:
-        logger.error("Failed to run tunnel action %s: %s", action, e)
+        logger.error("Failed to run headless cmd %s: %s", cmd, e)
+
+
+def _wait_for_adapter(port: int, timeout: float = _ADAPTER_READY_TIMEOUT) -> bool:
+    """Ждёт пока OAuth adapter начнёт отвечать 200 на /health."""
+    import urllib.request
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            with urllib.request.urlopen(
+                f"http://127.0.0.1:{port}/health",
+                timeout=1.0
+            ) as r:
+                if r.status == 200:
+                    return True
+        except Exception:
+            pass
+        time.sleep(_ADAPTER_POLL_INTERVAL)
+    return False
 
 
 class TunnelUrlWatcher:
@@ -268,7 +292,7 @@ class DaemonTrayApp(QApplication):
     def _restart_daemon(self):
         """Restart Mnemostroma services in a cascade."""
         try:
-            from mnemostroma.tools.cleanup import stop_services, start_services
+            from mnemostroma.tools.cleanup import start_services, stop_services
             # Run cascade restart in a background thread to prevent UI lockup
             def run_restart():
                 try:
@@ -319,7 +343,7 @@ class DaemonTrayApp(QApplication):
 
         # --- Строка статуса (не кликабельна, только инфо) ---
         if s == TunnelState.ACTIVE:
-            label = f"Tunnel: ACTIVE"
+            label = "Tunnel: ACTIVE"
             if url:
                 short = url.replace("https://", "").replace("http://", "")[:35]
                 label += f" ({short})"
@@ -385,78 +409,67 @@ class DaemonTrayApp(QApplication):
         kill.triggered.connect(self._on_tunnel_force_kill)
 
     def _on_tunnel_start(self) -> None:
-        self.tray_icon.showMessage(
-            "Tunnel",
-            "Starting tunnel…",
-            QSystemTrayIcon.MessageIcon.Information,
-            2000,
+        from mnemostroma.integration.tunnel.resolve import (
+            resolve_mnemostroma_executable,
         )
-        from mnemostroma.integration.tunnel.resolve import resolve_mnemostroma_executable
-        cmd = resolve_mnemostroma_executable() + ["tunnel", "start", "--background"]
-        self._run_tunnel_cmd(cmd)
+
+        def _do():
+            _kill_port_occupants(OAUTH_PORT)
+            time.sleep(0.3)
+            cmd = resolve_mnemostroma_executable() + ["tunnel", "start", "--background"]
+            _run_headless(cmd)
+            ok = _wait_for_adapter(OAUTH_PORT)
+            if not ok:
+                self.tray_icon.showMessage(
+                    "Tunnel Start Failed",
+                    f"OAuth adapter on port {OAUTH_PORT} did not respond in "
+                    f"{_ADAPTER_READY_TIMEOUT:.0f}s.\n"
+                    "Run 'mnemostroma tunnel status' for details.",
+                    QSystemTrayIcon.MessageIcon.Warning,
+                    5000,
+                )
+
+        import threading
+        threading.Thread(target=_do, daemon=True).start()
 
     def _on_tunnel_stop(self) -> None:
-        self.tray_icon.showMessage(
-            "Tunnel",
-            "Stopping tunnel…",
-            QSystemTrayIcon.MessageIcon.Information,
-            2000,
+        from mnemostroma.integration.tunnel.resolve import (
+            resolve_mnemostroma_executable,
         )
-        from mnemostroma.integration.tunnel.resolve import resolve_mnemostroma_executable
         cmd = resolve_mnemostroma_executable() + ["tunnel", "stop"]
-        self._run_tunnel_cmd(cmd)
+        _run_headless(cmd)
 
     def _on_tunnel_restart(self) -> None:
-        """Force kill → пауза 1.5 сек → start. Запускается в фоне."""
-        self.tray_icon.showMessage(
-            "Tunnel",
-            "Restarting tunnel…",
-            QSystemTrayIcon.MessageIcon.Information,
-            2000,
-        )
+        """Force kill → orphan hunt → освободить порт → пауза → start."""
         def _do():
+            from mnemostroma.integration.tunnel.resolve import (
+                resolve_mnemostroma_executable,
+            )
             force_kill_tunnel()
+            kill_orphan_tunnel_processes()
+            _kill_port_occupants(OAUTH_PORT)
             time.sleep(1.5)
-            from mnemostroma.integration.tunnel.resolve import resolve_mnemostroma_executable
             cmd = resolve_mnemostroma_executable() + ["tunnel", "start", "--background"]
-            self._run_tunnel_cmd(cmd)
+            _run_headless(cmd)
 
-        thread = threading.Thread(target=_do, daemon=True)
-        thread.start()
+        import threading
+        threading.Thread(target=_do, daemon=True).start()
 
     def _on_tunnel_force_kill(self) -> None:
-        killed = force_kill_tunnel()
-        msg = "Tunnel process killed." if killed else "No tunnel process found."
+        force_kill_tunnel()
+        orphans = kill_orphan_tunnel_processes()
+        count = len(orphans)
+        msg = (
+            f"Killed {count} tunnel process(es): {orphans}"
+            if orphans
+            else "No tunnel processes found."
+        )
         self.tray_icon.showMessage(
             "Tunnel Force Kill",
             msg,
             QSystemTrayIcon.MessageIcon.Information,
-            2000
+            3000,
         )
-
-    def _run_tunnel_cmd(self, cmd: list[str]) -> None:
-        """Запускает команду туннеля в фоновом режиме."""
-        kwargs: dict = {
-            "stdout": subprocess.DEVNULL,
-            "stderr": subprocess.DEVNULL,
-        }
-        if sys.platform == "win32":
-            kwargs["creationflags"] = (
-                subprocess.CREATE_NEW_PROCESS_GROUP |
-                subprocess.DETACHED_PROCESS
-            )
-        else:
-            kwargs["start_new_session"] = True
-        try:
-            subprocess.Popen(cmd, **kwargs)
-        except Exception as e:
-            logger.error("Failed to run tunnel cmd %s: %s", cmd, e)
-            self.tray_icon.showMessage(
-                "Tunnel Error",
-                str(e),
-                QSystemTrayIcon.MessageIcon.Critical,
-                4000
-            )
 
     def _init_tray(self):
         """Initialize system tray icon and menu."""
@@ -504,7 +517,6 @@ def run_tray(db_path: Path, interval: int = 3):
     """Start the system tray icon. Blocks until user quits."""
     check_pyqt6()
 
-    from PyQt6.QtWidgets import QApplication
     app = DaemonTrayApp(sys.argv, db_path)
     sys.exit(app.exec())
 

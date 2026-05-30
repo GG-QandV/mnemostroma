@@ -9,7 +9,6 @@ Provides:
 
 import re
 import time
-from typing import Optional
 
 
 def unix_to_str(unix_ts: int | float | None, utc: bool = True) -> str:

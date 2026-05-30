@@ -5,9 +5,10 @@ Scans incoming message embedding against load-bearing anchors.
 Fires automatically in Observer Step 1.5 — no agent tool call needed.
 Zero extra ONNX calls: reuses the embedding computed at Step 1.
 """
-import time
 import logging
-from typing import List, Dict, Any, TYPE_CHECKING
+import time
+from typing import TYPE_CHECKING, Any
+
 import numpy as np
 
 if TYPE_CHECKING:
@@ -23,7 +24,7 @@ async def anchor_guardian(
     ctx: "SystemContext",
     threshold: float = 0.72,
     cooldown_sec: float = 3600.0,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Check incoming message embedding against load-bearing anchors.
 
     Returns list of conflict warnings. Empty list = no conflicts.
@@ -39,7 +40,7 @@ async def anchor_guardian(
         return []
 
     now = time.time()
-    warnings: List[Dict[str, Any]] = []
+    warnings: list[dict[str, Any]] = []
 
     for anchor in ctx.anchor_index.anchors.values():
         # Filter: only load-bearing types
@@ -73,7 +74,7 @@ async def anchor_guardian(
     return warnings
 
 
-def _keyword_anchor_check(text: str, ctx: "SystemContext") -> List[Dict[str, Any]]:
+def _keyword_anchor_check(text: str, ctx: "SystemContext") -> list[dict[str, Any]]:
     """Layer 1: fast keyword match against anchor briefs. Same-turn detection.
 
     Catches obvious conflicts immediately without waiting for Observer async scan.
@@ -88,7 +89,7 @@ def _keyword_anchor_check(text: str, ctx: "SystemContext") -> List[Dict[str, Any
         return []
 
     text_lower = text.lower()
-    hits: List[Dict[str, Any]] = []
+    hits: list[dict[str, Any]] = []
     now = time.time()
     cooldown = getattr(ctx.config.anchor_guardian, "cooldown_sec", 3600.0)
     recently_warned = getattr(ctx, "recently_warned", {})
@@ -123,7 +124,7 @@ async def scan_open_loops(
     threshold: float = 0.75,
     cooldown_sec: float = 7200.0,
     max_results: int = 5,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Phase 11.E: Semantic scan for pending-outcome anchors (open loops).
 
     Reuses Observer Step 1 embedding — zero extra ONNX calls.
@@ -141,7 +142,7 @@ async def scan_open_loops(
         return []
 
     now = time.time()
-    hits: List[Dict[str, Any]] = []
+    hits: list[dict[str, Any]] = []
     recently_looped = getattr(ctx, "recently_looped", {})
 
     for anchor in ctx.anchor_index.anchors.values():
@@ -179,7 +180,7 @@ def _keyword_open_loop(
     text: str,
     ctx: "SystemContext",
     cooldown_sec: float = 7200.0,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Layer 1: fast keyword match for pending-outcome anchors (open loops).
 
     Same-turn detection without waiting for Observer async scan.
@@ -190,7 +191,7 @@ def _keyword_open_loop(
         return []
 
     text_lower = text.lower()
-    hits: List[Dict[str, Any]] = []
+    hits: list[dict[str, Any]] = []
     now = time.time()
     recently_looped = getattr(ctx, "recently_looped", {})
     cooldown = cooldown_sec
@@ -219,14 +220,14 @@ def _keyword_open_loop(
 
 
 def _merge_warnings(
-    layer1: List[Dict[str, Any]],
-    layer2: List[Dict[str, Any]],
-) -> List[Dict[str, Any]]:
+    layer1: list[dict[str, Any]],
+    layer2: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     """Merge Layer 1 (keyword) and Layer 2 (semantic) warnings, dedup by anchor_id.
 
     Layer 2 entry wins if same anchor_id appears in both (has similarity score).
     """
-    merged: Dict[str, Dict[str, Any]] = {}
+    merged: dict[str, dict[str, Any]] = {}
     for w in layer1:
         merged[w["anchor_id"]] = w
     for w in layer2:

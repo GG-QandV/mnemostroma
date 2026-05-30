@@ -9,9 +9,9 @@ import pytest
 from mnemostroma.integration.mcp_server import list_tools
 
 EXPECTED_TOOLS = {
-    # 🧠 Воспоминание (8)
+    # 🧠 Воспоминание (7)
     "ctx_full", "ctx_anchors", "ctx_precision", "ctx_bridge",
-    "content_search", "content_get", "content_raw", "content_history",
+    "content_search", "content_raw", "content_history",
     # 🔍 Навигация (4)
     "ctx_semantic", "ctx_get", "ctx_search", "ctx_recent",
 }

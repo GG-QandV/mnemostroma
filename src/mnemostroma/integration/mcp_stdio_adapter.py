@@ -14,7 +14,7 @@ import stat
 import sys
 from datetime import date
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger("mnemostroma.mcp_adapter")
 
@@ -191,7 +191,7 @@ async def _ipc_call(tool: str, args: dict) -> Any:
         if "error" in response:
             raise RuntimeError(response["error"])
         return response.get("result")
-    except asyncio.TimeoutError:
+    except TimeoutError:
         raise ConnectionError("Mnemostroma daemon did not respond within 10s")
     finally:
         writer.close()
@@ -211,7 +211,7 @@ def _err(req_id: Any, code: int, message: str) -> dict:
     return {"jsonrpc": "2.0", "id": req_id, "error": {"code": code, "message": message}}
 
 
-async def _handle(req: dict) -> Optional[dict]:
+async def _handle(req: dict) -> dict | None:
     method = req.get("method", "")
     rid    = req.get("id")          # None for notifications
     params = req.get("params") or {}

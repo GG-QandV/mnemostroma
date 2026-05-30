@@ -2,10 +2,11 @@
 import asyncio
 import ctypes
 import gc
-import time
 import logging
-from typing import Any, Optional, List
+import time
 from pathlib import Path
+from typing import Any
+
 from ..memory.scoring import calculate_score
 
 _CONS_BUILD_TAG_ = ""  # consolidation build tag

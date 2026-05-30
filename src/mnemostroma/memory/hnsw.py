@@ -6,9 +6,10 @@ API is drop-in compatible with the former HNSWIndex wrapper.
 """
 import math
 import time
-import numpy as np
 from pathlib import Path
-from typing import List, Tuple, Any
+from typing import Any
+
+import numpy as np
 
 
 def time_decay(age_days: float, half_life: float) -> float:
@@ -42,13 +43,13 @@ class MatrixSearch:
         self.dim = dim
         self._max_elements = max_elements
         self._vectors: np.ndarray = np.empty((0, dim), dtype=np.float32)
-        self._labels: List[int] = []
+        self._labels: list[int] = []
 
     # ------------------------------------------------------------------
     # Write
     # ------------------------------------------------------------------
 
-    def add_items(self, vectors: List[np.ndarray], ids: List[int]) -> None:
+    def add_items(self, vectors: list[np.ndarray], ids: list[int]) -> None:
         """Append normalised vectors and their integer labels."""
         vecs = np.array(vectors, dtype=np.float32).reshape(-1, self.dim)
         norms = np.linalg.norm(vecs, axis=1, keepdims=True)
@@ -69,7 +70,7 @@ class MatrixSearch:
         half_life_days: float = 30.0,
         exempt_importance: tuple = ("critical", "principle"),
         label_meta: dict | None = None,
-    ) -> Tuple[List[int], List[float]]:
+    ) -> tuple[list[int], list[float]]:
         """Return (labels, distances) for the k nearest neighbours.
 
         distances are cosine distances: 0 = identical, 2 = opposite.

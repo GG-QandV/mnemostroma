@@ -14,36 +14,42 @@ from __future__ import annotations
 import argparse
 import asyncio
 import base64
-import os
-import sys
 import hashlib
 import inspect
 import json
 import logging
+import os
 import secrets
+import sys
 import threading
 import time
 import webbrowser
+from collections.abc import AsyncGenerator, AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, AsyncGenerator, AsyncIterator, Callable, Protocol
+from typing import Any, Protocol
 
 import httpx
 import uvicorn
-from starlette.applications import Starlette
-from starlette.requests import Request
-from starlette.responses import JSONResponse, RedirectResponse, Response, StreamingResponse
-from starlette.routing import Route
-from starlette.middleware import Middleware
-from starlette.middleware.cors import CORSMiddleware
-
 from mcp.server import Server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
-from mcp.types import Tool, TextContent
+from mcp.types import TextContent, Tool
+from starlette.applications import Starlette
+from starlette.middleware import Middleware
+from starlette.middleware.cors import CORSMiddleware
+from starlette.requests import Request
+from starlette.responses import (
+    JSONResponse,
+    RedirectResponse,
+    Response,
+    StreamingResponse,
+)
+from starlette.routing import Route
 
 from mnemostroma.integration.tunnel.token import get_or_create_tunnel_token
+
 from .common import TOKEN, safe_ipc_call
 from .mcp_stdio_adapter import _TOOLS
 

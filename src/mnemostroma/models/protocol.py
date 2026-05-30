@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
 """Embedding engine protocol — the contract all engines must follow."""
 from typing import Protocol, runtime_checkable
+
 import numpy as np
 
 

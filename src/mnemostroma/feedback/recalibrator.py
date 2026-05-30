@@ -12,10 +12,11 @@ session utility.
 Triggered by ConsolidationWorker every N hours (config.feedback.recalibrate_every_hours).
 Expected latency: <5ms for 200 sessions.
 """
-import time
 import logging
+from typing import Any
+
 import numpy as np
-from typing import Any, Dict, List, Optional, Tuple
+
 
 logger = logging.getLogger("mnemostroma.feedback.recalibrator")
 
@@ -45,7 +46,7 @@ def _compute_pearson(x: np.ndarray, y: np.ndarray) -> float:
     return float(((x - mx) * (y - my)).mean() / (sx * sy))
 
 
-def _project_weights(alpha: float, beta: float, gamma: float) -> Tuple[float, float, float]:
+def _project_weights(alpha: float, beta: float, gamma: float) -> tuple[float, float, float]:
     """Project weights so that they form a valid probability simplex.
 
     Clamps each weight to [_WEIGHT_MIN, _WEIGHT_MAX] then renormalises
@@ -77,7 +78,7 @@ async def run_recalibration(ctx: Any) -> None:
         return
 
     # Gather (initial_score, actual_use) pairs from RAM
-    sessions: List[Any] = list(ctx.ram_index.values())
+    sessions: list[Any] = list(ctx.ram_index.values())
     if len(sessions) < 10:
         logger.debug("recalibrator: too few sessions (%d), skipping", len(sessions))
         return

@@ -1,18 +1,18 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
 """Administrative tools for Mnemostroma system monitoring and maintenance."""
-import time
-import os
 import json
 import logging
-from typing import Dict, Any, List, Optional
+import os
+import time
 from pathlib import Path
+from typing import Any
 
 from ..core import SystemContext
 from ..memory.growth_forecast import GrowthForecast
 
 logger = logging.getLogger("mnemostroma.tools.admin")
 
-async def ctx_status(ctx: SystemContext) -> Dict[str, Any]:
+async def ctx_status(ctx: SystemContext) -> dict[str, Any]:
     """Retrieve current system status and resource metrics.
     
     Returns:
@@ -60,7 +60,7 @@ async def ctx_sync(ctx: SystemContext) -> bool:
         logger.error(f"Sync failed: {e}")
         return False
 
-async def ctx_dump(ctx: SystemContext, target_dir: Optional[str] = None) -> str:
+async def ctx_dump(ctx: SystemContext, target_dir: str | None = None) -> str:
     """Dump the entire Hot/Warm layer state to a JSON file for debugging.
     
     Args:
@@ -139,13 +139,13 @@ async def ctx_load(session_id: str, ctx: SystemContext):
     return sb
 
 
-async def ctx_growth(ctx: SystemContext) -> Dict[str, Any]:
+async def ctx_growth(ctx: SystemContext) -> dict[str, Any]:
     """Analyse session growth rate and project storage capacity.
 
     Queries SQLite for historical counts and measures file size on disk.
     Latency: <10ms (aggregate queries on small metadata table).
     """
-    result: Dict[str, Any] = {
+    result: dict[str, Any] = {
         "sessions_total": 0,
         "sessions_today": 0,
         "sessions_week": 0,
@@ -258,7 +258,7 @@ async def ctx_growth(ctx: SystemContext) -> Dict[str, Any]:
     return result
 
 
-async def ctx_pulse(ctx: SystemContext) -> Dict[str, Any]:
+async def ctx_pulse(ctx: SystemContext) -> dict[str, Any]:
     """Minimal system heartbeat — pure RAM, <0.01ms.
 
     Returns session count, process RSS, and RAM usage percentage
@@ -289,7 +289,7 @@ async def ctx_pulse(ctx: SystemContext) -> Dict[str, Any]:
     }
 
 
-async def ctx_bridge(ctx: SystemContext) -> Dict[str, Any]:
+async def ctx_bridge(ctx: SystemContext) -> dict[str, Any]:
     """Generate a structured handoff packet for the next agent.
 
     Unlike ctx_inject (which builds XML for the current agent's prompt),
@@ -304,18 +304,18 @@ async def ctx_bridge(ctx: SystemContext) -> Dict[str, Any]:
 
     intent_summary = sessions[0].brief if sessions else "No active sessions."
 
-    active_variables: List[str] = [
+    active_variables: list[str] = [
         f"[{sb.importance}] {sb.brief}"
         for sb in sessions
         if sb.importance in ("critical", "principle")
     ][:9]
 
-    last_decisions: List[str] = [
+    last_decisions: list[str] = [
         sb.brief for sb in sessions
         if sb.importance in ("critical", "important")
     ][:5]
 
-    open_issues: List[str] = [
+    open_issues: list[str] = [
         sb.brief for sb in sessions if sb.conflict_flag
     ][:5]
 

@@ -53,7 +53,7 @@ class _IPCConn:
                 writer.write((payload + "\n").encode())
                 await writer.drain()
                 line = await asyncio.wait_for(reader.readline(), timeout=10.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # Request was sent but response never arrived — protocol is desynced.
                 # Must close so the pool does not reuse this connection.
                 await self.close()

@@ -1,10 +1,12 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
 from __future__ import annotations
-from typing import Protocol, TYPE_CHECKING
+
+from typing import TYPE_CHECKING, Protocol
+
 from mnemostroma.memory.session_index import SessionBrief
 
 if TYPE_CHECKING:
-    from mnemostroma.domain.types import Result, NotFoundError, StorageError
+    from mnemostroma.domain.types import NotFoundError, Result, StorageError
 
 class SessionPort(Protocol):
     async def save(self, s: SessionBrief) -> Result[None, StorageError]: ...

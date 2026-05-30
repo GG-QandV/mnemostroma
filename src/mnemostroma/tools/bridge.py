@@ -4,17 +4,17 @@
 ctx_sync():  Force-flush RAM→SQLite, WAL checkpoint, return stats.
 ctx_load():  Lazy-load a specific session from cold SQLite into RAM.
 """
-import asyncio
 import logging
+from typing import Any
+
 import numpy as np
-from typing import Any, Dict, Optional
 
 from ..core import SystemContext
 
 logger = logging.getLogger("mnemostroma.bridge")
 
 
-async def ctx_sync(ctx: SystemContext, checkpoint_mode: str = "PASSIVE") -> Dict[str, Any]:
+async def ctx_sync(ctx: SystemContext, checkpoint_mode: str = "PASSIVE") -> dict[str, Any]:
     """Force immediate flush of all pending RAM changes to SQLite.
 
     Steps:
@@ -35,7 +35,7 @@ async def ctx_sync(ctx: SystemContext, checkpoint_mode: str = "PASSIVE") -> Dict
     return await ctx.persistence.sync(checkpoint_mode=checkpoint_mode)
 
 
-async def ctx_load(session_id: str, ctx: SystemContext) -> Optional[Any]:
+async def ctx_load(session_id: str, ctx: SystemContext) -> Any | None:
     """Force-load a specific session from SQLite cold storage into RAM.
 
     Steps:

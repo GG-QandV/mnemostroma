@@ -1,9 +1,10 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
 """Hybrid NER: DistilBERT + regex patterns for robust entity extraction."""
-import re
-import logging
 import asyncio
-from typing import List, Dict, Any
+import logging
+import re
+from typing import Any
+
 from .bert_ner import BertNER
 
 logger = logging.getLogger(__name__)
@@ -83,7 +84,7 @@ class HybridNER:
 
     async def extract_entities(
         self, text: str, threshold: float = 0.5
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Extract entities using both model and regex.
 
         Args:
@@ -93,7 +94,7 @@ class HybridNER:
         Returns:
             List of entity dicts with type, value, score, start, end.
         """
-        entities: List[Dict[str, Any]] = []
+        entities: list[dict[str, Any]] = []
 
         # 1. Model-based NER (PER, ORG, LOC, DATE)
         # Adheres to Rule 2: ONNX inference runs in executor
@@ -163,7 +164,7 @@ class HybridNER:
         entities.sort(key=lambda e: e["start"])
         return entities
 
-    def _overlaps(self, entities: List[Dict[str, Any]], start: int, end: int, candidate_type: str) -> bool:
+    def _overlaps(self, entities: list[dict[str, Any]], start: int, end: int, candidate_type: str) -> bool:
         """Check if span overlaps with existing entities considering priority."""
         for e in entities:
             if start < e["end"] and end > e["start"]:

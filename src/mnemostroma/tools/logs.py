@@ -12,7 +12,6 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
-
 # ─────────────────────────────────────────────────────────────
 # Data structures
 # ─────────────────────────────────────────────────────────────
@@ -360,14 +359,14 @@ def format_report(report: AnalysisReport) -> str:
         lines.append(f"  Avg components: R={ss['avg_R']}, T={ss['avg_T']}, I={ss['avg_I']}")
 
     # Conflicts & Evictions
-    lines.append(f"\n── TUNER & DISSOLVER ──")
+    lines.append("\n── TUNER & DISSOLVER ──")
     lines.append(f"  Conflicts detected: {report.conflicts_detected}")
     lines.append(f"  Evictions: {report.evictions} ({report.eviction_reasons})")
     lines.append(f"  RAM peak: {report.ram_peak_mb}MB")
 
     # Feedback
     if report.feedback_stats.get("total", 0) > 0:
-        lines.append(f"\n── FEEDBACK ──")
+        lines.append("\n── FEEDBACK ──")
         lines.append(f"  Total signals: {report.feedback_stats['total']}")
         lines.append(f"  Breakdown: {report.feedback_stats['signals']}")
 
@@ -398,7 +397,7 @@ def format_report(report: AnalysisReport) -> str:
             lines.append(f"  → {r}")
 
     if not report.errors and not report.warnings and not report.recommendations:
-        lines.append(f"\n✅ No issues found. System operating normally.")
+        lines.append("\n✅ No issues found. System operating normally.")
 
     lines.append("\n" + "=" * 60)
     return "\n".join(lines)

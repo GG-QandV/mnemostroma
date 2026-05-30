@@ -133,13 +133,16 @@ def test_tray_start_disabled_when_active(monkeypatch):
 def test_tray_restart_kills_then_starts(monkeypatch):
     mock_kill = MagicMock()
     monkeypatch.setattr("mnemostroma.tools.tray_pyqt.force_kill_tunnel", mock_kill)
+    mock_orphan = MagicMock(return_value=[])
+    monkeypatch.setattr("mnemostroma.tools.tray_pyqt.kill_orphan_tunnel_processes", mock_orphan)
+    mock_port = MagicMock(return_value=[])
+    monkeypatch.setattr("mnemostroma.tools.tray_pyqt._kill_port_occupants", mock_port)
 
     mock_popen = MagicMock()
     monkeypatch.setattr("subprocess.Popen", mock_popen)
 
     app = MagicMock()
     app.tray_icon = MagicMock()
-    app._run_tunnel_cmd = lambda cmd: DaemonTrayApp._run_tunnel_cmd(app, cmd)
 
     # Call restart
     DaemonTrayApp._on_tunnel_restart(app)
@@ -149,6 +152,8 @@ def test_tray_restart_kills_then_starts(monkeypatch):
     time.sleep(1.8)
 
     mock_kill.assert_called_once()
+    mock_orphan.assert_called_once()
+    mock_port.assert_called_once_with(8769)
     mock_popen.assert_called_once()
 
 
@@ -187,8 +192,10 @@ def test_popen_detached_flags_win(monkeypatch):
     app = MagicMock()
     app.tray_icon = MagicMock()
 
+    from mnemostroma.tools.tray_pyqt import _run_headless
+
     cmd = ["python", "-m", "mnemostroma", "tunnel", "start"]
-    DaemonTrayApp._run_tunnel_cmd(app, cmd)
+    _run_headless(cmd)
 
     mock_popen.assert_called_once()
     kwargs = mock_popen.call_args[1]

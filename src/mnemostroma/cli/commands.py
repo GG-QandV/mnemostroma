@@ -1,16 +1,17 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
-import asyncio
-import signal
-import logging
-import sys
-import subprocess
-import json
 import argparse
+import asyncio
+import json
+import logging
 import os
-import psutil
+import signal
+import subprocess
+import sys
 import time as _time
 from datetime import datetime
 from pathlib import Path
+
+import psutil
 
 logger = logging.getLogger("mnemostroma")
 
@@ -28,9 +29,8 @@ EXT_SRC = _EXT_SRC_DIST if _EXT_SRC_DIST.exists() else _EXT_SRC_BASE
 
 def _open_watch_terminal() -> None:
     """Open mnemostroma watch in new terminal (platform-specific)."""
-    import os
-    import sys
     import shlex
+    import sys
 
     # Construct command using current python interpreter to avoid PATH/venv issues
     python_bin = sys.executable
@@ -194,7 +194,6 @@ async def _run_daemon(
     db_path: str = "mnemostroma.db",
     model_dir: str = "models",
 ):
-    from mnemostroma.conductor import Conductor
 
     root = logging.getLogger()
     root.setLevel(logging.INFO)
@@ -264,7 +263,8 @@ def _macos_preflight() -> None:
 
 def _windows_preflight() -> None:
     """Check Windows 10/11 specific requirements and warn about known issues."""
-    import shutil, subprocess
+    import shutil
+    import subprocess
 
     if sys.version_info < (3, 12):
         print("ERROR: Python 3.12+ required.")
@@ -295,7 +295,7 @@ def _check_environment_ready(config_path: Path, manifest_path: Path, model_dir: 
         sys.exit(1)
     
     try:
-        with open(config_path, "r", encoding="utf-8") as f:
+        with open(config_path, encoding="utf-8") as f:
             json.load(f)
     except Exception as e:
         print(f"ERROR: Invalid JSON in config: {config_path}")
@@ -311,7 +311,7 @@ def _check_environment_ready(config_path: Path, manifest_path: Path, model_dir: 
         sys.exit(1)
 
 def _load_manifest(manifest_path: Path) -> dict:
-    with open(manifest_path, "r", encoding="utf-8") as f:
+    with open(manifest_path, encoding="utf-8") as f:
         return json.load(f)
 
 def _ensure_manifest(force: bool = False) -> Path:
@@ -354,7 +354,7 @@ def _install_models(manifest_path: Path, force: bool = False):
         sys.exit(1)
 
     total_mb = sum(b.get("size_mb", 0) for b in bundles.values())
-    print(f"\nMnemostroma model setup")
+    print("\nMnemostroma model setup")
     print(f"Models to download: {len(bundles)}  (~{total_mb} MB total)\n")
 
     if not _check_hf_token():
@@ -374,7 +374,7 @@ def _install_models(manifest_path: Path, force: bool = False):
 
         key_file = local_dir / files[0]
         if key_file.exists() and not force:
-            print(f"    ✓ already installed, skipping\n")
+            print("    ✓ already installed, skipping\n")
             continue
 
         local_dir.mkdir(parents=True, exist_ok=True)
@@ -435,7 +435,6 @@ def _write_claude_wrapper(wrapper_path: Path, ca_cert: Path) -> None:
 def _backup_db(db_path: Path) -> Path:
     """Copy db_path to a timestamped backup. Returns backup path."""
     import shutil
-    from datetime import datetime
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     backup = db_path.with_name(f"{db_path.stem}_backup_{ts}{db_path.suffix}")
     shutil.copy2(db_path, backup)
@@ -527,8 +526,8 @@ def _cmd_setup() -> None:
     # Detect extras
     has_tray = False
     try:
-        import PyQt6
         import PIL
+        import PyQt6
         has_tray = True
     except ImportError:
         pass
@@ -544,7 +543,7 @@ def _cmd_setup() -> None:
     print("\n" + "─" * 40)
     print("Mnemostroma Post-Setup Summary")
     print("─" * 40)
-    print(f"  Core Runtime:   READY")
+    print("  Core Runtime:   READY")
     print(f"  Database:       {db_path}")
     print(f"  Config:         {config_dest}")
     print(f"  SSE Extra:      {'[INSTALLED]' if has_sse else '[NOT FOUND]'}")
@@ -588,8 +587,8 @@ def _cmd_setup() -> None:
     if EXT_SRC.exists() and EXT_SRC.is_dir() and any(EXT_SRC.iterdir()) and not ext_dst.exists():
         try:
             shutil.copytree(EXT_SRC, ext_dst, dirs_exist_ok=True)
-            print(f"\n  🧩 Browser extension ready:")
-            print(f"     Chrome/Edge → Extensions → Load unpacked →")
+            print("\n  🧩 Browser extension ready:")
+            print("     Chrome/Edge → Extensions → Load unpacked →")
             print(f"     {ext_dst}\n")
         except Exception as e:
             print(f"  ⚠ Failed to copy browser extension: {e}")
@@ -616,6 +615,7 @@ def _cmd_install_extension() -> None:
     print(f"→ Chrome: Extensions → Developer mode → Load unpacked → {ext_dst}")
 
 from mnemostroma.version import __version__
+
 _BANNER = f"""
   ███╗   ███╗███╗  ██╗███████╗███╗   ███╗ ██████╗
   ████╗ ████║████╗ ██║██╔════╝████╗ ████║██╔═══██╗
@@ -698,7 +698,7 @@ def _cmd_cleanup(args: list) -> bool:
     return survivor is not None
 
 def _cmd_on() -> None:
-    import subprocess, os
+    import subprocess
     
     # Step 1: Automated cleanup
     # We want to know if processes were killed even in "silent" mode
@@ -732,11 +732,12 @@ def _cmd_on() -> None:
     if proc.poll() is None:
         print(f"  ⚡ Daemon running   PID {proc.pid}")
     else:
-        print(f"  ✗ Daemon exited early")
+        print("  ✗ Daemon exited early")
         sys.exit(1)
 
 def _cmd_off() -> None:
-    import os, time as _time
+    import os
+    import time as _time
     pid = _read_pid()
     if pid is None:
         print("Daemon not running")
@@ -760,7 +761,6 @@ def _cmd_off() -> None:
     print("killed")
 
 def _print_status(pid_path: Path = _PID_FILE) -> None:
-    import os, time as _time
     print("\nMnemostroma status\n")
     
     status = get_daemon_status(pid_path)
@@ -827,7 +827,7 @@ def _cmd_config_set(key: str, value_str: str) -> None:
         return
 
     try:
-        with open(_CONFIG_PATH, "r", encoding="utf-8") as f:
+        with open(_CONFIG_PATH, encoding="utf-8") as f:
             data = json.load(f)
         
         # Try to parse value as bool, int, float, otherwise keep as string
@@ -910,7 +910,7 @@ def _cmd_db_dump_time(args: list) -> None:
         return
 
     try:
-        with open(config_path, "r", encoding="utf-8") as f:
+        with open(config_path, encoding="utf-8") as f:
             data = json.load(f)
         
         if "storage" not in data:
@@ -1075,12 +1075,16 @@ def _cmd_tunnel(args: list) -> None:
     """
     import shutil
     import time
+
     from mnemostroma.integration.tunnel.manager import (
         TUNNEL_URLS_DIR,
         _load_tunnel_config,
         _print_connection_guide,
     )
-    from mnemostroma.integration.tunnel.token import get_or_create_tunnel_token, get_tunnel_token
+    from mnemostroma.integration.tunnel.token import (
+        get_or_create_tunnel_token,
+        get_tunnel_token,
+    )
 
     config = _load_tunnel_config()
     subdomain = config.get("subdomain")

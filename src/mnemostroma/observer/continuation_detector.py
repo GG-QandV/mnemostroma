@@ -16,7 +16,7 @@ Pipeline integration:
 """
 import logging
 import time
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -40,7 +40,7 @@ def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.dot(a, b) / (na * nb))
 
 
-def _tag_overlap(tags_a: List[str], tags_b: List[str]) -> float:
+def _tag_overlap(tags_a: list[str], tags_b: list[str]) -> float:
     """Jaccard overlap between two tag lists, clamped to [0, 1]."""
     if not tags_a or not tags_b:
         return 0.0
@@ -58,7 +58,7 @@ def _recency_score(created_at: int, max_age_days: int) -> float:
     return 1.0 - (age_days / max_age_days)
 
 
-def _chain_depth(sid: str, ctx: "SystemContext", visited: Optional[set] = None) -> int:
+def _chain_depth(sid: str, ctx: "SystemContext", visited: set | None = None) -> int:
     """Trace continuation chain depth via anchor_index, with circular-chain protection."""
     if visited is None:
         visited = set()
@@ -76,13 +76,13 @@ def _chain_depth(sid: str, ctx: "SystemContext", visited: Optional[set] = None) 
 
 def detect_continuation(
     current_embedding: np.ndarray,
-    current_tags: List[str],
+    current_tags: list[str],
     ctx: "SystemContext",
     max_lookback: int = 10,
     continuation_score_threshold: float = 0.65,
     related_cosine_threshold: float = 0.45,
     max_age_days: int = 7,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Full B.2 continuation detection.
 
     Steps:
@@ -111,7 +111,7 @@ def detect_continuation(
             best_cosine      — raw cosine of winner (0.0 if new)
             candidates_count — how many candidates were evaluated
     """
-    null_result: Dict[str, Any] = {
+    null_result: dict[str, Any] = {
         "state": "new",
         "continuation_of": None,
         "continuation_depth": 0,
@@ -136,7 +136,7 @@ def detect_continuation(
     now = time.time()
     best_score = 0.0
     best_cosine = 0.0
-    best_sid: Optional[str] = None
+    best_sid: str | None = None
     evaluated = 0
 
     for label, dist in zip(labels, distances):

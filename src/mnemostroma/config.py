@@ -2,7 +2,8 @@
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, List, Optional, Dict
+from typing import Any
+
 
 @dataclass(frozen=True)
 class ResourcesConfig:
@@ -154,19 +155,19 @@ class ExperienceConfig:
 @dataclass(frozen=True)
 class ModelDefinition:
     path: str
-    query_prefix: Optional[str] = None
-    tokenizer_path: Optional[str] = None
-    dim: Optional[int] = None
-    max_length: Optional[int] = None
-    pooling: Optional[str] = None
+    query_prefix: str | None = None
+    tokenizer_path: str | None = None
+    dim: int | None = None
+    max_length: int | None = None
+    pooling: str | None = None
 
 @dataclass(frozen=True)
 class ModelManifest:
-    active_models: Dict[str, ModelDefinition]
+    active_models: dict[str, ModelDefinition]
 
     @classmethod
     def load(cls, path: str | Path) -> 'ModelManifest':
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, encoding='utf-8') as f:
             data = json.load(f)
         
         models = {}
@@ -179,7 +180,7 @@ class ModelManifest:
 class CalibrationConfig:
     enabled: bool
     max_sessions: int
-    source: Optional[str]
+    source: str | None
     save_history: bool
     min_onboarding_sessions: int = 10
     continuation_threshold: float = 0.82  # updated by CalibrationCollector
@@ -196,15 +197,15 @@ class SecurityConfig:
 @dataclass(frozen=True)
 class CloudSyncConfig:
     enabled: bool
-    endpoint: Optional[str]
-    layers: List[str]
+    endpoint: str | None
+    layers: list[str]
     interval_sec: int
     encrypted: bool
-    device_id: Optional[str]
+    device_id: str | None
 
 @dataclass(frozen=True)
 class FeedbackConfig:
-    weights: Dict[str, float]
+    weights: dict[str, float]
     ema_alpha: float
     ignore_window_sec: float
     revisit_threshold: int
@@ -224,14 +225,14 @@ class TemporalRetrievalConfig:
     ctx_recent_enabled: bool = True
     time_weighted_search: bool = False
     half_life_days: float = 30.0
-    time_weight_exempt_importance: List[str] = field(default_factory=lambda: ["critical", "principle"])
+    time_weight_exempt_importance: list[str] = field(default_factory=lambda: ["critical", "principle"])
 
 @dataclass(frozen=True)
 class AnchorGuardianConfig:
     enabled: bool = True
     threshold: float = 0.72
     cooldown_sec: float = 3600.0
-    guardian_types: List[str] = field(default_factory=lambda: ["principle", "constraint", "critical", "decision"])
+    guardian_types: list[str] = field(default_factory=lambda: ["principle", "constraint", "critical", "decision"])
 
 @dataclass(frozen=True)
 class AssociativeSurfacingConfig:
@@ -322,9 +323,9 @@ class Config:
     prompt: PromptConfig = field(default_factory=PromptConfig)
     watchdog: WatchdogConfig = field(default_factory=WatchdogConfig)
     ui: UiConfig = field(default_factory=UiConfig)
-    manifest: Optional[ModelManifest] = None
+    manifest: ModelManifest | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert config to dictionary for JSON serialization."""
         import dataclasses
         return dataclasses.asdict(self)
@@ -339,7 +340,7 @@ class Config:
         Returns:
             Config instance populated with data.
         """
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, encoding='utf-8') as f:
             data = json.load(f)
         
         def filter_keys(cls, data):

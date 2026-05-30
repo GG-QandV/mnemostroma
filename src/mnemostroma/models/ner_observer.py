@@ -2,7 +2,7 @@
 """NER extraction using Standard BERT/DistilBERT ONNX (No Torch)."""
 import gc
 import logging
-from typing import List, Dict, Any
+from typing import Any
 
 from .hybrid_ner import HybridNER
 
@@ -33,7 +33,7 @@ class NERObserver:
             logger.error(f"Failed to load HybridNER: {e}")
             raise
 
-    async def extract_entities(self, text: str, threshold: float = 0.5) -> List[Dict[str, Any]]:
+    async def extract_entities(self, text: str, threshold: float = 0.5) -> list[dict[str, Any]]:
         """Extract entities from text using HybridNER.
         
         Interface is async and uses executor for CPU-bound parts.

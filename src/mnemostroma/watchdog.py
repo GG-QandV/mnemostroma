@@ -6,7 +6,6 @@ Separated into 2 phases:
 2. Active Phase: Check every 15s for stagnation (120s threshold).
 """
 import asyncio
-import json
 import logging
 import os
 import signal

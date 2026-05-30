@@ -11,7 +11,7 @@ import sys
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-from mnemostroma.integration.tunnel.state import get_tunnel_url, get_tunnel_token
+from mnemostroma.integration.tunnel.state import get_tunnel_token, get_tunnel_url
 from mnemostroma.integration.tunnel.ui_meta import get_meta
 
 logger = logging.getLogger("mnemostroma.tunnel.observe")

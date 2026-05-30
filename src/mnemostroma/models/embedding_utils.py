@@ -4,8 +4,9 @@
 Engine-agnostic: works with any EmbeddingEngine implementation.
 """
 import logging
+from typing import TYPE_CHECKING
+
 import numpy as np
-from typing import List, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .protocol import EmbeddingEngine
@@ -13,7 +14,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def chunk_content(text: str, content_type: str) -> List[str]:
+def chunk_content(text: str, content_type: str) -> list[str]:
     """Split content into chunks based on type.
     
     Args:
@@ -30,7 +31,7 @@ def chunk_content(text: str, content_type: str) -> List[str]:
 
 def encode_chunks(
     engine: "EmbeddingEngine",
-    chunks: List[str],
+    chunks: list[str],
     decay: float = 0.2,
     min_weight: float = 0.2,
 ) -> np.ndarray:
@@ -74,7 +75,7 @@ def encode_chunks(
 
 async def aencode_chunks(
     engine: "EmbeddingEngine",
-    chunks: List[str],
+    chunks: list[str],
     decay: float = 0.2,
     min_weight: float = 0.2,
 ) -> np.ndarray:

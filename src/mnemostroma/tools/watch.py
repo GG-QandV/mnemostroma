@@ -1,12 +1,13 @@
+import asyncio
 import curses
 import json
 import sqlite3
 import time
-import asyncio
 from collections import Counter, defaultdict
 from pathlib import Path
-from typing import Optional, List, Any
+
 from mnemostroma.ipc_pool import IPCPool
+
 
 def _fmt_ts(ts_ms: int) -> str:
     return time.strftime("%H:%M:%S", time.localtime(ts_ms / 1000))
@@ -17,7 +18,7 @@ def _ago(ts_ms: int) -> str:
     if secs < 3600: return f"{secs//60}m ago"
     return f"{secs//3600}h ago"
 
-def _connect(db_path: Path) -> Optional[sqlite3.Connection]:
+def _connect(db_path: Path) -> sqlite3.Connection | None:
     if not db_path.exists():
         return None
     try:
@@ -49,7 +50,7 @@ def _fetch(conn: sqlite3.Connection, since_ms: int) -> list:
     except Exception:
         return []
 
-def _fetch_health(conn: sqlite3.Connection) -> Optional[dict]:
+def _fetch_health(conn: sqlite3.Connection) -> dict | None:
     try:
         row = conn.execute(
             "SELECT data FROM onnx_logs WHERE component='conductor.health' "
@@ -75,7 +76,7 @@ class WatchUI:
         curses.init_pair(5, curses.COLOR_BLUE, -1)   # Idle
         curses.init_pair(6, 8, -1)                   # Dim (if supported)
 
-    def draw(self, logs: list, health: Optional[dict], db_path: Path, interval: int, window_sec: int, is_history: bool = False):
+    def draw(self, logs: list, health: dict | None, db_path: Path, interval: int, window_sec: int, is_history: bool = False):
         self.stdscr.erase()
         h, w = self.stdscr.getmaxyx()
         

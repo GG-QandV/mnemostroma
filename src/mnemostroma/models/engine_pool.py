@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
 """Engine pool — deduplicates embedding engines by model path."""
 import logging
-from typing import Dict, Any
+from typing import Any
+
 from .onnx_engine import ONNXEmbeddingEngine
 from .protocol import EmbeddingEngine
 
@@ -19,7 +20,7 @@ class EnginePool:
     """
     
     def __init__(self, inter_threads: int = 2, intra_threads: int = 2):
-        self._engines: Dict[str, EmbeddingEngine] = {}
+        self._engines: dict[str, EmbeddingEngine] = {}
         self._inter_threads = inter_threads
         self._intra_threads = intra_threads
     

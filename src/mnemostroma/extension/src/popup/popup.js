@@ -179,34 +179,28 @@ function _tunnelShowState(state) {
 }
 
 async function observeFetch(path, options = {}) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), OBSERVE_TIMEOUT_MS);
-  try {
-    const res = await fetch(
-      `http://127.0.0.1:${OBSERVE_PORT_PRIMARY}${path}`,
-      { ...options, signal: controller.signal }
-    );
-    return res;
-  } catch (e) {
-    if (e.name === "AbortError") {
-      throw new Error("Observe API timeout");
-    }
-    const legacyController = new AbortController();
-    const legacyTimer = setTimeout(() => legacyController.abort(), OBSERVE_TIMEOUT_MS);
+  let lastError = null;
+  const ports = [OBSERVE_PORT_PRIMARY, OBSERVE_PORT_LEGACY];
+  for (const port of ports) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), OBSERVE_TIMEOUT_MS);
     try {
-      const res2 = await fetch(
-        `http://127.0.0.1:${OBSERVE_PORT_LEGACY}${path}`,
-        { ...options, signal: legacyController.signal }
+      const res = await fetch(
+        `http://127.0.0.1:${port}${path}`,
+        { ...options, signal: controller.signal }
       );
-      return res2;
-    } catch (err) {
-      throw new Error("Observe API unreachable on both ports");
-    } finally {
-      clearTimeout(legacyTimer);
+      clearTimeout(timer);
+      if (!res.ok) {
+        lastError = new Error(`HTTP ${res.status} from port ${port}`);
+        continue;
+      }
+      return res;
+    } catch (e) {
+      clearTimeout(timer);
+      lastError = e;
     }
-  } finally {
-    clearTimeout(timer);
   }
+  throw lastError || new Error("observeFetch: all ports failed");
 }
 
 async function _fetchTunnelStatus() {
@@ -318,25 +312,48 @@ async function _refreshTunnel() {
   }
 }
 
-document.getElementById("btn-start-tunnel")?.addEventListener("click", async () => {
-  try {
-    await observeFetch("/tunnel/start", { method: "POST" });
-  } catch { /* ignore — polling покажет результат */ }
-  _tunnelShowState("starting");
-  if (!_tunnelPolling) _tunnelPolling = setInterval(_refreshTunnel, TUNNEL_POLL_MS);
-});
+// ─── Tunnel error UI (Fix E) ────────────────────────────────────────────────
 
-document.getElementById("btn-stop-tunnel")?.addEventListener("click", async () => {
+function _showTunnelError(message) {
+  const el = document.getElementById("tunnel-error");
+  if (!el) return;
+  el.textContent = message;
+  el.classList.remove("hidden");
+  clearTimeout(el._hideTimer);
+  el._hideTimer = setTimeout(() => el.classList.add("hidden"), 6000);
+}
+
+async function _tunnelAction(action) {
+  const btn = document.getElementById(`btn-${action}-tunnel`);
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = action === "start" ? "Starting…" : "Stopping…";
+  }
   try {
-    await observeFetch("/tunnel/stop", { method: "POST" });
-  } catch { /* ignore */ }
-  // При остановке сразу сбрасываем ободок в дефолт
-  const tunnelRing = document.getElementById('tunnel-ring');
-  if (tunnelRing) tunnelRing.className = 'tunnel-ring';
-  
-  _stopPolling();
-  _tunnelShowState("stopped");
-});
+    await observeFetch(`/tunnel/${action}`, { method: "POST" });
+    if (action === "start") {
+      _tunnelShowState("starting");
+      if (!_tunnelPolling) _tunnelPolling = setInterval(_refreshTunnel, TUNNEL_POLL_MS);
+    } else {
+      const tunnelRing = document.getElementById("tunnel-ring");
+      if (tunnelRing) tunnelRing.className = "tunnel-ring";
+      _stopPolling();
+      _tunnelShowState("stopped");
+    }
+  } catch (e) {
+    _showTunnelError(
+      action === "start" ? `Tunnel start failed: ${e.message}` : `Tunnel stop failed: ${e.message}`
+    );
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = action === "start" ? "▶ Start Tunnel" : "⏹";
+    }
+  }
+}
+
+document.getElementById("btn-start-tunnel")?.addEventListener("click", () => _tunnelAction("start"));
+document.getElementById("btn-stop-tunnel")?.addEventListener("click", () => _tunnelAction("stop"));
 
 window.addEventListener("unload", _stopPolling);
 

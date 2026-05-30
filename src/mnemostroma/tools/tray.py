@@ -12,7 +12,6 @@ Colour legend with smooth transitions:
 """
 import sqlite3
 import subprocess
-import sys
 import threading
 import time
 from pathlib import Path
@@ -21,8 +20,8 @@ try:
     import gi
     gi.require_version('Gtk', '3.0')
     gi.require_version('AppIndicator3', '0.1')
-    from gi.repository import Gtk, GLib
     from gi.repository import AppIndicator3 as appindicator
+    from gi.repository import GLib, Gtk
     HAS_APPINDICATOR = True
 except (ImportError, ValueError):
     HAS_APPINDICATOR = False
@@ -184,7 +183,7 @@ class DaemonTrayApp:
     def _restart_daemon(self, widget=None):
         """Restart Mnemostroma services in a cascade."""
         try:
-            from mnemostroma.tools.cleanup import stop_services, start_services
+            from mnemostroma.tools.cleanup import start_services, stop_services
             # Run cascade restart in a background thread to prevent UI lockup
             def run_restart():
                 try:

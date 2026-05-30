@@ -6,9 +6,8 @@ import re
 import shutil
 import subprocess
 import threading
-import time
 from pathlib import Path
-from typing import Optional, Any
+from typing import Any
 
 logger = logging.getLogger("mnemostroma.tunnel.providers.serveo")
 
@@ -17,12 +16,12 @@ DEFAULT_MCP_PORT = 8769
 _BACKOFF = [5, 15, 30, 60]  # reconnect delays in seconds
 
 
-def check_ssh_available() -> Optional[str]:
+def check_ssh_available() -> str | None:
     """Check if ssh binary is available."""
     return shutil.which("ssh")
 
 
-def build_ssh_cmd(port: int = DEFAULT_MCP_PORT, subdomain: Optional[str] = None) -> str:
+def build_ssh_cmd(port: int = DEFAULT_MCP_PORT, subdomain: str | None = None) -> str:
     """Build SSH command for Serveo tunnel."""
     remote = f"{subdomain}:80:localhost:{port}" if subdomain else f"80:localhost:{port}"
     return (
@@ -32,7 +31,7 @@ def build_ssh_cmd(port: int = DEFAULT_MCP_PORT, subdomain: Optional[str] = None)
     )
 
 
-def parse_serveo_url(line: str) -> Optional[str]:
+def parse_serveo_url(line: str) -> str | None:
     """Extract Serveo URL from SSH output."""
     if "console.serveo.net" in line:
         return None
@@ -43,7 +42,7 @@ def parse_serveo_url(line: str) -> Optional[str]:
 class ServeoModeResolver:
     """Determine Serveo mode: anonymous, keyed, or named."""
 
-    def __init__(self, port: int = DEFAULT_MCP_PORT, subdomain: Optional[str] = None):
+    def __init__(self, port: int = DEFAULT_MCP_PORT, subdomain: str | None = None):
         self.port = port
         self.subdomain = subdomain
 
@@ -135,21 +134,21 @@ def _load_saved_proc() -> Any:
 class ServeoTunnelManager:
     """Manages Serveo SSH tunnel with auto-reconnect."""
 
-    def __init__(self, port: int = DEFAULT_MCP_PORT, subdomain: Optional[str] = None):
+    def __init__(self, port: int = DEFAULT_MCP_PORT, subdomain: str | None = None):
         self.resolver = ServeoModeResolver(port, subdomain)
-        self._proc: Optional[subprocess.Popen] = _load_saved_proc()
-        self._url: Optional[str] = None
+        self._proc: subprocess.Popen | None = _load_saved_proc()
+        self._url: str | None = None
         self._stop_event = threading.Event()
         self._url_event = threading.Event()
         self._last_output: list[str] = []
-        self._loop_thread: Optional[threading.Thread] = None
+        self._loop_thread: threading.Thread | None = None
 
     @property
-    def public_url(self) -> Optional[str]:
+    def public_url(self) -> str | None:
         """Get current tunnel URL."""
         return self._url
 
-    def start(self, timeout: float = 15.0) -> Optional[str]:
+    def start(self, timeout: float = 15.0) -> str | None:
         """Start tunnel and wait for URL."""
         info = self.resolver.resolve()
 

@@ -1,10 +1,11 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
 """BertNER: Standard Token Classification for ONNX (No Torch)."""
 import logging
+from typing import Any
+
 import numpy as np
 import onnxruntime as ort
 from tokenizers import Tokenizer
-from typing import List, Dict, Any
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +45,7 @@ class BertNER:
         self._tokenizer = Tokenizer.from_file(self.tokenizer_path)
         logger.info(f"BertNER loaded model: {self.model_path}")
 
-    def predict_entities(self, text: str, threshold: float = 0.5) -> List[Dict[str, Any]]:
+    def predict_entities(self, text: str, threshold: float = 0.5) -> list[dict[str, Any]]:
         """Predict and structure entities from text."""
         if self._session is None:
             self.load()

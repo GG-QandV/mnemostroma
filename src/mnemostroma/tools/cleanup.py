@@ -5,11 +5,9 @@ Provides a robust mechanism to terminate zombie and rogue processes without kill
 the system tray or IDE processes. Supports both Linux and Windows platforms.
 """
 import os
-import sys
 import subprocess
+import sys
 import time
-from pathlib import Path
-from typing import List
 
 # Ensure psutil is available
 try:
@@ -50,7 +48,7 @@ def stop_services() -> None:
             print(f"Failed to end Windows scheduled tasks: {e}")
     else:
         # Linux: Stop systemd user units
-        services: List[str] = [
+        services: list[str] = [
             "mnemostroma.service",
             "mnemostroma-daemon.service",
             "mnemostroma-proxy.service",
@@ -127,7 +125,7 @@ def emergency_cleanup(restart_services: bool = True) -> None:
     time.sleep(1.0)
 
     # 2. Identify target processes and kill them
-    targets: List[str] = [
+    targets: list[str] = [
         "-m mnemostroma",
         "bin/mnemostroma",
         "mnemostroma.exe",
@@ -137,7 +135,7 @@ def emergency_cleanup(restart_services: bool = True) -> None:
     ]
 
     # Explicitly avoid killing these (suicide prevention)
-    avoid_keywords: List[str] = [
+    avoid_keywords: list[str] = [
         "tray_pyqt",
         "tray.py",
         "tray_old_pystray",

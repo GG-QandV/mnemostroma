@@ -20,7 +20,6 @@ import sys
 import threading
 import time
 from pathlib import Path
-from typing import Optional
 
 import servicemanager
 import win32event
@@ -140,7 +139,7 @@ class _DaemonRunner:
 
     def __init__(self, stop_event: threading.Event) -> None:
         self._stop = stop_event
-        self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._loop: asyncio.AbstractEventLoop | None = None
 
     # Called from a dedicated thread; blocks until service stops.
     def run(self) -> None:
@@ -203,7 +202,7 @@ class _DaemonRunner:
             # Teardown before restart (or final stop)
             try:
                 await asyncio.wait_for(conductor.stop(), timeout=10)
-            except (asyncio.TimeoutError, Exception) as exc:
+            except (TimeoutError, Exception) as exc:
                 logger.warning(f"conductor.stop() issue: {exc}")
 
             if not restart_requested:
@@ -237,9 +236,9 @@ class _DaemonRunner:
                 return True
 
             if not hb:
-                logger.warning(f"Watchdog: heartbeat stale (proxy OK)")
+                logger.warning("Watchdog: heartbeat stale (proxy OK)")
             if not prx:
-                logger.warning(f"Watchdog: proxy unreachable (heartbeat OK)")
+                logger.warning("Watchdog: proxy unreachable (heartbeat OK)")
 
         return False  # stop_event was set
 
@@ -270,8 +269,8 @@ class MnemostramaService(win32serviceutil.ServiceFramework):
         super().__init__(args)
         self._scm_event  = win32event.CreateEvent(None, 0, 0, None)
         self._stop_event = threading.Event()
-        self._runner: Optional[_DaemonRunner] = None
-        self._thread:  Optional[threading.Thread] = None
+        self._runner: _DaemonRunner | None = None
+        self._thread:  threading.Thread | None = None
 
     def SvcDoRun(self) -> None:
         _setup_logging()

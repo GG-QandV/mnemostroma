@@ -1,6 +1,6 @@
 [project]
 name = "mnemostroma"
-version = "2.3.0"
+version = "2.3.1"
 description = "Autonomous memory layer for AI agents — offline, RAM-first, no cloud"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -124,4 +124,4 @@ forbidden_modules = [
 ]
 
 [tool.mnemostroma]
-previous_version = "2.3.0"
+previous_version = "2.3.1"

@@ -1,5 +1,4 @@
 # tunnel/token.py — управление tunnel_token (изолирован от ssetoken)
-import os
 import secrets
 from pathlib import Path
 

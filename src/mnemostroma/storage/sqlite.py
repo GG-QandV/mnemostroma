@@ -1,11 +1,13 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
-import aiosqlite
 import asyncio
 import json
 import logging
 import time
-from typing import Any, List, Optional
 from pathlib import Path
+from typing import Any
+
+import aiosqlite
+
 from .schemas import ALL_SCHEMAS
 
 _LOGS_ID_DB_ = ""  # internal diagnostics id
@@ -13,7 +15,7 @@ _LOGS_ID_DB_ = ""  # internal diagnostics id
 logger = logging.getLogger("mnemostroma.storage")
 
 
-async def init_db(db_path: str | Path, config: Optional[Any] = None) -> aiosqlite.Connection:
+async def init_db(db_path: str | Path, config: Any | None = None) -> aiosqlite.Connection:
     """Initialize SQLite database with WAL mode and schemas.
 
     Applies WAL journal mode, cache and mmap sizes from config if provided,
@@ -125,12 +127,12 @@ class DatabaseManager:
         ctx: SystemContext passed for log_event instrumentation.
     """
 
-    def __init__(self, db: aiosqlite.Connection, config: Any, ctx: Optional[Any] = None):
+    def __init__(self, db: aiosqlite.Connection, config: Any, ctx: Any | None = None):
         self.db = db
         self.config = config.storage
         self.ctx = ctx  # SystemContext — wired after bootstrap
         self.queue: asyncio.Queue = asyncio.Queue()
-        self._worker_task: Optional[asyncio.Task] = None
+        self._worker_task: asyncio.Task | None = None
         self._running: bool = False
 
     async def start(self) -> None:
@@ -148,7 +150,7 @@ class DatabaseManager:
         Stops at the stop sentinel (None) and returns it to the queue intact.
         Called by Dissolver before eviction and by the SIGUSR1 handler.
         """
-        batch: List[Any] = []
+        batch: list[Any] = []
         while not self.queue.empty():
             try:
                 item = self.queue.get_nowait()
@@ -223,7 +225,7 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"dim_migration check failed: {e}")
 
-    async def get_all_embeddings(self, expected_dim: int = 768) -> List[tuple[str, Any]]:
+    async def get_all_embeddings(self, expected_dim: int = 768) -> list[tuple[str, Any]]:
         """Retrieve all session embeddings from SQLite for HNSW hydration.
         
         Args:
@@ -253,7 +255,7 @@ class DatabaseManager:
         
         return results
 
-    async def get_all_session_briefs(self) -> List[Any]:
+    async def get_all_session_briefs(self) -> list[Any]:
         """Retrieve all session metadata for ram_index hydration.
         
         Returns:
@@ -301,7 +303,7 @@ class DatabaseManager:
             
         return results
 
-    async def get_session_by_id(self, session_id: str) -> Optional[Any]:
+    async def get_session_by_id(self, session_id: str) -> Any | None:
         """Load a single session from SQLite by session_id (cold load for ctx.load()).
 
         Returns SessionBrief or None if not found.
@@ -378,8 +380,9 @@ class DatabaseManager:
 
     async def list_sessions_by_score(self, limit: int = 50) -> list:
         """List sessions ordered by implicit_score DESC."""
-        from ..memory.session_index import SessionBrief
         import numpy as np
+
+        from ..memory.session_index import SessionBrief
         results = []
         try:
             async with self.db.execute(
@@ -528,7 +531,7 @@ class DatabaseManager:
             logger.error(f"Error loading anchors: {e}")
         return anchors
 
-    async def get_anchor(self, anchor_id: str) -> Optional[Any]:
+    async def get_anchor(self, anchor_id: str) -> Any | None:
         """Load single anchor from SQLite (for resurface from silt)."""
         import numpy as np
         try:
@@ -572,10 +575,10 @@ class DatabaseManager:
 
     async def find_anchors_by_flags(
         self,
-        outcome: Optional[str] = None,
-        multi_session: Optional[bool] = None,
-        anchor_type: Optional[str] = None,
-        session_id: Optional[str] = None,
+        outcome: str | None = None,
+        multi_session: bool | None = None,
+        anchor_type: str | None = None,
+        session_id: str | None = None,
         decay_level_max: int = 3,
         limit: int = 50,
         offset: int = 0,
@@ -600,6 +603,7 @@ class DatabaseManager:
             List of Anchor objects, ordered by last_accessed_at DESC.
         """
         import numpy as np
+
         from ..subconscious.anchor import Anchor
 
         conditions = ["decay_level <= ?"]
@@ -666,9 +670,9 @@ class DatabaseManager:
 
     async def find_sessions_by_flags(
         self,
-        importance: Optional[str] = None,
-        urgency: Optional[str] = None,
-        has_tag: Optional[str] = None,
+        importance: str | None = None,
+        urgency: str | None = None,
+        has_tag: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list:
@@ -688,9 +692,11 @@ class DatabaseManager:
         Returns:
             List of SessionBrief objects ordered by created_at DESC.
         """
-        from ..memory.session_index import SessionBrief
-        import numpy as np
         import sqlite3
+
+        import numpy as np
+
+        from ..memory.session_index import SessionBrief
 
         conditions = []
         params: list = []
@@ -767,7 +773,7 @@ class DatabaseManager:
             logger.error("find_sessions_by_flags failed: %s", e)
         return results
 
-    async def get_full_session(self, session_id: str) -> Optional[dict]:
+    async def get_full_session(self, session_id: str) -> dict | None:
         """Load full session record from SQLite including content_full.
         
         Returns dict matching tool expectations or None.
@@ -841,13 +847,13 @@ class DatabaseManager:
 
     async def list_precision_entries(
         self,
-        precision_type: Optional[str] = None,
-        importance: Optional[str] = None,
+        precision_type: str | None = None,
+        importance: str | None = None,
         limit: int = 20,
     ) -> list[dict]:
         """Read precision artifacts from SQLite precision_log table."""
         conditions = []
-        params: List[Any] = []
+        params: list[Any] = []
         if precision_type:
             conditions.append("type = ?")
             params.append(precision_type)
@@ -956,7 +962,7 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Failed to upsert experience for tag '{tag}': {e}")
 
-    async def load_experience(self) -> List[dict]:
+    async def load_experience(self) -> list[dict]:
         """Load all experience clusters for RAM hydration on bootstrap."""
         rows = []
         try:
@@ -982,7 +988,7 @@ class DatabaseManager:
 
     async def _worker(self) -> None:
         """Background worker that flushes batched sessions to SQLite."""
-        batch: List[Any] = []
+        batch: list[Any] = []
         last_flush = time.time()
 
         while True:
@@ -993,7 +999,7 @@ class DatabaseManager:
                         self.queue.get(),
                         timeout=self.config.async_flush_interval_sec
                     )
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     item = "TIMEOUT"
 
                 if item is None:  # Shutdown sentinel MUST be checked first
@@ -1022,7 +1028,7 @@ class DatabaseManager:
             except Exception as e:
                 logger.error(f"Error in DatabaseManager worker: {e}", exc_info=True)
 
-    async def _flush_batch(self, batch: List[Any]) -> None:
+    async def _flush_batch(self, batch: list[Any]) -> None:
         """Persist a batch of objects to SQLite.
 
         Handles SessionBrief (session index) and dict (content branch) payloads.

@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
 from dataclasses import dataclass
-from typing import List, Optional
+
 import numpy as np
+
 
 @dataclass
 class SessionBrief:
@@ -30,7 +31,7 @@ class SessionBrief:
     """
     session_id: str
     brief: str
-    tags: List[str]
+    tags: list[str]
     importance: str
     score: float
     resolution: float
@@ -39,17 +40,17 @@ class SessionBrief:
     # v1.3 / v1.4 fields
     conflict_flag: bool = False
     urgency: str = "none"
-    deadline_ts: Optional[int] = None
+    deadline_ts: int | None = None
     urgency_expired: bool = False
     bare_entity: bool = False
     embedding_model_version: str = "multilingual-e5-small"
     
     layer: str = "RAM_HOT"
-    embedding: Optional[np.ndarray] = None
+    embedding: np.ndarray | None = None
     implicit_score: float = 0.5
     # Emotion intensity linked to this session (0.0 = no emotion; used in eviction v2)
     intensity: float = 0.0
 
     # Content Branch classification (set by Observer PersistStep)
     # Values: "content" | "research" | "context" | None (unclassified)
-    session_type: Optional[str] = None
+    session_type: str | None = None

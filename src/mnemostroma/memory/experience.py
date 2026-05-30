@@ -4,10 +4,10 @@
 Accumulates long-term behavioural patterns per tag.
 Generates Intuition Signals (DO_THIS / AVOID_THIS / TENSION) for ConductorProxy.
 """
-import time
 import logging
+import time
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any
+from typing import Any
 
 logger = logging.getLogger("mnemostroma.experience")
 
@@ -73,7 +73,7 @@ class ExperienceCluster:
         return (self.emotion_positive - self.emotion_negative) / total
 
     @property
-    def emotion_signal(self) -> Optional[str]:
+    def emotion_signal(self) -> str | None:
         """ATTRACT | REPEL | AMBIVALENT | None (insufficient data)."""
         total = self.emotion_count
         if total < _EMOTION_MIN_SAMPLES:
@@ -109,7 +109,7 @@ class ExperienceCluster:
         self.score_sum = max(-abs(self.score_sum), self.score_sum - reduction)
         self.last_updated = int(time.time())
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "tag": self.tag,
             "session_count": self.session_count,
@@ -132,17 +132,17 @@ class ExperienceIndex:
     def __init__(self, signal_threshold: float = 0.75,
                  maturity_apprentice: int = 5, maturity_practitioner: int = 10,
                  maturity_expert: int = 30, maturity_master: int = 100):
-        self._clusters: Dict[str, ExperienceCluster] = {}
+        self._clusters: dict[str, ExperienceCluster] = {}
         self._signal_threshold = signal_threshold
         self._thresholds = (maturity_master, maturity_expert, maturity_practitioner, maturity_apprentice)
 
-    def get(self, tag: str) -> Optional[ExperienceCluster]:
+    def get(self, tag: str) -> ExperienceCluster | None:
         return self._clusters.get(tag)
 
-    def all_clusters(self) -> List[ExperienceCluster]:
+    def all_clusters(self) -> list[ExperienceCluster]:
         return list(self._clusters.values())
 
-    def update(self, tags: List[str], is_continuation: bool, is_conflict: bool) -> None:
+    def update(self, tags: list[str], is_continuation: bool, is_conflict: bool) -> None:
         """Update clusters for all tags in a processed session."""
         score = SCORE_DEEP_USE if is_continuation else SCORE_USE
         if is_conflict:
@@ -152,7 +152,7 @@ class ExperienceIndex:
                 self._clusters[tag] = ExperienceCluster(tag=tag, _thresholds=self._thresholds)
             self._clusters[tag].record(score, is_conflict=is_conflict)
 
-    def update_emotion(self, tags: List[str], charge: str, intensity: float) -> None:
+    def update_emotion(self, tags: list[str], charge: str, intensity: float) -> None:
         """Record an emotion event for all given tags.
 
         charge: 'positive' | 'negative'
@@ -163,7 +163,7 @@ class ExperienceIndex:
                 self._clusters[tag] = ExperienceCluster(tag=tag, _thresholds=self._thresholds)
             self._clusters[tag].record_emotion(charge, intensity)
 
-    def load(self, rows: List[Dict[str, Any]]) -> None:
+    def load(self, rows: list[dict[str, Any]]) -> None:
         """Hydrate from SQLite rows on bootstrap."""
         for row in rows:
             tag = row["tag"]
@@ -179,7 +179,7 @@ class ExperienceIndex:
                 _thresholds=self._thresholds,
             )
 
-    def apply_decay(self, threshold_days: int = 90, rate: float = 0.01) -> List[str]:
+    def apply_decay(self, threshold_days: int = 90, rate: float = 0.01) -> list[str]:
         """Apply forgetting curve to clusters inactive longer than threshold_days.
 
         Returns list of tags that were decayed (for SQLite persistence).
@@ -196,7 +196,7 @@ class ExperienceIndex:
                         f"(threshold={threshold_days}d, rate={rate}/d)")
         return decayed
 
-    def intuition_signals(self, active_tags: List[str]) -> List[Dict[str, str]]:
+    def intuition_signals(self, active_tags: list[str]) -> list[dict[str, str]]:
         """Generate Intuition Signals for tags in the current context.
 
         Returns list of {type, tag, message} dicts.

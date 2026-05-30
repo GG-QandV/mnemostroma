@@ -6,8 +6,10 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, List, Optional
+
 import aiosqlite
+
 from ..config import Config
 from ..subconscious.anchor_index import AnchorIndex
 
@@ -29,7 +31,7 @@ class ModelRegistry:
         _reranker: Cross-encoder reranking model (lazy).
     """
     config: Config
-    model_dir: Optional[Path] = None
+    model_dir: Path | None = None
     _pool: Any = field(default=None, repr=False)
     _ner: Any = None
     _reranker: Any = None
@@ -132,19 +134,19 @@ class SystemContext:
         id_to_sid: Mapping from matrix row label to session_id.
     """
     config: Config
-    ram_index: Dict[str, Any] = field(default_factory=dict)
-    session_index: Optional[Any] = None
-    content_index: Optional[Any] = None
-    db: Optional[aiosqlite.Connection] = None
-    models: Optional[ModelRegistry] = None
-    metrics: Dict[str, Any] = field(default_factory=dict)
+    ram_index: dict[str, Any] = field(default_factory=dict)
+    session_index: Any | None = None
+    content_index: Any | None = None
+    db: aiosqlite.Connection | None = None
+    models: ModelRegistry | None = None
+    metrics: dict[str, Any] = field(default_factory=dict)
 
-    id_to_sid: Dict[int, str] = field(default_factory=dict)
-    sid_to_id: Dict[str, int] = field(default_factory=dict)
+    id_to_sid: dict[int, str] = field(default_factory=dict)
+    sid_to_id: dict[str, int] = field(default_factory=dict)
 
     # Content label mappings for content_index
-    id_to_cid: Dict[int, str] = field(default_factory=dict)
-    cid_to_id: Dict[str, int] = field(default_factory=dict)
+    id_to_cid: dict[int, str] = field(default_factory=dict)
+    cid_to_id: dict[str, int] = field(default_factory=dict)
 
     # Content Management
     content: Optional['ContentManager'] = None
@@ -156,12 +158,12 @@ class SystemContext:
     # Infrastructure
     persistence: Optional['PersistenceLayer'] = None
     log_writer: Optional['LogWriter'] = None
-    session_repo: Optional[Any] = None     # Active SessionPort adapter (legacy/shadow/new)
-    precision_repo: Optional[Any] = None   # Active PrecisionPort adapter
-    anchor_repo: Optional[Any] = None      # Active AnchorPort adapter
+    session_repo: Any | None = None     # Active SessionPort adapter (legacy/shadow/new)
+    precision_repo: Any | None = None   # Active PrecisionPort adapter
+    anchor_repo: Any | None = None      # Active AnchorPort adapter
 
     # v1.1 / v1.3 extensions
-    urgency_index: Dict[str, Any] = field(default_factory=dict)
+    urgency_index: dict[str, Any] = field(default_factory=dict)
     pending_updates: asyncio.Queue = field(default_factory=asyncio.Queue)
     _next_session_label: int = 0
     _next_content_label: int = 0
@@ -170,22 +172,22 @@ class SystemContext:
     index_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     # Pending emotions awaiting entity binding (Memory Model v2 § 5.2)
-    pending_emotions: List[Any] = field(default_factory=list)
+    pending_emotions: list[Any] = field(default_factory=list)
 
     # Anchor vectors for marker() classification — pre-warmed at bootstrap (§ 2.3)
-    anchor_vectors: Dict[str, Any] = field(default_factory=dict)
+    anchor_vectors: dict[str, Any] = field(default_factory=dict)
 
     # Onboarding calibration collector
-    calibration: Optional[Any] = None
+    calibration: Any | None = None
 
     # Experience Layer index
-    experience_index: Optional[Any] = None
+    experience_index: Any | None = None
 
     # Feedback Loop
     feedback_tracker: Optional['ImplicitFeedbackTracker'] = None
     
     # Urgency Pulse cache (session_id -> last known level)
-    urgency_level_cache: Dict[str, str] = field(default_factory=dict)
+    urgency_level_cache: dict[str, str] = field(default_factory=dict)
 
     # ONNX model memory baseline — set once after all models are loaded
     onnx_baseline_mb: float = 0.0
@@ -198,21 +200,21 @@ class SystemContext:
     last_message_text: str = ""
 
     # GAP 2: Session IDs injected into last LLM prompt — consumed by ImplicitFeedbackTracker
-    _last_injected_ids: List[str] = field(default_factory=list)
+    _last_injected_ids: list[str] = field(default_factory=list)
 
     # Phase 11.A/C: Associative Surfacing + Anchor Guardian queues
-    surfaced_queue: List[Any] = field(default_factory=list)
-    conflict_warnings: List[Any] = field(default_factory=list)
-    recently_warned: Dict[str, float] = field(default_factory=dict)  # anchor_id → timestamp
+    surfaced_queue: list[Any] = field(default_factory=list)
+    conflict_warnings: list[Any] = field(default_factory=list)
+    recently_warned: dict[str, float] = field(default_factory=dict)  # anchor_id → timestamp
 
     # Phase 11.E: Open Loop Detector
-    open_loops_queue: List[Any] = field(default_factory=list)
-    recently_looped: Dict[str, float] = field(default_factory=dict)  # anchor_id → timestamp
+    open_loops_queue: list[Any] = field(default_factory=list)
+    recently_looped: dict[str, float] = field(default_factory=dict)  # anchor_id → timestamp
 
     # Phase 11.D: Precision Guard
     # key: (type, context_tag) → {value, session_id, stored_at}
-    precision_ram: Dict[tuple, Dict[str, Any]] = field(default_factory=dict)
-    precision_warnings: List[Any] = field(default_factory=list)
+    precision_ram: dict[tuple, dict[str, Any]] = field(default_factory=dict)
+    precision_warnings: list[Any] = field(default_factory=list)
 
     # subconscious anchors
     anchor_index: Optional['AnchorIndex'] = field(default_factory=lambda: AnchorIndex(max_capacity=1000))
@@ -220,7 +222,9 @@ class SystemContext:
     def set_onnx_baseline(self) -> None:
         """Measure current RSS as ONNX model overhead. Call after all models are loaded."""
         try:
-            import os, psutil
+            import os
+
+            import psutil
             rss = psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024
             self.onnx_baseline_mb = rss
             self.onnx_baseline_ready = True

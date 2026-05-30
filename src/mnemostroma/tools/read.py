@@ -1,13 +1,14 @@
-import time
 import logging
 import re
-from typing import List, Dict, Any, Optional, Union
+import time
+from typing import Any
+
 from ..core import SystemContext
-from ..memory.search import semantic_search
 from ..feedback.implicit import signal_use
+from ..memory.search import semantic_search
 from .admin import ctx_bridge as _ctx_bridge
-from .time_utils import enrich_with_time, parse_exact_time_with_mask
 from .response_builder import build_search_response
+from .time_utils import enrich_with_time, parse_exact_time_with_mask
 
 logger = logging.getLogger("mnemostroma.tools.read")
 
@@ -27,7 +28,7 @@ def _compute_urgency_level(deadline_ts: float) -> str:
         return "medium"
     return "low"
 
-def _urgency_pulse(ctx: SystemContext) -> List[Dict[str, Any]]:
+def _urgency_pulse(ctx: SystemContext) -> list[dict[str, Any]]:
     """Compute urgency escalation events. Returns list of new/escalated items."""
     now = time.time()
     pulse = []
@@ -97,7 +98,7 @@ def _is_farewell(text: str) -> bool:
         return False
     return any(p.search(text) for p in FAREWELL_PATTERNS)
 
-async def ctx_get(session_id: str, ctx: SystemContext) -> Optional[Any]:
+async def ctx_get(session_id: str, ctx: SystemContext) -> Any | None:
     """Retrieve session from RAM or lazy load via session_repo."""
     if session_id in ctx.ram_index:
         sb = ctx.ram_index[session_id]
@@ -122,7 +123,7 @@ async def ctx_semantic(
     ctx: SystemContext, 
     k: int = 20, 
     top_n: int = 5
-) -> List[Any]:
+) -> list[Any]:
     """Perform high-precision semantic search.
 
     Feeds returned session IDs into ImplicitFeedbackTracker for IGNORE
@@ -149,13 +150,13 @@ async def ctx_semantic(
     return results
 
 async def ctx_search(
-    tags: List[str],
+    tags: list[str],
     ctx: SystemContext,
-    importance: Optional[str] = None,
-    age: Optional[str] = None,
+    importance: str | None = None,
+    age: str | None = None,
     limit: int = 10,
-    exact_time: Optional[str] = None,
-) -> Union[Dict[str, Any], List[Any]]:
+    exact_time: str | None = None,
+) -> dict[str, Any] | list[Any]:
     """Search sessions by tags (RAM) or by exact time with optional tag filter.
 
     When exact_time is provided:
@@ -190,7 +191,7 @@ async def ctx_search(
             return [{"error": error_msg, "exact_time_received": exact_time}]
 
         # 2. RAM scan — fast path (~0.1ms)
-        candidates: List[Dict[str, Any]] = [
+        candidates: list[dict[str, Any]] = [
             {
                 "session_id": sb.session_id,
                 "brief": sb.brief,
@@ -214,7 +215,7 @@ async def ctx_search(
 
         # 4. Apply additional filters on top
         tag_set = set(tags) if tags else set()
-        filtered: List[Dict[str, Any]] = [
+        filtered: list[dict[str, Any]] = [
             r for r in candidates
             if (not tag_set or tag_set.issubset(set(r.get("tags", []))))
             and (importance is None or r.get("importance") == importance)
@@ -247,7 +248,7 @@ async def ctx_search(
     return results[:limit]
 
 
-async def ctx_full(session_id: str, ctx: SystemContext) -> Optional[Dict[str, Any]]:
+async def ctx_full(session_id: str, ctx: SystemContext) -> dict[str, Any] | None:
     """Load full session record via session_repo including content_full."""
     if not ctx.session_repo:
         return None
@@ -262,10 +263,10 @@ async def ctx_full(session_id: str, ctx: SystemContext) -> Optional[Dict[str, An
 
 async def ctx_anchors(
     ctx: SystemContext,
-    anchor_type: Optional[str] = None,
-    session_id: Optional[str] = None,
+    anchor_type: str | None = None,
+    session_id: str | None = None,
     limit: int = 20,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Read anchors from RAM index (subconscious layer).
 
     Returns full anchor objects without embedding blobs.
@@ -305,10 +306,10 @@ async def ctx_anchors(
 
 async def ctx_precision(
     ctx: SystemContext,
-    precision_type: Optional[str] = None,
-    importance: Optional[str] = None,
+    precision_type: str | None = None,
+    importance: str | None = None,
     limit: int = 20,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Read precision artifacts from Repository."""
     if not ctx.precision_repo:
         return []
@@ -329,7 +330,7 @@ async def ctx_recent(
     days: float = 7.0,
     by: str = "created",
     limit: int = 20,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Return sessions observed or accessed within the last N days."""
     import time as _time
 
@@ -352,7 +353,7 @@ async def ctx_recent(
 
 
 
-async def ctx_active(ctx: SystemContext) -> Dict[str, Any]:
+async def ctx_active(ctx: SystemContext) -> dict[str, Any]:
     """Return the current active context summary (bridge) for the agent.
     
     Includes active_variables and urgency_active (v1.3).

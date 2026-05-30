@@ -1,10 +1,7 @@
-import ast
-import os
-import sys
 from pathlib import Path
-from typing import List, Dict
 
-def extract_contracts(path: Path) -> List[Dict]:
+
+def extract_contracts(path: Path) -> list[dict]:
     # Placeholder for AST parser that finds Protocols and Dataclasses
     # and generates CONTRACT_REGISTRY.md documentation snippets.
     # To be implemented in detail during Phase 2.

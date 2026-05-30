@@ -8,7 +8,7 @@ writes it back to config.json. No imports, no user action required.
 import json
 import logging
 from pathlib import Path
-from typing import List, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -28,7 +28,7 @@ class CalibrationCollector:
     def __init__(self, ctx: "SystemContext", config_path: str = "config.json"):
         self.ctx = ctx
         self.config_path = Path(config_path)
-        self._distances: List[float] = []
+        self._distances: list[float] = []
         self._calibrated: bool = ctx.config.calibration.calibration_complete
 
     def record(self, new_vector: np.ndarray) -> None:
@@ -80,6 +80,7 @@ class CalibrationCollector:
         # Log calibration event for watch/dashboard observability
         try:
             import asyncio
+
             asyncio.ensure_future(
             )
         except Exception:

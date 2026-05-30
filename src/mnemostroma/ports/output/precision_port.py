@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
 from __future__ import annotations
-from typing import Protocol, TYPE_CHECKING
+
+from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
     from mnemostroma.domain.types import Result, StorageError

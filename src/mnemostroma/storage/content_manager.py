@@ -1,12 +1,18 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
-import asyncio
-import json
 import logging
 import time
+
 import numpy as np
-from typing import List, Optional, Dict, Any
-from .content import ContentBlock, ContentVersion, compress_content, decompress_content, get_content_hash, generate_diff
+
 from ..core import SystemContext
+from .content import (
+    ContentBlock,
+    ContentVersion,
+    compress_content,
+    decompress_content,
+    generate_diff,
+    get_content_hash,
+)
 
 logger = logging.getLogger("mnemostroma.content")
 
@@ -17,7 +23,7 @@ class ContentManager:
     """
     def __init__(self, ctx: SystemContext):
         self.ctx = ctx
-        self.blocks: Dict[str, ContentBlock] = {} # RAM cache of active blocks
+        self.blocks: dict[str, ContentBlock] = {} # RAM cache of active blocks
 
     async def save(
         self, 
@@ -25,7 +31,7 @@ class ContentManager:
         text: str, 
         content_type: str,
         session_id: str,
-        tags: List[str] = None,
+        tags: list[str] = None,
         why_changed: str = None
     ) -> ContentVersion:
         """Save a new version of a content block.
@@ -60,7 +66,7 @@ class ContentManager:
             return last_version
 
         # 2. Vectorization (BGE-M3)
-        from ..models.embedding_utils import chunk_content, aencode_chunks
+        from ..models.embedding_utils import aencode_chunks, chunk_content
         chunks = chunk_content(text, content_type)
         
         if self.ctx.models and self.ctx.models.content_embedder:

@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
 import os
-import sys
 import shutil
+import sys
 from pathlib import Path
+
 
 def resolve_mnemostroma_executable() -> list[str]:
     """

@@ -1,4 +1,4 @@
-## Upgrading to v2.3.0 (Current)
+## Upgrading to v2.3.1 (Current)
 
 ### What changed
 - `mnemostroma tunnel` now uses **Cloudflare Tunnel** instead of Serveo SSH.

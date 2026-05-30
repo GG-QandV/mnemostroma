@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
 import asyncio
-import time
-import numpy as np
 import logging
-from typing import List, Dict, Any, Optional
+
+import numpy as np
+
 from ..core import SystemContext
 from ..memory.session_index import SessionBrief
 from .scoring import calculate_score
@@ -15,7 +15,7 @@ async def semantic_search(
     ctx: SystemContext,
     k: int = 20,
     top_n: int = 5
-) -> List[SessionBrief]:
+) -> list[SessionBrief]:
     """Perform hybrid semantic search: KNN -> Query Expansion -> Rerank.
     
     Args:

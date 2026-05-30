@@ -3,20 +3,17 @@ import asyncio
 import json
 import logging
 import os
-import secrets
-import sys
 from pathlib import Path
-from typing import Any
 
+import uvicorn
 from starlette.applications import Starlette
+from starlette.middleware import Middleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
-from starlette.routing import Route, Mount
-from starlette.middleware import Middleware
-from starlette.middleware.cors import CORSMiddleware
-import uvicorn
+from starlette.routing import Route
 
-from starlette.middleware.base import BaseHTTPMiddleware
 
 class ServeoHeaderMiddleware(BaseHTTPMiddleware):  # PATCH-2026-05-17
     async def dispatch(self, request, call_next):
@@ -27,7 +24,7 @@ class ServeoHeaderMiddleware(BaseHTTPMiddleware):  # PATCH-2026-05-17
 
 from mcp.server import Server
 from mcp.server.sse import SseServerTransport
-from mcp.types import Tool, TextContent
+from mcp.types import TextContent, Tool
 
 logger = logging.getLogger("mnemostroma.sse_adapter")
 
@@ -37,15 +34,14 @@ _PIPE_NAME = r"\\.\pipe\mnemostroma"
 _TOKEN_PATH = _MNEMO_DIR / "sse_token"
 
 from .common import (
-    TOKEN,
     OBSERVE_TOKEN,
-    safe_ipc_call,
-    check_localhost,
+    TOKEN,
     PrivateNetworkAccessMiddleware,
+    check_localhost,
+    safe_ipc_call,
 )
 
 # ── Tool list (keep in sync with mcp_stdio_adapter.py) ──────────────
-
 from .mcp_stdio_adapter import _TOOLS  # Reuse tools definition from stdio adapter
 
 # ── MCP Server factory ────────────────────────────────────────────────
@@ -146,8 +142,8 @@ async def handle_mcp_config(request):
 
 
 from mnemostroma.integration.tunnel.observe_handlers import (
-    handle_tunnel_status,
     handle_tunnel_start,
+    handle_tunnel_status,
     handle_tunnel_stop,
 )
 
@@ -205,6 +201,7 @@ def make_observe_app():
     )
 
 import socket
+
 
 def is_port_in_use(port: int, host: str = "127.0.0.1") -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:

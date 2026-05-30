@@ -7,9 +7,8 @@ tool layer and fed into an EMA-based implicit_score per session.
 
 Spec: feedback_loop_v1.5.md
 """
-import time
 import logging
-from typing import Any, Dict, Optional
+import time
 
 from ..core import SystemContext
 
@@ -94,8 +93,8 @@ class ImplicitFeedbackTracker:
     def __init__(
         self,
         ctx: SystemContext,
-        ignore_window_sec: Optional[float] = None,
-        revisit_threshold: Optional[int] = None,
+        ignore_window_sec: float | None = None,
+        revisit_threshold: int | None = None,
     ) -> None:
         self.ctx = ctx
         config = ctx.config.feedback
@@ -103,8 +102,8 @@ class ImplicitFeedbackTracker:
         self.revisit_threshold = revisit_threshold if revisit_threshold is not None else config.revisit_threshold
 
         # {session_id: list[ts]} — tracks retrieval timestamps in this working session
-        self._retrieval_history: Dict[str, list] = {}
-        self._last_semantic_ts: Optional[float] = None
+        self._retrieval_history: dict[str, list] = {}
+        self._last_semantic_ts: float | None = None
         self._last_semantic_ids: list = []
 
     async def on_semantic_query(self, returned_ids: list) -> None:

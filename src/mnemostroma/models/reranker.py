@@ -2,7 +2,6 @@
 """Cross-encoder reranking using TinyBERT (ONNX)."""
 import logging
 import os
-from typing import List, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +39,7 @@ class TinyBERTReranker:
             logger.error(f"Failed to load TinyBERT ONNX: {e}")
             raise
 
-    def rerank(self, query: str, candidates: List[str]) -> List[Tuple[str, float]]:
+    def rerank(self, query: str, candidates: list[str]) -> list[tuple[str, float]]:
         """Rerank candidates against query."""
         if not candidates:
             return []

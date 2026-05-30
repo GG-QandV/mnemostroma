@@ -1,8 +1,6 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
-import asyncio
 import logging
 from pathlib import Path
-from typing import Union
 
 from mnemostroma.conductor import Conductor
 from mnemostroma.core.lifecycle import register_signal_handlers
@@ -10,9 +8,9 @@ from mnemostroma.core.lifecycle import register_signal_handlers
 logger = logging.getLogger(__name__)
 
 async def bootstrap(
-    config_path: Union[str, Path],
-    db_path: Union[str, Path],
-    model_dir: Union[str, Path]
+    config_path: str | Path,
+    db_path: str | Path,
+    model_dir: str | Path
 ) -> Conductor:
     """Bootstrap the daemon, initialize layers and spawn background workers."""
     conductor = Conductor()

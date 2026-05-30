@@ -4,9 +4,10 @@
 All detectors must complete within 1-2ms total.
 No model inference — only regex and dictionary lookups.
 """
-import re
 import logging
-from typing import Dict, Any, List, Optional, TYPE_CHECKING
+import re
+from typing import TYPE_CHECKING, Any
+
 import numpy as np
 
 if TYPE_CHECKING:
@@ -18,7 +19,7 @@ logger = logging.getLogger("mnemostroma.observer.flags")
 # --- Outcome detection ---
 # Outcome signals: what happened with the process/decision
 
-_OUTCOME_SIGNALS: Dict[str, List[re.Pattern]] = {
+_OUTCOME_SIGNALS: dict[str, list[re.Pattern]] = {
     "success": [
         re.compile(r, re.IGNORECASE) for r in [
             r"\bуспешно\b", r"\bготово\b", r"\bсделано\b", r"\bработает\b",
@@ -57,7 +58,7 @@ def detect_outcome(text: str) -> str:
     Priority: failure > abandoned > success > neutral
     If no signals found → pending (not enough info yet)
     """
-    scores: Dict[str, int] = {"success": 0, "failure": 0, "abandoned": 0}
+    scores: dict[str, int] = {"success": 0, "failure": 0, "abandoned": 0}
     
     for outcome_type, patterns in _OUTCOME_SIGNALS.items():
         for pattern in patterns:
@@ -82,7 +83,7 @@ def detect_outcome(text: str) -> str:
 # --- User pin detection ---
 # User explicitly asks to remember
 
-_PIN_PATTERNS: List[re.Pattern] = [
+_PIN_PATTERNS: list[re.Pattern] = [
     re.compile(r, re.IGNORECASE) for r in [
         r"\bзапомни\b", r"\bне\s+забудь\b", r"\bзафиксируй\b",
         r"\bзапиши\b", r"\bобрати\s+внимание\b",
@@ -107,7 +108,7 @@ def detect_user_pin(text: str) -> bool:
 # At level B.1 — by text signals
 # At level B.2 — supplemented by cosine continuation
 
-_MULTI_SESSION_PATTERNS: List[re.Pattern] = [
+_MULTI_SESSION_PATTERNS: list[re.Pattern] = [
     re.compile(r, re.IGNORECASE) for r in [
         r"\bпродолж", r"\bкак\s+(?:и\s+)?(?:в\s+)?прошл",
         r"\bв\s+прошлой\s+сесси[ий]\b", r"\bранее\s+(?:мы\s+)?",
@@ -127,7 +128,7 @@ def detect_multi_session(text: str) -> bool:
     return False
 
 
-def detect_mention_type(text: str, entities: List[Dict[str, Any]]) -> str:
+def detect_mention_type(text: str, entities: list[dict[str, Any]]) -> str:
     """Classify mention type for dominant entity: 'focus' or 'passing'.
 
     focus:   entity in first 30% of text OR appears more than once
@@ -162,7 +163,7 @@ def detect_mention_type(text: str, entities: List[Dict[str, Any]]) -> str:
     return "passing"
 
 
-def detect_all_flags(text: str, entities: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+def detect_all_flags(text: str, entities: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """Run all signal-based detectors. <1ms total.
 
     Returns partial flags dict to merge into anchor flags.
@@ -178,8 +179,8 @@ def detect_all_flags(text: str, entities: Optional[List[Dict[str, Any]]] = None)
 
 async def detect_mention_type_embedding(
     text_embedding: np.ndarray,
-    entities: List[Dict[str, Any]],
-    embedder: "Optional[ONNXEmbeddingEngine]",
+    entities: list[dict[str, Any]],
+    embedder: "ONNXEmbeddingEngine | None",
     threshold: float = 0.7,
 ) -> str:
     """Classify mention_type using cosine similarity between text and entity embeddings.
@@ -223,7 +224,7 @@ async def detect_mention_type_embedding(
     if not entity_values:
         return "focus"
 
-    async def _embed_one(value: str) -> Optional[np.ndarray]:
+    async def _embed_one(value: str) -> np.ndarray | None:
         try:
             raw = await embedder.aencode(value)
             vec = np.array(raw, dtype=np.float32).flatten()

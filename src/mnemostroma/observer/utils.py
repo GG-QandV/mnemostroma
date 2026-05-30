@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
 """Text compression and tagging utilities for Mnemostroma Observer."""
 import logging
-from typing import Dict, Any, List, Set, Tuple
+from typing import Any
 
 logger = logging.getLogger("mnemostroma.observer.utils")
 
 
-def compress_text(text: str, entities: List[Dict[str, Any]] = None) -> Tuple[str, List[str]]:
+def compress_text(text: str, entities: list[dict[str, Any]] = None) -> tuple[str, list[str]]:
     """Compress text into brief (50 chars) and tags from NER entities.
 
     Args:
@@ -26,7 +26,7 @@ def compress_text(text: str, entities: List[Dict[str, Any]] = None) -> Tuple[str
         brief = first_sentence[:cut] if cut > 20 else first_sentence[:50]
 
     # Tags from entities
-    tags: List[str] = []
+    tags: list[str] = []
     if entities:
         # Type prefix mapping (HybridNER types → short prefix)
         PREFIX_MAP = {
@@ -46,7 +46,7 @@ def compress_text(text: str, entities: List[Dict[str, Any]] = None) -> Tuple[str
             "запрет": "ban",
         }
 
-        seen: Set[str] = set()
+        seen: set[str] = set()
         # Sort by score desc — best entities first
         sorted_ents = sorted(entities, key=lambda e: e.get("score", 0), reverse=True)
 

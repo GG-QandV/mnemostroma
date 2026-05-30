@@ -1,9 +1,11 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
+from pathlib import Path
+from typing import Any
+
 import numpy as np
 import onnxruntime as ort
 from tokenizers import Tokenizer
-from pathlib import Path
-from typing import List, Any
+
 
 class Reranker:
     """TinyBERT ONNX wrapper for cross-encoder reranking.
@@ -14,7 +16,7 @@ class Reranker:
         self.session = ort.InferenceSession(str(model_path))
         self.tokenizer = Tokenizer.from_file(str(tokenizer_path))
 
-    def rank(self, query: str, documents: List[str]) -> List[float]:
+    def rank(self, query: str, documents: list[str]) -> list[float]:
         """Rank a list of documents against a query.
         
         Args:

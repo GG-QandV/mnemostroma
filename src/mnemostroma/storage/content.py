@@ -1,10 +1,11 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
-import lz4.frame
-import hashlib
 import difflib
-from dataclasses import dataclass, field
-from typing import List, Optional, Any
+import hashlib
 import time
+from dataclasses import dataclass, field
+
+import lz4.frame
+
 
 @dataclass
 class ContentVersion:
@@ -12,12 +13,12 @@ class ContentVersion:
     version: int
     content_hash: str
     content_raw: bytes # LZ4 compressed
-    content_diff: Optional[str] = None
-    content_tags: List[str] = field(default_factory=list)
+    content_diff: str | None = None
+    content_tags: list[str] = field(default_factory=list)
     tags_verified: bool = False
-    why_changed: Optional[str] = None
+    why_changed: str | None = None
     status: str = "active" # active/rejected/archived
-    embedding: Optional[bytes] = None # float16 512d
+    embedding: bytes | None = None # float16 512d
     created_at: int = field(default_factory=lambda: int(time.time()))
 
 @dataclass
@@ -26,10 +27,10 @@ class ContentBlock:
     content_id: str
     session_id: str
     content_type: str # function/class/chapter/scene/config
-    parent_id: Optional[str] = None
-    project_id: Optional[str] = None
+    parent_id: str | None = None
+    project_id: str | None = None
     status: str = "active"
-    versions: List[ContentVersion] = field(default_factory=list)
+    versions: list[ContentVersion] = field(default_factory=list)
 
 def compress_content(text: str) -> bytes:
     """Compress text using LZ4 frame format."""
