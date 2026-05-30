@@ -109,6 +109,18 @@ def _build_cmd_args(cmd: str) -> list[str]:
     return shlex.split(cmd, posix=(sys.platform != "win32"))
 
 
+def _atomic_write(path: Path, content: str) -> None:
+    """Пишет файл атомарно с использованием временного файла рядом."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    try:
+        tmp.write_text(content, encoding="utf-8")
+        tmp.replace(path)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
 # ── C1: ServeoTunnelManager ────────────────────────────────────────────────
 
 class ServeoTunnelManager:
@@ -187,8 +199,8 @@ class ServeoTunnelManager:
                         self._url = url
                         fill_client_configs(url)
                         url_file = Path.home() / ".mnemostroma" / "serveo_url"
-                        url_file.parent.mkdir(parents=True, exist_ok=True)
-                        url_file.write_text(url, encoding="utf-8")
+                        _atomic_write(url_file, url)
+                        _atomic_write(Path.home() / ".mnemostroma" / "tunnel_url", url)
                         self._url_event.set()  # after all side-effects
 
             reader = threading.Thread(target=_reader, daemon=True)

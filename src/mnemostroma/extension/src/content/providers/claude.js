@@ -33,7 +33,10 @@ export default makeParser('claude', '1.0.0', {
     if (ev?.type === 'content_block_delta' && ev?.delta?.type === 'text_delta') {
       return { textDelta: ev.delta.text ?? '' };
     }
-    if (ev?.type === 'message_stop') return { done: true };
+    if (ev?.type === 'completion') {
+      return { textDelta: ev.completion ?? '' };
+    }
+    if (ev?.type === 'message_stop' || ev?.stop_reason || ev?.stop_sequence) return { done: true };
     return { control: { type: ev?.type ? 'SCHEMA_DRIFT' : 'MISSING_FIELD' } };
   },
   classifyTurn(payload = {}) {

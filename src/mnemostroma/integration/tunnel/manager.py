@@ -30,22 +30,28 @@ def _save_tunnel_config(config: dict[str, Any]) -> None:
 
 
 def _get_or_ask_subdomain() -> Optional[str]:
-    """Read subdomain from config, or ask user on first run with a unique default."""
+    """Read subdomain from config, or ask user on first run in interactive mode."""
+    from mnemostroma.integration.tunnel.resolve import _is_headless
     config = _load_tunnel_config()
     subdomain = config.get("subdomain")
 
     if subdomain is None:
-        # First run — generate a unique random subdomain to guarantee no collisions
+        if _is_headless():
+            return None  # Headless mode — do not prompt, launch anonymously
+
+        # First run in interactive mode — generate unique random default
         import secrets
-        random_suffix = secrets.token_hex(4)  # 8 hex chars
+        random_suffix = secrets.token_hex(4)
         default_subdomain = f"mnemo-{random_suffix}"
 
-        raw = input(f"Subdomain for Serveo tunnel [default: {default_subdomain}]: ").strip()
-        subdomain = raw if raw else default_subdomain
-
-        config["subdomain"] = subdomain
-        _save_tunnel_config(config)
-        print(f"  Saved unique subdomain: {subdomain}")
+        try:
+            raw = input(f"Subdomain for Serveo tunnel [default: {default_subdomain}]: ").strip()
+            subdomain = raw if raw else default_subdomain
+            config["subdomain"] = subdomain
+            _save_tunnel_config(config)
+            print(f"  Saved unique subdomain: {subdomain}")
+        except EOFError:
+            return None
 
     return subdomain
 

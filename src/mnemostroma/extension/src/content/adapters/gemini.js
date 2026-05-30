@@ -30,118 +30,69 @@ const REGENERATE_SELECTORS = [
  * @returns {string}
  */
 export function extractChatId(_url) {
-  // Уровень 1: data-атрибуты в DOM
-  const domEl = document.querySelector(
-    '[data-thread-id], [data-conversation-id]'
-  );
+  const domEl = document.querySelector('[data-thread-id], [data-conversation-id]');
   if (domEl) {
     const id = domEl.dataset.threadId ?? domEl.dataset.conversationId;
     if (id) return id;
   }
-
-  // Уровень 2: fetch interceptor
-  if (typeof window.__mnemo_gemini_chat_id === 'string'
-      && window.__mnemo_gemini_chat_id.length > 0) {
-    return window.__mnemo_gemini_chat_id;
-  }
-
-  // Уровень 3: sessionStorage
-  try {
-    const stored = sessionStorage.getItem('mnemo_gemini_chat_id');
-    if (stored) return stored;
-  } catch {}
-
-  // Уровень 4: UUID fallback
+  if (typeof window.__mnemo_gemini_chat_id === 'string' && window.__mnemo_gemini_chat_id.length > 0) return window.__mnemo_gemini_chat_id;
+  try { const stored = sessionStorage.getItem('mnemo_gemini_chat_id'); if (stored) return stored; } catch {}
   const id = crypto.randomUUID();
-  try {
-    sessionStorage.setItem('mnemo_gemini_chat_id', id);
-  } catch {}
+  try { sessionStorage.setItem('mnemo_gemini_chat_id', id); } catch {}
   return id;
 }
 
-/**
- * No-op — Gemini сохраняет промпт в DOM после отправки,
- * перехват до отправки не нужен.
- */
-export function initSubmitListener(_cb) {}
-
-/**
- * @param {string} _selector
- * @param {() => void} cb
- */
-export function getStreamEndSignal(_selector, cb) {
-  let wasStreaming = false;
-  let checkTimer  = null;
-
-  const observer = new MutationObserver(() => {
-    if (checkTimer) return;
-    checkTimer = setTimeout(() => {
-      checkTimer = null;
-
-      const stopEl = document.querySelector(STOP_SELECTORS);
-      const loadEl = document.querySelector(
-        'model-response .loading-indicator, .response-container .loading-indicator'
-      ) ?? document.querySelector('.loading-indicator');
-
-      const isStreaming = !!(stopEl || loadEl);
-
-      if (isStreaming) {
-        wasStreaming = true;
-        return;
+export function initSubmitListener(cb) {
+  let wasGenerating = false;
+  setInterval(() => {
+    const spinners = document.querySelectorAll('.loading-content-spinner-container, .mat-mdc-progress-spinner');
+    let isGenerating = false;
+    for (const s of spinners) {
+      if (s.getBoundingClientRect().width > 0 && window.getComputedStyle(s).visibility !== 'hidden') {
+        isGenerating = true;
+        break;
       }
-
-      if (wasStreaming) {
-        wasStreaming = false;
-        setTimeout(cb, STREAM_END_SETTLE_MS);
-      }
-    }, 50);
-  });
-
-  observer.observe(document.body, { childList: true, subtree: true });
+    }
+    
+    if (isGenerating && !wasGenerating) {
+      wasGenerating = true;
+    } else if (!isGenerating && wasGenerating) {
+      wasGenerating = false;
+      const allRes = document.querySelectorAll('message-content, .model-response-text');
+      const responseEl = allRes.length ? allRes[allRes.length - 1] : null;
+      if (responseEl) cb(responseEl);
+    }
+  }, 500);
 }
 
-/**
- * @param {string} [selector]
- * @returns {string}
- */
 export function extractUserMessage(selector = '.user-query') {
   try {
     const messages = document.querySelectorAll(selector);
     if (messages.length === 0) return '';
     return messages[messages.length - 1].textContent.trim();
-  } catch {
-    return '';
-  }
+  } catch { return ''; }
 }
 
-/**
- * Берёт последний непустой драфт.
- * Gemini показывает несколько драфтов при Regenerate.
- * @param {string} selector
- * @returns {string}
- */
-export function extractLlmResponse(selector) {
-  try {
-    const all = document.querySelectorAll(selector);
-    if (all.length === 0) return '';
-    for (let i = all.length - 1; i >= 0; i--) {
-      if (all[i].childNodes.length === 0) continue;
-      const text = all[i].textContent.trim();
-      if (text.length > 0) return text;
-    }
-    return '';
-  } catch {
-    return '';
+export function extractLlmResponse(responseEl) {
+  // `responseEl` is DOM element passed from `index.js` or string selector
+  if (typeof responseEl === 'string') {
+    try {
+      const all = document.querySelectorAll(responseEl);
+      if (all.length === 0) return '';
+      for (let i = all.length - 1; i >= 0; i--) {
+        if (all[i].childNodes.length === 0) continue;
+        const text = all[i].textContent.trim();
+        if (text.length > 0) return text;
+      }
+      return '';
+    } catch { return ''; }
   }
+  return responseEl?.innerText || '';
 }
 
-/**
- * @param {() => void} cb
- * @returns {() => void} unsubscribe
- */
 export function onRegenerate(cb) {
   const handler = (e) => {
-    if (e.target.closest(REGENERATE_SELECTORS)) cb();
+    if (e.target.closest('[aria-label="Regenerate draft"], [aria-label="Regenerate"], [aria-label="Retry"], [aria-label="Повторить"]')) cb();
   };
   document.addEventListener('click', handler);
   return () => document.removeEventListener('click', handler);

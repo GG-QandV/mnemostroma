@@ -14,18 +14,18 @@ const HARDCODED_SELECTORS = {
   'claude.ai': {
     responseContainer: '.font-claude-response',
     stopButton:        '[aria-label="Stop Response"]',
-    userMessage:       '.\\!font-user-message',
+    userMessage:       '[data-testid="user-message"]',
     regenerateButton:  '[aria-label="Retry"]',
   },
   'chatgpt.com': {
     responseContainer: '[data-message-author-role="assistant"]',
-    stopButton:        '[aria-label="Stop streaming"]',
+    stopButton:        '[aria-label="Stop streaming"], [data-testid="stop-button"]',
     userMessage:       '[data-message-author-role="user"]',
     regenerateButton:  '[aria-label="Regenerate"]',
   },
   'chat.openai.com': {
     responseContainer: '[data-message-author-role="assistant"]',
-    stopButton:        '[aria-label="Stop streaming"]',
+    stopButton:        '[aria-label="Stop streaming"], [data-testid="stop-button"]',
     userMessage:       '[data-message-author-role="user"]',
     regenerateButton:  '[aria-label="Regenerate"]',
   },
@@ -42,10 +42,10 @@ const HARDCODED_SELECTORS = {
     regenerateButton:  '[aria-label="Rewrite"]',
   },
   'gemini.google.com': {
-    responseContainer: '.model-response-text',
-    stopButton:        '.stop-button',
-    userMessage:       '.user-query',
-    regenerateButton:  '[aria-label="Regenerate draft"]',
+    responseContainer: 'message-content, .model-response-text',
+    stopButton:        '.loading-content-spinner-container, .mat-mdc-progress-spinner, button[aria-label*="Stop generating"], button[aria-label*="Stop response"], button[aria-label*="Зупинити генерацію"], button[aria-label*="Остановить генерацию"], .stop-button',
+    userMessage:       '.query-text, .user-query',
+    regenerateButton:  '[aria-label="Regenerate draft"], [aria-label="Повторить"]',
   },
   'deepseek.com': {
     responseContainer: '.ds-markdown',

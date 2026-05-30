@@ -100,28 +100,33 @@ async def handle_tunnel_start(request: Request) -> JSONResponse:
     Extension после этого переходит в "starting" state и polling /tunnel/status.
     asyncio.create_subprocess_exec не блокирует event loop (в отличие от subprocess.Popen).
     """
+    from mnemostroma.integration.tunnel.resolve import resolve_mnemostroma_executable
     try:
+        cmd = resolve_mnemostroma_executable() + ["tunnel", "start"]
         await asyncio.create_subprocess_exec(
-            "mnemostroma", "tunnel", "start",
+            *cmd,
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.DEVNULL,
             **_detach_kwargs(),
         )
-    except FileNotFoundError:
-        logger.error("handle_tunnel_start: 'mnemostroma' not found in PATH")
+    except FileNotFoundError as e:
+        logger.error("handle_tunnel_start: executable not found: %s", e)
         return JSONResponse({"started": False, "error": "mnemostroma_not_found"}, status_code=500)
     return JSONResponse({"started": True})
 
 
 async def handle_tunnel_stop(request: Request) -> JSONResponse:
     """POST /tunnel/stop"""
+    from mnemostroma.integration.tunnel.resolve import resolve_mnemostroma_executable
     try:
+        cmd = resolve_mnemostroma_executable() + ["tunnel", "stop"]
         await asyncio.create_subprocess_exec(
-            "mnemostroma", "tunnel", "stop",
+            *cmd,
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.DEVNULL,
             **_detach_kwargs(),
         )
-    except FileNotFoundError:
+    except FileNotFoundError as e:
+        logger.error("handle_tunnel_stop: executable not found: %s", e)
         return JSONResponse({"stopped": False, "error": "mnemostroma_not_found"}, status_code=500)
     return JSONResponse({"stopped": True})

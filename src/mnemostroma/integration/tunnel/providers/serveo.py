@@ -8,7 +8,7 @@ import subprocess
 import threading
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any
 
 logger = logging.getLogger("mnemostroma.tunnel.providers.serveo")
 
@@ -66,12 +66,78 @@ def _build_cmd_args(cmd: str) -> list[str]:
     return shlex.split(cmd, posix=(sys.platform != "win32"))
 
 
+def _atomic_write(path: Path, content: str) -> None:
+    """Пишет файл атомарно с использованием временного файла рядом."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    try:
+        tmp.write_text(content, encoding="utf-8")
+        tmp.replace(path)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def _load_saved_proc() -> Any:
+    """Пытается восстановить handle на живой ssh/serveo процесс."""
+    pid_file = Path.home() / ".mnemostroma" / "serveo_tunnel.pid"
+    if not pid_file.exists():
+        return None
+    try:
+        import psutil
+        pid = int(pid_file.read_text(encoding="utf-8").strip())
+        if psutil.pid_exists(pid):
+            proc = psutil.Process(pid)
+            name = proc.name().lower()
+            cmdline = proc.cmdline()
+            is_valid = "ssh" in name or any("serveo.net" in c for c in cmdline)
+            if is_valid:
+                class _RestoredProc:
+                    def __init__(self, pid):
+                        self.pid = pid
+                    def poll(self):
+                        import psutil
+                        return None if psutil.pid_exists(self.pid) else 0
+                    def terminate(self):
+                        import psutil
+                        try:
+                            psutil.Process(self.pid).terminate()
+                        except Exception:
+                            pass
+                    def kill(self):
+                        import psutil
+                        try:
+                            psutil.Process(self.pid).kill()
+                        except Exception:
+                            pass
+                    def wait(self, timeout=None):
+                        import psutil
+                        try:
+                            psutil.Process(self.pid).wait(timeout)
+                        except Exception:
+                            pass
+                    def send_signal(self, sig):
+                        import psutil
+                        try:
+                            psutil.Process(self.pid).send_signal(sig)
+                        except Exception:
+                            pass
+                return _RestoredProc(pid)
+    except Exception:
+        pass
+    try:
+        pid_file.unlink(missing_ok=True)
+    except Exception:
+        pass
+    return None
+
+
 class ServeoTunnelManager:
     """Manages Serveo SSH tunnel with auto-reconnect."""
 
     def __init__(self, port: int = DEFAULT_MCP_PORT, subdomain: Optional[str] = None):
         self.resolver = ServeoModeResolver(port, subdomain)
-        self._proc: Optional[subprocess.Popen] = None
+        self._proc: Optional[subprocess.Popen] = _load_saved_proc()
         self._url: Optional[str] = None
         self._stop_event = threading.Event()
         self._url_event = threading.Event()
@@ -135,6 +201,12 @@ class ServeoTunnelManager:
                 **kwargs
             )
             self._proc = proc
+            try:
+                pid_file = Path.home() / ".mnemostroma" / "serveo_tunnel.pid"
+                pid_file.parent.mkdir(parents=True, exist_ok=True)
+                pid_file.write_text(str(proc.pid), encoding="utf-8")
+            except Exception:
+                pass
 
             def _reader(p=proc) -> None:
                 for line in p.stdout:
@@ -147,8 +219,8 @@ class ServeoTunnelManager:
                     if url:
                         self._url = url
                         url_file = Path.home() / ".mnemostroma" / "serveo_url"
-                        url_file.parent.mkdir(parents=True, exist_ok=True)
-                        url_file.write_text(url, encoding="utf-8")
+                        _atomic_write(url_file, url)
+                        _atomic_write(Path.home() / ".mnemostroma" / "tunnel_url", url)
                         self._url_event.set()
 
             reader = threading.Thread(target=_reader, daemon=True)
@@ -197,3 +269,4 @@ class ServeoTunnelManager:
         mnemo_dir = Path.home() / ".mnemostroma"
         (mnemo_dir / "serveo_url").unlink(missing_ok=True)
         (mnemo_dir / "tunnel_url").unlink(missing_ok=True)
+        (mnemo_dir / "serveo_tunnel.pid").unlink(missing_ok=True)

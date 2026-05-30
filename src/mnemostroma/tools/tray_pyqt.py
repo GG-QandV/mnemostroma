@@ -38,6 +38,7 @@ def _copy(text: str) -> None:
 
 
 def _run_tunnel(action: str) -> None:
+    from mnemostroma.integration.tunnel.resolve import resolve_mnemostroma_executable
     kwargs: dict = {
         "stdout": subprocess.DEVNULL,
         "stderr": subprocess.DEVNULL,
@@ -46,7 +47,11 @@ def _run_tunnel(action: str) -> None:
         kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
     else:
         kwargs["start_new_session"] = True
-    subprocess.Popen(["mnemostroma", "tunnel", action], **kwargs)
+    try:
+        cmd = resolve_mnemostroma_executable() + ["tunnel", action]
+        subprocess.Popen(cmd, **kwargs)
+    except Exception as e:
+        logger.error("Failed to run tunnel action %s: %s", action, e)
 
 
 class TunnelUrlWatcher:

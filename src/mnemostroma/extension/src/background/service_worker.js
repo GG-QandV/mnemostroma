@@ -43,22 +43,7 @@ function badgeRed()    { setBadge({ text: 'X', color: '#ef4444' }); } // ASCII �
 // Minimum: Chrome 103, Firefox 100 — both covered by manifest requirements §2.2
 
 function fetchWithTimeout(url, ms) {
-  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
-    try {
-      return fetch(url, { signal: AbortSignal.timeout(ms) });
-    } catch (_) {}
-  }
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), ms);
-  return fetch(url, { signal: controller.signal })
-    .then(res => {
-      clearTimeout(timeoutId);
-      return res;
-    })
-    .catch(err => {
-      clearTimeout(timeoutId);
-      throw err;
-    });
+  return fetch(url, { signal: AbortSignal.timeout(ms) });
 }
 
 // ─── Health check ─────────────────────────────────────────────────────────────
@@ -85,7 +70,6 @@ async function _doHealthCheck() {
     const mcpConf = json?.mcpConfirmed === true;
 
     if (!alive) {
-      console.warn('[Mnemostroma] Health check: daemon returned alive=false', json);
       await _handleDaemonDown();
       return;
     }
@@ -98,8 +82,7 @@ async function _doHealthCheck() {
 
     if (!globalEnabled || !lastPostOk) badgeYellow(); else badgeGreen();
 
-  } catch (err) {
-    console.error('[Mnemostroma] Health check failed:', err);
+  } catch {
     await _handleDaemonDown();
   }
 }

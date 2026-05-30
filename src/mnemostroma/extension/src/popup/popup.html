@@ -130,6 +130,80 @@
     }
     .footer a { color: #475569; text-decoration: none; }
     .footer a:hover { color: #94a3b8; }
+
+    /* ── Tunnel section ── */
+    .hidden { display: none !important; }
+
+    .btn-primary {
+      width: 100%;
+      padding: 6px 10px;
+      background: #4f46e5;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 12px;
+      font-family: inherit;
+    }
+    .btn-primary:hover { background: #4338ca; }
+
+    .btn-small {
+      padding: 3px 7px;
+      background: #1e293b;
+      color: #cbd5e1;
+      border: 1px solid #334155;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 11px;
+      font-family: inherit;
+    }
+    .btn-small:hover { background: #334155; }
+    .btn-danger { border-color: #ef4444; color: #ef4444; }
+    .btn-danger:hover { background: #450a0a; }
+
+    .tunnel-hint { font-size: 11px; color: #475569; margin-top: 5px; text-align: center; }
+
+    .tunnel-url-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    .tunnel-url-text {
+      flex: 1;
+      font-size: 11px;
+      color: #94a3b8;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .chat-row { margin-bottom: 8px; }
+    .chat-label { font-size: 12px; color: #e2e8f0; margin-bottom: 2px; }
+    .chat-url-text {
+      font-size: 10px;
+      color: #64748b;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      margin-bottom: 3px;
+    }
+    .chat-actions { display: flex; gap: 4px; margin-bottom: 2px; }
+    .chat-hint { font-size: 10px; color: #475569; }
+
+    .copy-hint { font-size: 11px; color: #22c55e; margin-top: 4px; text-align: center; }
+
+    .spinner {
+      width: 14px; height: 14px;
+      border: 2px solid #334155;
+      border-top-color: #6366f1;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      display: inline-block;
+      vertical-align: middle;
+      margin-right: 5px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
@@ -178,6 +252,32 @@
   <div class="section">
     <div class="section-label">Sites</div>
     <div id="sites-list"></div>
+  </div>
+
+  <!-- Tunnel -->
+  <div class="section" id="tunnel-section" aria-label="Tunnel status">
+    <div class="section-label">🌐 Tunnel</div>
+
+    <!-- STOPPED -->
+    <div id="tunnel-stopped">
+      <button id="btn-start-tunnel" class="btn-primary">▶ Start Tunnel</button>
+      <p class="tunnel-hint">Connect Claude · ChatGPT · Perplexity · Grok</p>
+    </div>
+
+    <!-- STARTING (polling) -->
+    <div id="tunnel-starting" class="hidden" aria-live="polite">
+      <span class="spinner" aria-hidden="true"></span><span>Starting tunnel…</span>
+    </div>
+
+    <!-- RUNNING -->
+    <div id="tunnel-running" class="hidden">
+      <div class="tunnel-url-row">
+        <span id="tunnel-url-display" class="tunnel-url-text" title=""></span>
+        <button id="btn-stop-tunnel" class="btn-small btn-danger" title="Stop tunnel">⏹</button>
+      </div>
+      <div id="tunnel-chats-container"></div>
+      <div id="copy-hint" class="copy-hint hidden" role="status" aria-live="polite"></div>
+    </div>
   </div>
 
   <!-- Footer -->

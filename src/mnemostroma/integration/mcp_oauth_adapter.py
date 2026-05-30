@@ -719,6 +719,70 @@ async def proxy_to_cm(request: Request) -> Response:
 
 # ── Handler map & config-to-entries (Sprint+2) ────────────────────────────────
 
+async def tunnel_status(request: Request) -> JSONResponse:
+    url_file = Path.home() / ".mnemostroma" / "tunnel_url"
+    pid_file = Path.home() / ".mnemostroma" / "serveo_tunnel.pid"
+
+    active = False
+    url = None
+    pid = None
+
+    if url_file.exists():
+        try:
+            url = url_file.read_text(encoding="utf-8").strip()
+            active = bool(url)
+        except Exception:
+            pass
+
+    if pid_file.exists():
+        try:
+            import psutil
+            pid = int(pid_file.read_text(encoding="utf-8").strip())
+            if not psutil.pid_exists(pid):
+                active = False
+                url = None
+        except Exception:
+            pass
+
+    return JSONResponse({
+        "active": active,
+        "url": url,
+        "pid": pid
+    })
+
+async def tunnel_start(request: Request) -> JSONResponse:
+    from mnemostroma.integration.tunnel.resolve import resolve_mnemostroma_executable
+    cmd = resolve_mnemostroma_executable() + ["tunnel", "start"]
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        url_file = Path.home() / ".mnemostroma" / "tunnel_url"
+        for _ in range(40):
+            await asyncio.sleep(0.5)
+            if url_file.exists() and url_file.read_text(encoding="utf-8").strip():
+                url = url_file.read_text(encoding="utf-8").strip()
+                return JSONResponse({"started": True, "url": url})
+        return JSONResponse({"started": False, "error": "timeout"}, status_code=504)
+    except FileNotFoundError as e:
+        return JSONResponse({"started": False, "error": str(e)}, status_code=500)
+
+async def tunnel_stop(request: Request) -> JSONResponse:
+    from mnemostroma.integration.tunnel.resolve import resolve_mnemostroma_executable
+    cmd = resolve_mnemostroma_executable() + ["tunnel", "stop"]
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        await proc.wait()
+    except Exception as e:
+        return JSONResponse({"stopped": False, "error": str(e)}, status_code=500)
+    return JSONResponse({"stopped": True})
+
 _HANDLER_MAP: dict[str, Callable] = {
     "streamable-http": handle_mcp,
     "sse":             proxy_sse,
@@ -742,6 +806,9 @@ _SERVICE_ENTRIES: dict[str, RouteEntry] = {
     "/token":             RouteEntry([AuthMode.NONE], token,             ["POST"]),
     "/health":            RouteEntry([AuthMode.NONE], health,            ["GET"]),
     "/mcp-config":        RouteEntry([AuthMode.NONE], handle_mcp_config, ["GET"]),
+    "/tunnel/status":     RouteEntry([AuthMode.NONE], tunnel_status,     ["GET"]),
+    "/tunnel/start":      RouteEntry([AuthMode.NONE], tunnel_start,      ["POST"]),
+    "/tunnel/stop":       RouteEntry([AuthMode.NONE], tunnel_stop,       ["POST"]),
 }
 
 

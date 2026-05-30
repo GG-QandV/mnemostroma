@@ -11,17 +11,6 @@ import {
 // Spec §7.6 backoff values kept in constants for future non-SW contexts.
 const MAX_ATTEMPTS = TRANSPORT_RETRY_DELAYS.length;
 
-function getSignal(ms) {
-  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
-    try {
-      return AbortSignal.timeout(ms);
-    } catch (_) {}
-  }
-  const controller = new AbortController();
-  setTimeout(() => controller.abort(), ms);
-  return controller.signal;
-}
-
 /**
  * Отправляет exchange payload на :8766/observe.
  * 3 немедленных попытки. 4xx — выход без retry.
@@ -36,7 +25,7 @@ export async function postCollect(payload) {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify(payload),
-        signal:  getSignal(TRANSPORT_TIMEOUT_MS),
+        signal:  AbortSignal.timeout(TRANSPORT_TIMEOUT_MS),
       });
 
       if (res.ok) return true;

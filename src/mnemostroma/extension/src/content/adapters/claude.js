@@ -66,7 +66,7 @@ export function getStreamEndSignal(selector, cb) {
  * @param {string} [selector]
  * @returns {string}
  */
-export function extractUserMessage(selector = '.\\!font-user-message') {
+export function extractUserMessage(selector = '[data-testid="user-message"]') {
   try {
     const messages = document.querySelectorAll(selector);
     if (messages.length === 0) return '';

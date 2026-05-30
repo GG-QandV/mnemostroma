@@ -18,7 +18,6 @@ window.addEventListener('message', (event) => {
 
   const msg = event.data;
   if (!msg || msg.__mnemo !== true) return;
-  console.debug('[Mnemostroma-Bridge-Debug] bridge.js received message from MAIN world:', msg);
   if (!ALLOWED_TYPES.has(msg.type)) return;
 
   // Shape validation: COLLECT must have hostname (string) and payload (object).
@@ -31,12 +30,10 @@ window.addEventListener('message', (event) => {
 
   if (!api?.runtime?.sendMessage) {
     console.warn('[Mnemostroma] Extension context invalidated. Please refresh the page to reconnect.');
-    console.debug('[Mnemostroma-Bridge-Debug] api.runtime.sendMessage is UNDEFINED (context invalidated)!');
     return;
   }
 
   try {
-    console.debug('[Mnemostroma-Bridge-Debug] bridge.js calling api.runtime.sendMessage for payload:', payload);
     const promise = api.runtime.sendMessage(payload);
     if (promise && typeof promise.then === 'function') {
       promise
