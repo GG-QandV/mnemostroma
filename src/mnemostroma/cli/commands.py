@@ -1165,22 +1165,34 @@ def _cmd_tunnel(args: list) -> None:
                 cmd = proc.info.get('cmdline') or []
                 name = (proc.info.get('name') or "").lower()
 
-                # 1. ssh (serveo.net)
-                if "ssh" in name or any("ssh" in c for c in cmd):
+                # 1. ssh/autossh (serveo.net)
+                if "ssh" in name or "autossh" in name or any("ssh" in c for c in cmd):
                     if any("serveo.net" in c for c in cmd):
-                        proc.kill()
-                        print(f"✓ Killed Serveo SSH tunnel process PID {pid}")
+                        try:
+                            proc.terminate()
+                            proc.wait(timeout=3)
+                        except psutil.TimeoutExpired:
+                            proc.kill()
+                        print(f"✓ Stopped Serveo tunnel process PID {pid} ({name})")
 
                 # 2. mcp_oauth_adapter
                 elif any("mcp_oauth_adapter" in c for c in cmd):
-                    proc.kill()
-                    print(f"✓ Killed mcp_oauth_adapter process PID {pid}")
+                    try:
+                        proc.terminate()
+                        proc.wait(timeout=3)
+                    except psutil.TimeoutExpired:
+                        proc.kill()
+                    print(f"✓ Stopped mcp_oauth_adapter process PID {pid}")
 
                 # 3. mnemostroma tunnel foreground process
                 elif any("mnemostroma" in c for c in cmd) and any("tunnel" in c for c in cmd) and any("--foreground" in c for c in cmd):
-                    proc.kill()
-                    print(f"✓ Killed tunnel manager process PID {pid}")
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    try:
+                        proc.terminate()
+                        proc.wait(timeout=3)
+                    except psutil.TimeoutExpired:
+                        proc.kill()
+                    print(f"✓ Stopped tunnel manager process PID {pid}")
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.TimeoutExpired):
                 pass
 
         url_file.unlink(missing_ok=True)
@@ -1194,10 +1206,10 @@ def _cmd_tunnel(args: list) -> None:
             try:
                 cmd = proc.info.get('cmdline') or []
                 name = (proc.info.get('name') or "").lower()
-                if "ssh" in name or any("ssh" in c for c in cmd):
+                if "ssh" in name or "autossh" in name or any("ssh" in c for c in cmd):
                     if any("serveo.net" in c for c in cmd):
                         active = True
-                        print(f"  Tunnel process (Serveo SSH): PID {proc.pid} (active)")
+                        print(f"  Tunnel process ({name}): PID {proc.pid} (active)")
                 elif any("mcp_oauth_adapter" in c for c in cmd):
                     active = True
                     print(f"  OAuth adapter process: PID {proc.pid} (active)")

@@ -10,7 +10,11 @@
     ],
     "host_permissions": [
         "http://127.0.0.1:8766/*",
-        "http://localhost:8766/*"
+        "http://localhost:8766/*",
+        "http://127.0.0.1:8769/*",
+        "http://localhost:8769/*",
+        "http://127.0.0.1:8768/*",
+        "http://localhost:8768/*"
     ],
     "background": {
         "service_worker": "src/background/service_worker.js",

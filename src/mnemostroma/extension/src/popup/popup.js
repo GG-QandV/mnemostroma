@@ -286,18 +286,8 @@ async function _refreshTunnel() {
     return;
   }
 
-  // Обновление классов ободка (Часть 3.4 спецификации)
-  if (tunnelRing) {
-    if (data.active && data.url) {
-      tunnelRing.className = 'tunnel-ring active';
-    } else if (data.pid) {
-      tunnelRing.className = 'tunnel-ring stale';
-    } else {
-      tunnelRing.className = 'tunnel-ring';
-    }
-  }
-
-  if (data.running) {
+  if (data.active && data.url) {
+    if (tunnelRing) tunnelRing.className = 'tunnel-ring active';
     const display = document.getElementById("tunnel-url-display");
     if (display) {
       const url   = data.url || "";
@@ -308,6 +298,9 @@ async function _refreshTunnel() {
     _renderTunnelChats(data.chats || []);
     _tunnelShowState("running");
   } else {
+    if (tunnelRing) {
+      tunnelRing.className = data.pid ? 'tunnel-ring stale' : 'tunnel-ring';
+    }
     _tunnelShowState("stopped");
   }
 }

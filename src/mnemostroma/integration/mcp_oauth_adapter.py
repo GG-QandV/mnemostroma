@@ -23,7 +23,6 @@ import secrets
 import sys
 import threading
 import time
-import webbrowser
 from collections.abc import AsyncGenerator, AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -33,7 +32,7 @@ from typing import Any, Protocol
 
 import httpx
 import uvicorn
-from mcp.server import Server
+from mcp.server import NotificationOptions, Server as MCPServer
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.types import TextContent, Tool
 from starlette.applications import Starlette
@@ -294,8 +293,22 @@ class OAuthTokenMiddleware:
 
 # ── MCP Server factory ────────────────────────────────────────────────────────
 
-def _make_mcp_server() -> Server:
-    srv = Server("mnemostroma")
+class _NotifyingServer(MCPServer):
+    """Server with tools.listChanged=true для Perplexity protocol 2025-06-18."""
+
+    def create_initialization_options(
+        self,
+        notification_options: NotificationOptions | None = None,
+        experimental_capabilities: dict[str, dict[str, Any]] | None = None,
+    ) -> Any:
+        return super().create_initialization_options(
+            notification_options=NotificationOptions(tools_changed=True),
+            experimental_capabilities=experimental_capabilities,
+        )
+
+
+def _make_mcp_server() -> MCPServer:
+    srv = _NotifyingServer("mnemostroma")
 
     @srv.list_tools()
     async def list_tools() -> list[Tool]:
@@ -353,23 +366,25 @@ class ASGIAppWrapper:
 
 async def handle_mcp(scope, receive, send):
     # Accept-patch для Perplexity (HTTP 406 workaround)
+    # MCP Streamable HTTP spec требует: Accept: application/json, text/event-stream
     headers = list(scope.get("headers", []))
+    accept_value = b"application/json, text/event-stream"
     has_accept = False
     for i, (k, v) in enumerate(headers):
         if k.lower() == b"accept":
             has_accept = True
-            if b"application/json" not in v:
-                headers[i] = (b"accept", b"application/json")
+            if b"application/json" not in v or b"text/event-stream" not in v:
+                headers[i] = (b"accept", accept_value)
             break
     if not has_accept:
-        headers.append((b"accept", b"application/json"))
+        headers.append((b"accept", accept_value))
     scope["headers"] = headers
 
     sm = scope["app"].state.sm if hasattr(scope["app"].state, "sm") else None
     if sm is not None and sm._task_group is not None:
         await sm.handle_request(scope, receive, send)
         return
-    # Fallback для тестов: создаём временный SM с run()
+    # Fallback: SM не стартовал — создаём временный со stateless
     sm = StreamableHTTPSessionManager(
         app=_make_mcp_server(),
         event_store=None,
@@ -432,14 +447,6 @@ async def register(request: Request) -> JSONResponse:
 
 # ── /authorize — PKCE S256 ──────────────────────────────────────────────────
 
-def _is_headless() -> bool:
-    if os.environ.get("MNEMOSTROMA_NO_BROWSER", "").lower() in ("1", "true", "yes"):
-        return True
-    if sys.platform == "win32":
-        return os.environ.get("SESSIONNAME", "") == ""
-    return os.environ.get("DISPLAY", "") == ""
-
-
 async def authorize(request: Request) -> Response:
     p: dict[str, str] = dict(request.query_params)
     required: set[str] = {"client_id", "redirect_uri", "code_challenge", "response_type"}
@@ -468,13 +475,6 @@ async def authorize(request: Request) -> Response:
         <button type="submit" style="background:#22c55e;color:white;padding:.5em 1.5em;border:none;border-radius:4px;cursor:pointer">Allow Access</button>
     </form>
     </body></html>"""
-    
-    # Пытаемся открыть браузер для удобства локального пользователя
-    if not _is_headless():
-        try:
-            webbrowser.open(f"{base}/authorize?client_id={client_id}&redirect_uri={redirect_uri}&code_challenge={code_challenge}&response_type=code&state={state}")
-        except Exception as e:
-            logger.warning(f"Failed to open web browser: {e}")
 
     return Response(html, media_type="text/html")
 
@@ -729,14 +729,13 @@ async def tunnel_status(request: Request) -> JSONResponse:
     url_file = Path.home() / ".mnemostroma" / "tunnel_url"
     pid_file = Path.home() / ".mnemostroma" / "serveo_tunnel.pid"
 
-    active = False
     url = None
     pid = None
+    pid_alive = False
 
     if url_file.exists():
         try:
-            url = url_file.read_text(encoding="utf-8").strip()
-            active = bool(url)
+            url = url_file.read_text(encoding="utf-8").strip() or None
         except Exception:
             pass
 
@@ -744,11 +743,11 @@ async def tunnel_status(request: Request) -> JSONResponse:
         try:
             import psutil
             pid = int(pid_file.read_text(encoding="utf-8").strip())
-            if not psutil.pid_exists(pid):
-                active = False
-                url = None
+            pid_alive = psutil.pid_exists(pid)
         except Exception:
             pass
+
+    active = bool(url) and (not pid_file.exists() or pid_alive)
 
     return JSONResponse({
         "active": active,
@@ -760,7 +759,7 @@ async def tunnel_start(request: Request) -> JSONResponse:
     from mnemostroma.integration.tunnel.resolve import resolve_mnemostroma_executable
     cmd = resolve_mnemostroma_executable() + ["tunnel", "start"]
     try:
-        proc = await asyncio.create_subprocess_exec(
+        await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.DEVNULL,
@@ -1019,6 +1018,47 @@ class RouteFileWatcher:
 
 # ── App ───────────────────────────────────────────────────────────────────────
 
+class DebugMiddleware:
+    """Логирует каждый HTTP запрос/ответ при MNEMOSTROMA_DEBUG."""
+
+    DEBUG = os.environ.get("MNEMOSTROMA_DEBUG", "0")
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or self.DEBUG == "0":
+            await self.app(scope, receive, send)
+            return
+
+        request = Request(scope, receive)
+        body = await request.body()
+
+        logger.debug("─" * 60)
+        logger.debug(">>> %s %s", request.method, str(request.url))
+        logger.debug(">>> Headers: %s", dict(request.headers))
+        if body:
+            logger.debug(">>> Body: %s", body.decode(errors="replace")[:2000])
+
+        response_body = bytearray()
+
+        async def send_wrapper(message):
+            if message["type"] == "http.response.start":
+                logger.debug("<<< Status: %d", message.get("status", 0))
+            elif message["type"] == "http.response.body":
+                chunk = message.get("body", b"")
+                response_body.extend(chunk)
+                if message.get("more_body"):
+                    return
+                logger.debug("<<< Body: %s", bytes(response_body).decode(errors="replace")[:2000])
+            await send(message)
+
+        async def receive_wrapper():
+            return {"type": "http.request", "body": body, "more_body": False}
+
+        await self.app(scope, receive_wrapper, send_wrapper)
+
+
 class ServeoHeaderASGIMiddleware:
     def __init__(self, app):
         self.app = app
@@ -1092,6 +1132,7 @@ def make_app(
         lifespan=_lifespan,
         routes=[Route("/{path:path}", endpoint=router)],
         middleware=[
+            Middleware(DebugMiddleware),
             Middleware(OAuthTokenMiddleware),
             Middleware(CORSMiddleware,
                        allow_origins=["*"],
@@ -1130,5 +1171,7 @@ if __name__ == "__main__":
         "bearer_methods_supported": ["header"],
     })
 
-    logging.basicConfig(level=logging.INFO)
-    uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="info")
+    debug = os.environ.get("MNEMOSTROMA_DEBUG", "0")
+    log_level = "debug" if debug != "0" else "info"
+    logging.basicConfig(level=getattr(logging, log_level.upper()))
+    uvicorn.run(app, host="127.0.0.1", port=args.port, log_level=log_level)
