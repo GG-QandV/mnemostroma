@@ -184,6 +184,9 @@ This is not a database with TTL. This is how human memory works.
 | **Hexagonal Storage Refactor** | ✅ DONE — v1.8.0 |
 | **Browser Extension v1.0.5** | ✅ DONE — v2.2.7, ES modules, 6 adapters |
 | **Remote MCP Tunnel — Cloudflare + OAuth** | ✅ DONE — v2.3.0 |
+| **Tunnel UI Controls — Tray menu + Extension ring** | ✅ DONE |
+| **Tunnel Headless Launch — Path resolution, PID restore, atomic state** | ✅ DONE |
+| **Windows 10/11 Compatibility — Task Scheduler, DPI, tooltip** | ✅ DONE |
 
 ---
 
@@ -501,6 +504,15 @@ The Mnemostroma icon in your extension bar is fully functional and uses colors +
 - **Warning (Yellow badge / `!` marker)**: Warning status. The daemon is running, but either global memory capture is paused in the popup menu, the current site is disabled, or the last POST request failed.
 - **Offline (Red badge / `X` marker)**: Offline. The extension cannot connect to the Mnemostroma daemon. Make sure the daemon is running (`mnemostroma start` or universal script).
 
+### Tunnel Ring Indicator
+A circular ring around the extension icon shows tunnel status independently:
+
+- **Green ring** — Tunnel active. URL has been received and cloudflared is running. Memory tools are available to web chats.
+- **Yellow pulsing ring** — Tunnel starting. cloudflared process is alive but URL not yet received (transient state during launch).
+- **No ring** — Tunnel off. No tunnel process and no URL.
+
+The ring updates every ~3s via `observeFetch()` with dual-port fallback (8769 → 8766, 1500ms timeout). Click the tunnel status text in the popup to start/stop the tunnel directly from the extension.
+
 ---
 
 ## <img src="https://raw.githubusercontent.com/GG-QandV/mnemostroma/main/src/extension/assets/plug-thin.svg" width="28" height="28" align="center" /> Connecting to LLM (MCP)
@@ -667,6 +679,20 @@ mnemostroma tunnel start     # Start tunnel + adapter (foreground, Ctrl+C to sto
 mnemostroma tunnel stop      # Stop background tunnel service
 mnemostroma tunnel status    # Show public URL and token
 ```
+
+### Tray Tunnel Controls
+
+When running `mnemostroma tray`, the system tray icon includes a **Tunnel** submenu:
+
+| Menu item | Action |
+|---|---|
+| **Tunnel: Active / Starting… / Off** | Status line (not clickable, auto-updates every 5s) |
+| **▶ Start Tunnel** | Start cloudflared + OAuth adapter (disabled when already active) |
+| **■ Stop Tunnel** | Gracefully stop the tunnel |
+| **↺ Restart Tunnel** | Force kill → 1.5s pause → restart (no dialogs) |
+| **✕ Force Kill (Emergency)** | Kill cloudflared via `taskkill /F` (Windows) or `SIGKILL` (Linux/macOS) |
+
+The tunnel state is read from `~/.mnemostroma/tunnel_url` and `~/.mnemostroma/cloudflared.pid` — no IPC needed. The tray checks these files every 5s and updates the menu accordingly.
 
 ### Security notes
 
