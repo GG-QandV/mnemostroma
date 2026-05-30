@@ -460,7 +460,7 @@ async def authorize(request: Request) -> Response:
     <h2>Mnemostroma — Authorization Request</h2>
     <p>An external chat application is requesting access to your local Mnemostroma memory.</p>
     <p><b>Client ID:</b> {client_id}</p>
-    <form method="post" action="{base}/authorize/confirm">
+    <form method="get" action="{base}/authorize/confirm">
         <input type="hidden" name="client_id" value="{client_id}">
         <input type="hidden" name="redirect_uri" value="{redirect_uri}">
         <input type="hidden" name="code_challenge" value="{code_challenge}">
@@ -510,7 +510,7 @@ async def authorize_confirm(request: Request) -> Response:
                 <h2>Mnemostroma — Authorization Request</h2>
                 <p>An external chat application is requesting access to your local Mnemostroma memory.</p>
                 <p><b>Code:</b> {code[:8]}...</p>
-                <form method="post" action="{base}/authorize/confirm?code={code}&state={state}">
+                <form method="get" action="{base}/authorize/confirm?code={code}&state={state}">
                     <input type="hidden" name="code" value="{code}">
                     <input type="hidden" name="state" value="{state}">
                     <button type="submit" style="background:#22c55e;color:white;padding:.5em 1.5em;border:none;border-radius:4px;cursor:pointer">Allow Access</button>
