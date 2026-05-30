@@ -12,6 +12,7 @@ Colour legend:
   Red    #E53935  — error / daemon not responding
 """
 import json
+import logging
 import sqlite3
 import subprocess
 import sys
@@ -22,6 +23,58 @@ from pathlib import Path
 from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
 from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor
 from PyQt6.QtCore import QTimer, QSize
+
+from mnemostroma.integration.tunnel.state import get_tunnel_url, get_tunnel_token
+from mnemostroma.integration.tunnel.ui_meta import get_meta
+
+logger = logging.getLogger("mnemostroma.tray")
+
+
+def _copy(text: str) -> None:
+    try:
+        QApplication.clipboard().setText(text)
+    except Exception as e:
+        logger.warning("clipboard copy failed: %s", e)
+
+
+def _run_tunnel(action: str) -> None:
+    kwargs: dict = {
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.DEVNULL,
+    }
+    if sys.platform == "win32":
+        kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+    else:
+        kwargs["start_new_session"] = True
+    subprocess.Popen(["mnemostroma", "tunnel", action], **kwargs)
+
+
+class TunnelUrlWatcher:
+    """
+    Следит за изменением tunnel_url. Интегрируется в существующий QTimer (_check_status).
+    При появлении нового URL показывает balloon-уведомление через tray_icon.
+    """
+
+    def __init__(self, tray_icon: QSystemTrayIcon) -> None:
+        self._tray     = tray_icon
+        self._last_url = get_tunnel_url()
+
+    def check(self) -> None:
+        current = get_tunnel_url()
+        if current and current != self._last_url:
+            self._last_url = current
+            self._notify(current)
+        elif not current and self._last_url is not None:
+            self._last_url = None
+
+    def _notify(self, url: str) -> None:
+        short = url.replace("https://", "")[:50]
+        self._tray.showMessage(
+            "🌐 Tunnel Ready",
+            f"Open Tray → Tunnel to copy per-chat URLs\n{short}",
+            QSystemTrayIcon.MessageIcon.Information,
+            6000,
+        )
 
 # ── Status constants ────────────────────────────────────────────
 _ST_PROCESSING = "processing"
@@ -143,6 +196,7 @@ class DaemonTrayApp(QApplication):
         self.current_status = _ST_IDLE
         self.timer = None
         self._init_tray()
+        self._tunnel_watcher = TunnelUrlWatcher(self.tray_icon)
 
     def _create_icon(self, status: str) -> QIcon:
         """Create icon for current status."""
@@ -156,6 +210,8 @@ class DaemonTrayApp(QApplication):
             if self.tray_icon:
                 self.tray_icon.setIcon(self._create_icon(status))
                 self.tray_icon.setToolTip(_LABELS[status])
+        if hasattr(self, "_tunnel_watcher"):
+            self._tunnel_watcher.check()
 
     def _open_watch(self):
         """Open 'mnemostroma watch' in new terminal."""
@@ -184,25 +240,25 @@ class DaemonTrayApp(QApplication):
             print(f"Error opening watch: {e}")
 
     def _restart_daemon(self):
-        """Restart mnemostroma daemon."""
+        """Restart Mnemostroma services in a cascade."""
         try:
-            # Try systemctl first
-            subprocess.run(
-                ["systemctl", "--user", "restart", "mnemostroma-daemon"],
-                check=True,
-                timeout=10
-            )
-            print("Daemon restarted via systemctl")
-        except Exception:
-            try:
-                # Fallback: try direct socket restart
-                subprocess.run(
-                    ["mnemostroma", "daemon", "restart"],
-                    timeout=10
-                )
-                print("Daemon restarted via mnemostroma command")
-            except Exception as e:
-                print(f"Error restarting daemon: {e}")
+            from mnemostroma.tools.cleanup import stop_services, start_services
+            # Run cascade restart in a background thread to prevent UI lockup
+            def run_restart():
+                try:
+                    stop_services()
+                    time.sleep(1.0)
+                    start_services()
+                    print("All services restarted in cascade.")
+                except Exception as e:
+                    print(f"Error in cascade restart thread: {e}")
+
+            thread = threading.Thread(target=run_restart)
+            thread.daemon = True
+            thread.start()
+            print("Restart cascade thread started.")
+        except Exception as e:
+            print(f"Error starting restart cascade thread: {e}")
 
     def _show_status(self):
         """Show status in tray balloon."""
@@ -215,13 +271,82 @@ class DaemonTrayApp(QApplication):
         )
 
     def _clean_zombies(self):
-        """Hard reset memory and zombies via clean-zombies.py."""
-        script = Path(__file__).parent.parent.parent.parent / "scripts" / "clean-zombies.py"
-        if script.exists():
-            subprocess.Popen([sys.executable, str(script)])
-            print("Cleanup script executed.")
+        """Hard reset memory and zombies via integrated cleanup module."""
+        try:
+            from mnemostroma.tools.cleanup import emergency_cleanup
+            # Run cleanup in a background thread to prevent UI lockup
+            thread = threading.Thread(target=emergency_cleanup, args=(True,))
+            thread.daemon = True
+            thread.start()
+            print("Background emergency cleanup thread started.")
+        except Exception as e:
+            print(f"Failed to start cleanup thread: {e}")
+
+    def _populate_tunnel_submenu(self) -> None:
+        """Пересобирает tunnel submenu при каждом открытии (aboutToShow — нет кэша)."""
+        self._tunnel_submenu.clear()
+
+        url   = get_tunnel_url()
+        token = get_tunnel_token()
+
+        if url:
+            short = url.replace("https://", "").replace("http://", "")[:40]
+            s = self._tunnel_submenu.addAction(f"● {short}")
+            s.setEnabled(False)
+            self._tunnel_submenu.addSeparator()
+
+            try:
+                from mnemostroma.integration.mcp_oauth_adapter import load_route_config
+                routes = load_route_config().routes
+            except Exception as e:
+                logger.warning("tray tunnel menu: failed to load routes.json: %s", e)
+                routes = {}
+
+            for path, route_cfg in routes.items():
+                client = route_cfg.get("client", "")
+                if not client:
+                    continue
+
+                meta      = get_meta(client)
+                full_url  = f"{url}{path}"
+                auth_list = route_cfg.get("auth", [])
+                show_tok  = meta["needs_token"] and "bearer" in auth_list and token is not None
+
+                sub = self._tunnel_submenu.addMenu(f"{meta['icon']} {meta['label']}")
+
+                act_url = sub.addAction("📋 Copy URL")
+                act_url.triggered.connect(lambda checked, v=full_url: _copy(v))
+
+                if show_tok:
+                    act_tok = sub.addAction("📋 Copy Token")
+                    act_tok.triggered.connect(lambda checked, t=token: _copy(t))
+
+                hint_action = sub.addAction(meta["hint"])
+                hint_action.setEnabled(False)
+
+            self._tunnel_submenu.addSeparator()
+            stop = self._tunnel_submenu.addAction("⏹  Stop Tunnel")
+            stop.triggered.connect(self._stop_tunnel_with_feedback)
+
         else:
-            print("Cleanup script not found.")
+            start = self._tunnel_submenu.addAction("▶  Start Tunnel")
+            start.triggered.connect(lambda: _run_tunnel("start"))
+
+            info = QMenu("ℹ️ After start:", self._tunnel_submenu)
+            for label in ["Perplexity (no auth)", "Claude.ai / ChatGPT (OAuth)", "Grok (Bearer token)"]:
+                a = info.addAction(label)
+                a.setEnabled(False)
+            self._tunnel_submenu.addMenu(info)
+
+    def _stop_tunnel_with_feedback(self) -> None:
+        _run_tunnel("stop")
+        self.tray_icon.showMessage(
+            "Tunnel",
+            "Stopping tunnel…",
+            QSystemTrayIcon.MessageIcon.Information,
+            3000,
+        )
+        QTimer.singleShot(2500, self._populate_tunnel_submenu)
 
     def _init_tray(self):
         """Initialize system tray icon and menu."""
@@ -236,6 +361,12 @@ class DaemonTrayApp(QApplication):
         menu.addAction("Open Watch", self._open_watch)
         menu.addAction("Restart Daemon", self._restart_daemon)
         menu.addAction("Hard RAM Reset (Emergency)", self._clean_zombies)
+        menu.addSeparator()
+
+        self._tunnel_submenu = QMenu("🌐 Tunnel")
+        self._tunnel_submenu.aboutToShow.connect(self._populate_tunnel_submenu)
+        menu.addMenu(self._tunnel_submenu)
+
         menu.addSeparator()
         menu.addAction("Quit", self.quit)
 

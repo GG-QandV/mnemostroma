@@ -1,3 +1,70 @@
+## 2.3.3 — 2026-05-25
+
+### Added
+- **docs(adapter)**: Developer/Architect guide for `mcp_oauth_adapter` с ASCII-схемой, 7 ADR, component reference, request lifecycle, auth matrix, monitoring, testing guide и runbook.
+- **docs(specs)**: 4 spec-файла для Sprint 0 (Perplexity fix), Sprint+1 (per-route auth), Sprint+2 (hot reload), Sprint+3 (watchfiles backend + reload metrics).
+- **feat(adapter)**: Sprint+3 — watchfiles backend (`WatchBackend` Protocol + `InotifyBackend`/`PollingBackend`), `WatcherConfig`/`FullRouteConfig` dataclasses с валидацией в `routes.json`, `ReloadMetrics` thread-safe dataclass, extended `/health` с `routes.active_count`/`paths` и `reload` snapshot.
+- **feat(adapter)**: `_SERVICE_ENTRIES` вынесен на уровень модуля — исправляет баг потери service routes при hot reload watcher.
+- **feat(adapter)**: `load_route_config()` возвращает `FullRouteConfig` вместо `dict` — все каллеры обновлены.
+- **test(adapter)**: 61 тест Sprint+3 (5 классов: `TestWatchBackends`, `TestWatcherConfig`, `TestReloadMetrics`, `TestWatcherMetrics`, `TestHealthExtended`).
+
+### Fixed
+- **fix(adapter)**: Watcher больше не сбрасывает service entries (`/health`, `/mcp-config`, OAuth endpoints) при reload — `_SERVICE_ENTRIES` всегда мержатся в `registry.update()`.
+- **fix(test)**: Client fixture в тестах Sprint+3 использует `with TestClient(app)` — lifespan запускается, `app.state.registry`/`metrics` доступны в `/health`.
+- **fix(test)**: `test_mcp_sprint1.py` — обновлены assertion для `load_route_config()` возвращающего `FullRouteConfig` (`.routes` accessor).
+- **fix(test)**: `test_mcp_oauth_adapter.py::test_health` — обновлён под новый формат `/health` (удалён `adapter` field).
+
+### Documentation
+- `docs/mcp_oauth_adapter/guide.md` — полный Developer/Architect Guide (11 разделов, ASCII-схема, 7 ADR, 10 компонентов)
+- `docs/mcp_oauth_adapter/spec_sprint0_perplexity_fix.md` — спека Sprint 0
+- `docs/mcp_oauth_adapter/spec_sprint1_per_route_auth.md` — спека Sprint+1
+- `docs/mcp_oauth_adapter/spec_sprint2_hot_reload.md` — спека Sprint+2
+- `docs/mcp_oauth_adapter/spec_sprint3_watchfiles_metrics.md` — спека Sprint+3
+
+---
+
+## 2.3.2 — 2026-05-24
+
+### Added
+- **feat(logging)**: Добавлено полноценное `INFO`-логирование во все обработчики `mcp_oauth_adapter.py` (`_verify_bearer`, `mcp_http`, `mcp_sse`), позволяющее видеть входящие запросы клиентов и прокси-соединения.
+- **feat(logging)**: Изменен дефолтный уровень логирования с `WARNING` на `INFO` для `mcp_oauth_adapter` и `uvicorn`.
+- **fix(install)**: Добавлена переменная окружения `Environment=PYTHONUNBUFFERED=1` в systemd-сервис `mnemostroma-tunnel.service` для мгновенного сброса логов (гайда и URL туннеля) в журнал systemd.
+- **fix(mcp)**: Исправлен баг `'dict' object has no attribute 'name'` в `mcp_http_adapter.py` путем конвертации плоских словарей `_TOOLS` в типизированные объекты `Tool(...)` из официального MCP SDK.
+- **fix(proxy)**: Внедрена функция фильтрации заголовков ответов `_clean_response_headers` в `mcp_oauth_adapter.py`, исключающая транспортные заголовки (`content-length`, `content-encoding` и др.), ломавшие сжатие у внешних клиентов (Perplexity/ChatGPT).
+- **fix(tunnel)**: Реализован чистый ASGI-мидлвар `ServeoHeaderASGIMiddleware` и подключен `CORSMiddleware` в `mcp_oauth_adapter.py` взамен бажного `BaseHTTPMiddleware`, вызывавшего зависание event loop на `StreamingResponse` (SSE-стримах) при авторизации, сохранив при этом обход предупреждений Serveo и CORS.
+- **fix(auth)**: Ослаблена проверка `_verify_bearer` для `/mcp` маршрута — теперь любые запросы на `/mcp` гарантированно проксируются как no-auth (для беспрепятственного подключения Perplexity независимо от передаваемых им заголовков авторизации).
+
+---
+
+## 2.3.1 — 2026-05-23
+
+### 🎯 КРИТИЧНАЯ ФИЧА: Полная поддержка 6 LLM чатов (2026-05-23 16:00 CEST)
+
+**Расширение браузера обновлено до v1.2.7.8 — теперь Mnemostroma имеет прямой доступ к контексту 6 платформ LLM:**
+
+#### Новые адаптеры с 100% надёжным захватом контента:
+- ✅ **ChatGPT** — Full capture via network interception + DOM observer
+- ✅ **Claude.ai** — Full capture via network interception + polling
+- ✅ **Deepseek** — Robust container mutation polling + `/s/` path matching fix
+- ✅ **Gemini** — Complete rewrite with polling observer (v1.2.7.7)
+- ✅ **Grok** — Full transport capture + network fetch hook
+- ✅ **Perplexity** — Multi-provider parsing with query + answer extraction
+
+#### Технические улучшения:
+- **Гибридный захват** (v1.2.7.8): Network fetch interception + DOM polling для максимальной надёжности
+- **Исправления**:
+  - ✅ Deepseek URL matching для `/s/` paths
+  - ✅ Gemini adapter полностью переписан (из хрупкого в stable)
+  - ✅ Bridge.js crash при обновлении расширения устранён
+- **MCP интеграция**: Critical bug fix — `ctx_full()` и `ctx_precision()` больше не возвращают null благодаря восстановлению session_repo
+- **Тестовое покрытие**: 103/103 unit-тестов для адаптеров и парсеров
+
+#### Статус версии:
+- Мнемострома готова к снятию бета-статуса
+- Все 6 чатов протестированы маркерами `MNEMO-TEST-*-2026`
+
+---
+
 ## 2.3.0 — 2026-05-20
 
 ### Added

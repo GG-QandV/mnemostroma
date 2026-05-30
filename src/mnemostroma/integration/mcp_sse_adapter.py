@@ -36,100 +36,17 @@ _SOCKET_PATH = _MNEMO_DIR / "daemon.sock"
 _PIPE_NAME = r"\\.\pipe\mnemostroma"
 _TOKEN_PATH = _MNEMO_DIR / "sse_token"
 
-# ── Auth & Token ───────────────────────────────────────────────────────
-
-def _get_or_create_token() -> str:
-    _MNEMO_DIR.mkdir(parents=True, exist_ok=True)
-    if not _TOKEN_PATH.exists():
-        token = secrets.token_urlsafe(32)
-        _TOKEN_PATH.write_text(token, encoding="utf-8")
-        _TOKEN_PATH.chmod(0o600)
-        logger.info(f"Generated new SSE token in {_TOKEN_PATH}")
-        return token
-    return _TOKEN_PATH.read_text(encoding="utf-8").strip()
-
-
-TOKEN = _get_or_create_token()
-
-_OBSERVE_TOKEN_PATH = _MNEMO_DIR / "observe_token"
-
-def _get_or_create_observe_token() -> str:
-    _MNEMO_DIR.mkdir(parents=True, exist_ok=True)
-    if not _OBSERVE_TOKEN_PATH.exists():
-        token = secrets.token_urlsafe(32)
-        _OBSERVE_TOKEN_PATH.write_text(token, encoding="utf-8")
-        _OBSERVE_TOKEN_PATH.chmod(0o600)
-        return token
-    return _OBSERVE_TOKEN_PATH.read_text(encoding="utf-8").strip()
-
-OBSERVE_TOKEN = _get_or_create_observe_token()
+from .common import (
+    TOKEN,
+    OBSERVE_TOKEN,
+    safe_ipc_call,
+    check_localhost,
+    PrivateNetworkAccessMiddleware,
+)
 
 # ── Tool list (keep in sync with mcp_stdio_adapter.py) ──────────────
 
 from .mcp_stdio_adapter import _TOOLS  # Reuse tools definition from stdio adapter
-
-# ── IPC client ────────────────────────────────────────────────────────
-
-import itertools
-_msg_id_counter = itertools.count(1)  # PATCH-2026-05-17
-
-def _next_id() -> int:
-    return next(_msg_id_counter)
-
-# ── Windows Named Pipe helper ─────────────────────────────────────────
-
-if sys.platform == "win32":
-    async def _open_pipe() -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
-        """Open Named Pipe via ProactorEventLoop (Windows-only).
-
-        ProactorEventLoop is the default on Windows starting from Python 3.8.
-        create_pipe_connection() is a low-level API, analogous to open_unix_connection.
-        """
-        loop = asyncio.get_running_loop()
-        reader = asyncio.StreamReader()
-        protocol = asyncio.StreamReaderProtocol(reader)
-
-        transport, _ = await loop.create_pipe_connection(
-            lambda: protocol,
-            _PIPE_NAME,
-        )
-        writer = asyncio.StreamWriter(transport, protocol, reader, loop)
-        return reader, writer
-
-
-async def _ipc_call(tool: str, args: dict) -> Any:
-    """Send one request to the daemon IPC socket, return result or raise."""
-    if sys.platform == "win32":
-        try:
-            reader, writer = await _open_pipe()
-        except OSError as e:
-            raise ConnectionError(
-                f"Mnemostroma daemon not running (pipe unavailable): {e}\n"
-                "Start with: mnemostroma start"
-            ) from e
-    else:
-        if not _SOCKET_PATH.exists():
-            raise ConnectionError("Mnemostroma daemon not running.")
-        reader, writer = await asyncio.open_unix_connection(str(_SOCKET_PATH))
-
-    try:
-        msg_id = _next_id()
-        payload = json.dumps({"id": msg_id, "tool": tool, "args": args}, ensure_ascii=False)
-        writer.write((payload + "\n").encode())
-        await writer.drain()
-
-        line = await reader.readline()
-        response = json.loads(line.decode())
-
-        if "error" in response:
-            raise RuntimeError(response["error"])
-        return response.get("result")
-    finally:
-        writer.close()
-        try:
-            await writer.wait_closed()
-        except Exception:
-            pass
 
 # ── MCP Server factory ────────────────────────────────────────────────
 # Create a new Server() for each SSE connection.
@@ -145,12 +62,19 @@ def _make_mcp_server() -> Server:
 
     @srv.list_tools()
     async def list_tools() -> list[Tool]:
-        return _TOOLS
+        return [
+            Tool(
+                name=t["name"],
+                description=t["description"],
+                inputSchema=t["inputSchema"],
+            )
+            for t in _TOOLS
+        ]
 
     @srv.call_tool()
     async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         try:
-            result = await _ipc_call(name, arguments)
+            result = await safe_ipc_call(name, arguments)
             text = json.dumps(
                 result if isinstance(result, (dict, list)) else {"result": result},
                 default=str,
@@ -206,7 +130,7 @@ async def handle_messages(scope, receive, send):
 
 async def handle_health(request):
     try:
-        await _ipc_call("ctx_active", {})
+        await safe_ipc_call("ctx_active", {})
         return JSONResponse({"status": "ok", "daemon": "connected", "mcpConfirmed": True})
     except Exception as e:
         return JSONResponse({"status": "error", "daemon": str(e)}, status_code=503)
@@ -214,28 +138,34 @@ async def handle_health(request):
 # ── Starlette App (Observe Receiver - Localhost only) ─────────────────
 
 async def handle_mcp_config(request):
-    serveo_path = _MNEMO_DIR / "serveo_url"
-    serveo_base = serveo_path.read_text(encoding="utf-8").strip() if serveo_path.exists() else None
+    from mnemostroma.integration.tunnel.state import get_tunnel_url
+    tunnel_url = get_tunnel_url()
     local_url  = f"http://127.0.0.1:8765/sse?token={TOKEN}"
-    public_url = f"{serveo_base}/sse?token={TOKEN}" if serveo_base else None
+    public_url = f"{tunnel_url}/sse?token={TOKEN}" if tunnel_url else None
     return JSONResponse({"local_url": local_url, "public_url": public_url})
+
+
+from mnemostroma.integration.tunnel.observe_handlers import (
+    handle_tunnel_status,
+    handle_tunnel_start,
+    handle_tunnel_stop,
+)
 
 
 async def handle_observe(request):
     """Browser extension -> /observe endpoint."""
     # Localhost (extension) or valid token required
     auth = request.headers.get("X-Mnemo-Token")
-    is_localhost = request.client.host in ("127.0.0.1", "localhost")
-    if not is_localhost and (not auth or auth != OBSERVE_TOKEN):
+    if not check_localhost(request) and (not auth or auth != OBSERVE_TOKEN):
         return JSONResponse({"error": "unauthorized"}, status_code=401)
     try:
         data = await request.json()
         session_id = data.get("session_id")
         text = data.get("text")
         if not session_id or not text:
-            return JSONResponse({"error": "missing session_id or text"}, status_code=400)
+            logger.warning(f"Observe 400 payload: {data}"); return JSONResponse({"error": "missing session_id or text"}, status_code=400)
         
-        await _ipc_call("observe", {"session_id": session_id, "text": text})
+        await safe_ipc_call("observe", {"session_id": session_id, "text": text})
         return JSONResponse({"ok": True})
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
@@ -252,6 +182,7 @@ def make_mcp_app():
         ],
         middleware=[
             Middleware(ServeoHeaderMiddleware),
+            Middleware(PrivateNetworkAccessMiddleware),
             Middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]),
         ]
     )
@@ -260,11 +191,15 @@ def make_observe_app():
     return Starlette(
         debug=os.getenv("MNEMO_DEBUG", "false").lower() == "true",  # PATCH-2026-05-17
         routes=[
-            Route("/health",     endpoint=handle_health),
-            Route("/mcp-config", endpoint=handle_mcp_config),
-            Route("/observe",    endpoint=handle_observe, methods=["POST"]),
+            Route("/health",        endpoint=handle_health),
+            Route("/mcp-config",    endpoint=handle_mcp_config),
+            Route("/observe",       endpoint=handle_observe,       methods=["POST"]),
+            Route("/tunnel/status", endpoint=handle_tunnel_status, methods=["GET"]),
+            Route("/tunnel/start",  endpoint=handle_tunnel_start,  methods=["POST"]),
+            Route("/tunnel/stop",   endpoint=handle_tunnel_stop,   methods=["POST"]),
         ],
         middleware=[
+            Middleware(PrivateNetworkAccessMiddleware),
             Middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]),
         ]
     )

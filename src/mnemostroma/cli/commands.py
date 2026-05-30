@@ -1066,7 +1066,7 @@ def _cmd_service(args: list) -> None:
 # ---------------------------------------------------------------------------
 
 def _cmd_tunnel(args: list) -> None:
-    """Управление Cloudflare туннелем и OAuth адаптером для MCP.
+    """Управление Serveo SSH туннелем и OAuth адаптером для MCP.
 
     Subcommands:
         start                     — запустить туннель и адаптер (systemd или foreground)
@@ -1074,8 +1074,18 @@ def _cmd_tunnel(args: list) -> None:
         status                    — показать статус туннеля и URL
     """
     import shutil
-    from mnemostroma.integration.tunnel.manager import TUNNEL_URL_PATH, _print_connection_guide
+    import time
+    from mnemostroma.integration.tunnel.manager import (
+        TUNNEL_URLS_DIR,
+        _load_tunnel_config,
+        _print_connection_guide,
+    )
     from mnemostroma.integration.tunnel.token import get_or_create_tunnel_token, get_tunnel_token
+
+    config = _load_tunnel_config()
+    subdomain = config.get("subdomain")
+    filename = f"user-{subdomain}.txt" if subdomain else "user-anonymous.txt"
+    url_file = TUNNEL_URLS_DIR / filename
 
     subcmd = args[0] if args else "start"
 
@@ -1094,11 +1104,11 @@ def _cmd_tunnel(args: list) -> None:
             print("✓ Mnemostroma tunnel started via systemd")
             # Ждем появления tunnel_url
             for _ in range(20):
-                if TUNNEL_URL_PATH.exists():
+                if url_file.exists():
                     break
-                _time.sleep(0.5)
-            if TUNNEL_URL_PATH.exists():
-                url = TUNNEL_URL_PATH.read_text().strip()
+                time.sleep(0.5)
+            if url_file.exists():
+                url = url_file.read_text().strip()
                 _print_connection_guide(url, get_or_create_tunnel_token())
             else:
                 print("⚠ Tunnel started, but URL is not available yet. Check status shortly.")
@@ -1119,11 +1129,11 @@ def _cmd_tunnel(args: list) -> None:
                     start_new_session=True
                 )
                 for _ in range(20):
-                    if TUNNEL_URL_PATH.exists():
+                    if url_file.exists():
                         break
-                    _time.sleep(0.5)
-                if TUNNEL_URL_PATH.exists():
-                    url = TUNNEL_URL_PATH.read_text().strip()
+                    time.sleep(0.5)
+                if url_file.exists():
+                    url = url_file.read_text().strip()
                     _print_connection_guide(url, get_or_create_tunnel_token())
                 else:
                     print("⚠ Tunnel is starting in background. Check 'mnemostroma tunnel status' shortly.")
@@ -1151,10 +1161,11 @@ def _cmd_tunnel(args: list) -> None:
                 cmd = proc.info.get('cmdline') or []
                 name = (proc.info.get('name') or "").lower()
 
-                # 1. cloudflared
-                if "cloudflared" in name or any("cloudflared" in c for c in cmd):
-                    proc.kill()
-                    print(f"✓ Killed cloudflared process PID {pid}")
+                # 1. ssh (serveo.net)
+                if "ssh" in name or any("ssh" in c for c in cmd):
+                    if any("serveo.net" in c for c in cmd):
+                        proc.kill()
+                        print(f"✓ Killed Serveo SSH tunnel process PID {pid}")
 
                 # 2. mcp_oauth_adapter
                 elif any("mcp_oauth_adapter" in c for c in cmd):
@@ -1168,7 +1179,9 @@ def _cmd_tunnel(args: list) -> None:
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 pass
 
-        TUNNEL_URL_PATH.unlink(missing_ok=True)
+        url_file.unlink(missing_ok=True)
+        (_MNEMO_DIR / "tunnel_url").unlink(missing_ok=True)
+        (_MNEMO_DIR / "serveo_url").unlink(missing_ok=True)
         print("✓ Tunnel stopped.")
 
     elif subcmd == "status":
@@ -1177,9 +1190,10 @@ def _cmd_tunnel(args: list) -> None:
             try:
                 cmd = proc.info.get('cmdline') or []
                 name = (proc.info.get('name') or "").lower()
-                if "cloudflared" in name or any("cloudflared" in c for c in cmd):
-                    active = True
-                    print(f"  Tunnel process (cloudflared): PID {proc.pid} (active)")
+                if "ssh" in name or any("ssh" in c for c in cmd):
+                    if any("serveo.net" in c for c in cmd):
+                        active = True
+                        print(f"  Tunnel process (Serveo SSH): PID {proc.pid} (active)")
                 elif any("mcp_oauth_adapter" in c for c in cmd):
                     active = True
                     print(f"  OAuth adapter process: PID {proc.pid} (active)")
@@ -1200,8 +1214,8 @@ def _cmd_tunnel(args: list) -> None:
         else:
             print("  Tunnel: running")
 
-        if TUNNEL_URL_PATH.exists():
-            url = TUNNEL_URL_PATH.read_text().strip()
+        if url_file.exists():
+            url = url_file.read_text().strip()
             token = get_tunnel_token() or "<not generated>"
             print(f"  Public URL: {url}")
             print(f"  Static token: {token}")

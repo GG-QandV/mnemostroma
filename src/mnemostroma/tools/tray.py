@@ -182,15 +182,25 @@ class DaemonTrayApp:
             print(f"Error opening watch: {e}")
 
     def _restart_daemon(self, widget=None):
-        """Restart mnemostroma daemon."""
+        """Restart Mnemostroma services in a cascade."""
         try:
-            subprocess.run(
-                ["systemctl", "--user", "restart", "mnemostroma-daemon"],
-                timeout=10
-            )
-            print("Daemon restarted")
+            from mnemostroma.tools.cleanup import stop_services, start_services
+            # Run cascade restart in a background thread to prevent UI lockup
+            def run_restart():
+                try:
+                    stop_services()
+                    time.sleep(1.0)
+                    start_services()
+                    print("All services restarted in cascade.")
+                except Exception as e:
+                    print(f"Error in cascade restart thread: {e}")
+
+            thread = threading.Thread(target=run_restart)
+            thread.daemon = True
+            thread.start()
+            print("Restart cascade thread started.")
         except Exception as e:
-            print(f"Error restarting daemon: {e}")
+            print(f"Error starting restart cascade thread: {e}")
 
     def _show_status(self, widget=None):
         """Show status."""
@@ -240,13 +250,16 @@ class DaemonTrayApp:
             time.sleep(0.05)  # 50ms update rate for smooth animation
 
     def _clean_zombies(self, widget=None):
-        """Hard reset memory and zombies via clean-zombies.py."""
-        script = Path(__file__).parent.parent.parent.parent.parent / "scripts" / "clean-zombies.py"
-        if script.exists():
-            subprocess.Popen([sys.executable, str(script)])
-            print("Cleanup script executed.")
-        else:
-            print("Cleanup script not found.")
+        """Hard reset memory and zombies via integrated cleanup module."""
+        try:
+            from mnemostroma.tools.cleanup import emergency_cleanup
+            # Run cleanup in a background thread to prevent UI lockup
+            thread = threading.Thread(target=emergency_cleanup, args=(True,))
+            thread.daemon = True
+            thread.start()
+            print("Background emergency cleanup thread started.")
+        except Exception as e:
+            print(f"Failed to start cleanup thread: {e}")
 
     def _init_indicator(self):
         """Initialize AppIndicator."""

@@ -166,16 +166,41 @@ def run_tray(db_path: Path, interval: int = 3):
         except Exception:
             pass  # notifications not supported on all platforms
 
+    def _restart_daemon(icon, item):
+        """Restart Mnemostroma services in a cascade."""
+        try:
+            from mnemostroma.tools.cleanup import stop_services, start_services
+            def run_restart():
+                try:
+                    stop_services()
+                    time.sleep(1.0)
+                    start_services()
+                    print("All services restarted in cascade.")
+                except Exception as e:
+                    print(f"Error in cascade restart thread: {e}")
+
+            thread = threading.Thread(target=run_restart)
+            thread.daemon = True
+            thread.start()
+            print("Restart cascade thread started.")
+        except Exception as e:
+            print(f"Error starting restart cascade: {e}")
+
     def _clean_zombies(icon, item):
-        """Hard reset memory and zombies via clean-zombies.py."""
-        import sys, subprocess
-        script = Path(__file__).parent.parent.parent.parent.parent / "scripts" / "clean-zombies.py"
-        if script.exists():
-            subprocess.Popen([sys.executable, str(script)])
-            print("Cleanup script executed.")
+        """Hard reset memory and zombies via integrated cleanup module."""
+        try:
+            from mnemostroma.tools.cleanup import emergency_cleanup
+            # Run cleanup in a background thread to prevent UI lockup
+            thread = threading.Thread(target=emergency_cleanup, args=(True,))
+            thread.daemon = True
+            thread.start()
+            print("Background emergency cleanup thread started.")
+        except Exception as e:
+            print(f"Failed to start cleanup thread: {e}")
 
     menu = pystray.Menu(
         pystray.MenuItem("Status", _on_status),
+        pystray.MenuItem("Restart Daemon", _restart_daemon),
         pystray.MenuItem("Hard RAM Reset (Emergency)", _clean_zombies),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Quit", _on_quit),

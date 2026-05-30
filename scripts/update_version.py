@@ -37,32 +37,32 @@ print(f"Date    : {DATE}\n")
 REPLACEMENTS = [
     (
         "README.md",
-        r'!\[Version\]\(https://img\.shields\.io/badge/version-v[\d\.]+(?:--beta)?-orange\)',
-        f'![Version](https://img.shields.io/badge/version-v{VERSION}--beta-orange)',
+        r'!\[Version\]\(https://img\.shields\.io/badge/version-v[\d\.]+(?:--beta)?-(orange|blue|green)\)',
+        f'![Version](https://img.shields.io/badge/version-v{VERSION}-blue)',
         1,
     ),
     (
         "README.md",
         r'\*\*Current:\*\* v[\d\.]+(?:\s+Beta\s+\(Active\s+Development\))? \| \d{4}-\d{2}-\d{2}',
-        f'**Current:** v{VERSION} Beta (Active Development) | {DATE}',
+        f'**Current:** v{VERSION} | {DATE}',
         1,
     ),
     (
         "README.md",
         r'v[\d\.]+(?:\s+Beta\s+\(Active\s+Development\))?\s+(?:is stable|Beta\s+\(Active\s+Development\))\.',
-        f'v{VERSION} Beta (Active Development).',
+        f'v{VERSION} is stable.',
         2,
     ),
     (
         "README.md",
         r'\*offline · ~650MB RAM \(baseline\) · ~20ms · \d+ tests · v[\d\.]+(?:\s+Beta)?\*',
-        f'*offline · ~650MB RAM (baseline) · ~20ms · 577 tests · v{VERSION} Beta*',
+        f'*offline · ~650MB RAM (baseline) · ~20ms · 831 tests · v{VERSION}*',
         1,
     ),
     (
         "UPGRADE.md",
         r'## Upgrading to v[\d\.]+(?:\s+Beta)? \(Current\)',
-        f'## Upgrading to v{VERSION} Beta (Current)',
+        f'## Upgrading to v{VERSION} (Current)',
         1,
     ),
 ]

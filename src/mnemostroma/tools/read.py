@@ -241,7 +241,7 @@ async def ctx_search(
         sb for sb in ctx.ram_index.values()
         if tag_set.issubset(set(sb.tags))
         and (importance is None or sb.importance == importance)
-        and (age is None or sb.age_signal == age)
+        and (age is None or getattr(sb, 'age_signal', None) == age)
     ]
     results.sort(key=lambda x: x.score, reverse=True)
     return results[:limit]
