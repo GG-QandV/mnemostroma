@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from mcp.server import Server
+from mcp.server.lowlevel import NotificationOptions
 from mcp.types import TextContent, Tool
 
 from mnemostroma.conductor import Conductor
@@ -62,6 +63,12 @@ def _serialize(obj: Any) -> str:
 # ── MCP Server Definition ────────────────────────────────────────────
 
 app = Server("mnemostroma")
+
+_orig_create_init = app.create_initialization_options
+app.create_initialization_options = lambda *a, **kw: _orig_create_init(
+    notification_options=NotificationOptions(tools_changed=True),
+    experimental_capabilities=kw.get("experimental_capabilities", {}),
+)
 
 
 @app.list_tools()

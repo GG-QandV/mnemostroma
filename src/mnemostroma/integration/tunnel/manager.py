@@ -103,10 +103,22 @@ async def run(provider: str = "serveo") -> None:
 
     # 2. Запустить OAuth адаптер с PUBLIC_URL
     print("  Starting OAuth adapter...", end=" ", flush=True)
+    # Kill any process still holding ADAPTER_PORT before binding
+    from mnemostroma.integration.tunnel.state import _kill_port_occupants
+    _kill_port_occupants(ADAPTER_PORT)
+    await asyncio.sleep(0.3)
+    adapter_log_path = MNEMO_DIR / "adapter.log"
+    adapter_log_file = open(adapter_log_path, "a", encoding="utf-8")  # noqa: WPS515
+    import os as _os
+    adapter_env = {**_os.environ, "MNEMOSTROMA_DEBUG": "1"}
     adapter_proc: asyncio.subprocess.Process = await asyncio.create_subprocess_exec(
         sys.executable, "-m", "mnemostroma.integration.mcp_oauth_adapter",
         "--port", str(ADAPTER_PORT),
         "--public-url", public_url,
+        env=adapter_env,
+        stdin=asyncio.subprocess.DEVNULL,
+        stdout=adapter_log_file,
+        stderr=adapter_log_file,
     )
     print("✓\n")
 
@@ -123,6 +135,7 @@ async def run(provider: str = "serveo") -> None:
             pass  # Windows
 
     await stop_event.wait()
+    adapter_log_file.close()
     await _shutdown(adapter_proc, tunnel_mgr)
 
 
@@ -184,4 +197,6 @@ def _print_connection_guide(url: str, token: str) -> None:
 
   ℹ️ To stop the tunnel at any time, run:
      mnemostroma tunnel stop
+
+  📋 Adapter debug log: ~/.mnemostroma/adapter.log
 """)

@@ -4,7 +4,8 @@ import asyncio
 import time
 import numpy as np
 from mnemostroma.observer.filter import deterministic_filter, detect_urgency, detect_principle
-from mnemostroma.observer.pipeline import compress_text, calculate_score
+from mnemostroma.observer.utils import compress_text
+from mnemostroma.memory.scoring import calculate_score
 
 def test_deterministic_filter():
     # 1. Critical

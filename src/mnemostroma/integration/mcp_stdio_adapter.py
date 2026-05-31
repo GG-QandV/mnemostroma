@@ -221,8 +221,9 @@ async def _handle(req: dict) -> dict | None:
         return None
 
     if method == "initialize":
+        client_version = params.get("protocolVersion", _PROTOCOL)
         return _ok(rid, {
-            "protocolVersion": _PROTOCOL,
+            "protocolVersion": client_version,
             "capabilities": {"tools": {}},
             "serverInfo": {"name": "mnemostroma", "version": _VERSION},
         })

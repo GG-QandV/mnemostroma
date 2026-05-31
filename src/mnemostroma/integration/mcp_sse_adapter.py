@@ -23,6 +23,7 @@ class ServeoHeaderMiddleware(BaseHTTPMiddleware):  # PATCH-2026-05-17
 
 
 from mcp.server import Server
+from mcp.server.lowlevel import NotificationOptions
 from mcp.server.sse import SseServerTransport
 from mcp.types import TextContent, Tool
 
@@ -55,6 +56,12 @@ def _make_mcp_server() -> Server:
     Guarantees isolated negotiation state and absence of race conditions.
     """
     srv = Server("mnemostroma")
+
+    _orig_create_init = srv.create_initialization_options
+    srv.create_initialization_options = lambda *a, **kw: _orig_create_init(
+        notification_options=NotificationOptions(tools_changed=True),
+        experimental_capabilities=kw.get("experimental_capabilities", {}),
+    )
 
     @srv.list_tools()
     async def list_tools() -> list[Tool]:

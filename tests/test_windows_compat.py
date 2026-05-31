@@ -18,7 +18,6 @@ from mnemostroma.integration.mcp_oauth_adapter import (
     _make_watch_backend_from_config,
     WatcherConfig,
     PollingBackend,
-    _is_headless,
 )
 from mnemostroma.integration.common import safe_ipc_call, _unix_socket_available
 
@@ -79,22 +78,7 @@ def test_inotify_fallback_on_windows(monkeypatch):
     assert isinstance(backend, PollingBackend)
 
 
-def test_no_browser_in_headless_mode(monkeypatch):
-    """Fix W-06: Browser open is bypassed in headless environments."""
-    monkeypatch.setattr(sys, "platform", "win32")
-    
-    # 1. Headless via environment variable
-    monkeypatch.setenv("MNEMOSTROMA_NO_BROWSER", "1")
-    assert _is_headless() is True
 
-    # 2. Headless via empty SESSIONNAME on Windows
-    monkeypatch.delenv("MNEMOSTROMA_NO_BROWSER", raising=False)
-    monkeypatch.setenv("SESSIONNAME", "")
-    assert _is_headless() is True
-
-    # 3. Headed simulation
-    monkeypatch.setenv("SESSIONNAME", "Console")
-    assert _is_headless() is False
 
 
 @pytest.mark.asyncio

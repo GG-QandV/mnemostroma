@@ -7,6 +7,7 @@ from pathlib import Path
 
 import uvicorn
 from mcp.server import Server
+from mcp.server.lowlevel import NotificationOptions
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.types import TextContent, Tool
 from starlette.applications import Starlette
@@ -38,6 +39,12 @@ from .mcp_stdio_adapter import _TOOLS  # Reuse tools definition from stdio adapt
 
 def _make_mcp_server() -> Server:
     srv = Server("mnemostroma")
+
+    _orig_create_init = srv.create_initialization_options
+    srv.create_initialization_options = lambda *a, **kw: _orig_create_init(
+        notification_options=NotificationOptions(tools_changed=True),
+        experimental_capabilities=kw.get("experimental_capabilities", {}),
+    )
 
     @srv.list_tools()
     async def list_tools() -> list[Tool]:

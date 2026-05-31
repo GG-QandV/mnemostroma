@@ -276,6 +276,39 @@ function _stopPolling() {
   if (_tunnelPolling) { clearInterval(_tunnelPolling); _tunnelPolling = null; }
 }
 
+const CHAT_META = {
+  'perplexity': { label: 'Perplexity', icon: '🔍', hint: 'Auth: None — вставь URL как есть' },
+  'claude':     { label: 'Claude',     icon: '🤖', hint: 'Auth: OAuth или Bearer token'   },
+  'chatgpt':    { label: 'ChatGPT',    icon: '💬', hint: 'Auth: OAuth'                     },
+  'grok':       { label: 'Grok',       icon: '✴️',  hint: 'Auth: Bearer token'              },
+};
+
+function _buildChatsFromConfig(routes, tunnelToken) {
+  const chats = [];
+  const seen = new Set();
+  for (const [path, cfg] of Object.entries(routes || {})) {
+    const meta = CHAT_META[cfg.client];
+    if (!meta || seen.has(cfg.client)) continue;
+    seen.add(cfg.client);
+
+    const clientUrl = cfg.fullurl || cfg.url || '';
+    const displayUrl = clientUrl.length > 50
+      ? clientUrl.slice(0, 48) + '…'
+      : clientUrl;
+
+    chats.push({
+      label:       meta.label,
+      icon:        meta.icon,
+      hint:        meta.hint,
+      full_url:    clientUrl,
+      url:         cfg.url,
+      needs_token: cfg.needs_token === true,
+      token:       cfg.needs_token ? tunnelToken : null,
+    });
+  }
+  return chats;
+}
+
 async function _refreshTunnel() {
   const data = await _fetchTunnelStatus();
   const tunnelRing = document.getElementById('tunnel-ring');
@@ -295,7 +328,16 @@ async function _refreshTunnel() {
       display.textContent = short + (url.length > 42 ? "…" : "");
       display.title = url;
     }
-    _renderTunnelChats(data.chats || []);
+
+    try {
+      const cfgRes = await observeFetch('/mcp-config');
+      if (cfgRes && cfgRes.ok) {
+        const cfg = await cfgRes.json();
+        const chats = _buildChatsFromConfig(cfg.routes, cfg.tunnel_token);
+        _renderTunnelChats(chats);
+      }
+    } catch (_) {}
+
     _tunnelShowState("running");
   } else {
     if (tunnelRing) {

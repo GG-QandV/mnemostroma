@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "mnemostroma": {
+      "url": "https://YOUR_SUBDOMAIN.serveo.net/mcp",
+      "headers": {
+        "serveo-skip-browser-warning": "true"
+      }
+    }
+  }
+}

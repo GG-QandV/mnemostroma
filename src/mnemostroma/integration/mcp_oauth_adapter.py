@@ -19,6 +19,7 @@ import inspect
 import json
 import logging
 import os
+import re
 import secrets
 import sys
 import threading
@@ -32,8 +33,9 @@ from typing import Any, Protocol
 
 import httpx
 import uvicorn
-from mcp.server import NotificationOptions, Server as MCPServer
+from mcp.server import Server as MCPServer
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+from mcp.server import Server
 from mcp.types import TextContent, Tool
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
@@ -49,7 +51,7 @@ from starlette.routing import Route
 
 from mnemostroma.integration.tunnel.token import get_or_create_tunnel_token
 
-from .common import TOKEN, safe_ipc_call
+from .common import safe_ipc_call
 from .mcp_stdio_adapter import _TOOLS
 
 logger: logging.Logger = logging.getLogger("mnemostroma.integration.mcp_oauth_adapter")
@@ -76,7 +78,7 @@ def _validate_oauth_token(token: str) -> bool:
 # ── Route config (Sprint+1) ──────────────────────────────────────────────────
 
 DEFAULT_ROUTES: dict[str, dict] = {
-    "/mcp":                    {"auth": ["none"],              "client": "perplexity",  "transport": "streamable-http"},
+    "/mcp":                    {"auth": ["api_key"],           "client": "perplexity",  "transport": "streamable-http"},
     "/sse":                    {"auth": ["oauth", "bearer"],  "client": "claude",       "transport": "sse"},
     "/messages/":              {"auth": ["oauth", "bearer"],  "client": "claude",       "transport": "sse-messages"},
     "/mcp/chatgpt":            {"auth": ["oauth", "bearer"],  "client": "chatgpt",      "transport": "streamable-http"},
@@ -85,7 +87,7 @@ DEFAULT_ROUTES: dict[str, dict] = {
     "/context-manager/{rest:path}": {"auth": ["bearer"],      "client": "internal",     "transport": "proxy"},
 }
 
-VALID_AUTH_MODES: set[str] = {"none", "bearer", "oauth"}
+VALID_AUTH_MODES: set[str] = {"none", "bearer", "oauth", "api_key"}
 
 
 @dataclass
@@ -138,6 +140,8 @@ def _build_routes(route_cfg: dict) -> list[Route]:
     routes = [
         Route("/.well-known/oauth-authorization-server", oauth_metadata, methods=["GET"]),
         Route("/.well-known/oauth-protected-resource", protected_resource_metadata, methods=["GET"]),
+        Route("/mcp/.well-known/oauth-protected-resource", protected_resource_metadata, methods=["GET"]),
+        Route("/.well-known/oauth-protected-resource/mcp", protected_resource_metadata, methods=["GET"]),
         Route("/register", register, methods=["POST"]),
         Route("/authorize", authorize, methods=["GET"]),
         Route("/authorize/confirm", authorize_confirm, methods=["GET", "POST"]),
@@ -200,9 +204,10 @@ class RouteRegistry:
 # ── AuthMode & AuthSelector (per-route auth isolation) ────────────────────────
 
 class AuthMode(Enum):
-    NONE   = "none"     # Perplexity — no auth
-    BEARER = "bearer"   # Grok, прямые вызовы
-    OAUTH  = "oauth"    # Claude, ChatGPT
+    NONE    = "none"     # Perplexity — no auth
+    BEARER  = "bearer"   # Grok, прямые вызовы
+    OAUTH   = "oauth"    # Claude, ChatGPT
+    API_KEY = "api_key"  # optional ?api_key=TOKEN: open if absent, validated if present
 
 
 class AuthSelector:
@@ -217,13 +222,24 @@ class AuthSelector:
                 return True
             if mode == AuthMode.BEARER:
                 bearer = request.headers.get("Authorization", "")
-                api_key = request.headers.get("api-key", "")
-                query = request.query_params.get("token", "")
-                if bearer == f"Bearer {TOKEN}" or api_key == TOKEN or query == TOKEN:
+                api_key_header = request.headers.get("api-key", "")
+                query_token = request.query_params.get("token", "")
+                api_key_param = request.query_params.get("api_key", "")
+                valid_token = get_or_create_tunnel_token()
+                if (
+                    bearer == f"Bearer {valid_token}"
+                    or api_key_header == valid_token
+                    or query_token == valid_token
+                    or api_key_param == valid_token
+                ):
                     return True
-                tok = bearer[len("Bearer "):] if bearer.startswith("Bearer ") else ""
-                if tok and tok == get_or_create_tunnel_token():
-                    return True
+            if mode == AuthMode.API_KEY:
+                api_key_param = request.query_params.get("api_key", "")
+                if not api_key_param:
+                    return True  # absent → open access
+                if api_key_param == get_or_create_tunnel_token():
+                    return True  # valid key → allow
+                # invalid key → fall through to next mode
             if mode == AuthMode.OAUTH:
                 token = scope.get("oauth_token", "")
                 if _validate_oauth_token(token):
@@ -293,22 +309,9 @@ class OAuthTokenMiddleware:
 
 # ── MCP Server factory ────────────────────────────────────────────────────────
 
-class _NotifyingServer(MCPServer):
-    """Server with tools.listChanged=true для Perplexity protocol 2025-06-18."""
-
-    def create_initialization_options(
-        self,
-        notification_options: NotificationOptions | None = None,
-        experimental_capabilities: dict[str, dict[str, Any]] | None = None,
-    ) -> Any:
-        return super().create_initialization_options(
-            notification_options=NotificationOptions(tools_changed=True),
-            experimental_capabilities=experimental_capabilities,
-        )
-
-
+# Keeps strong references to fire-and-forget tasks so GC doesn't kill them.
 def _make_mcp_server() -> MCPServer:
-    srv = _NotifyingServer("mnemostroma")
+    srv = Server("mnemostroma")
 
     @srv.list_tools()
     async def list_tools() -> list[Tool]:
@@ -365,6 +368,21 @@ class ASGIAppWrapper:
 # ── MCP handler — читает SM из app.state ─────────────────────────────────────
 
 async def handle_mcp(scope, receive, send):
+    # Intercept GET /mcp when Accept is NOT text/event-stream →
+    # return tool list directly as JSON for Perplexity dashboard
+    if scope.get("method") == "GET":
+        raw_headers = dict(scope.get("headers", []))
+        raw_accept = raw_headers.get(b"accept", b"*/*").decode()
+        if b"text/event-stream" not in raw_accept.encode():
+            response = JSONResponse(
+                {"list": [
+                    {"name": t["name"], "description": t["description"], "inputSchema": t["inputSchema"]}
+                    for t in _TOOLS
+                ]}
+            )
+            await response(scope, receive, send)
+            return
+
     # Accept-patch для Perplexity (HTTP 406 workaround)
     # MCP Streamable HTTP spec требует: Accept: application/json, text/event-stream
     headers = list(scope.get("headers", []))
@@ -455,28 +473,26 @@ async def authorize(request: Request) -> Response:
     if p.get("code_challenge_method", "S256") != "S256":
         return JSONResponse({"error": "invalid_request", "error_description": "Only S256 supported"}, status_code=400)
 
-    client_id = p["client_id"]
-    redirect_uri = p["redirect_uri"]
-    code_challenge = p["code_challenge"]
-    state = p.get("state", "")
+    code: str = secrets.token_urlsafe(32)
+    state: str = p.get("state", "")
+    redirect_uri: str = p["redirect_uri"]
+    _codes[code] = {
+        "client_id": p["client_id"],
+        "pkce_challenge": p["code_challenge"],
+        "redirect_uri": redirect_uri,
+        "expires": time.time() + 300,
+    }
 
+    # Немедленный редирект (Perplexity получает код сразу)
+    # Consent screen открывается в браузере асинхронно
     base: str = PUBLIC_URL if PUBLIC_URL else _base_url(request)
-    
-    # Возвращаем 200 HTML с формой согласия (Consent Screen)
-    html: str = f"""<!DOCTYPE html><html><body style="font-family:sans-serif;padding:2em">
-    <h2>Mnemostroma — Authorization Request</h2>
-    <p>An external chat application is requesting access to your local Mnemostroma memory.</p>
-    <p><b>Client ID:</b> {client_id}</p>
-    <form method="get" action="{base}/authorize/confirm">
-        <input type="hidden" name="client_id" value="{client_id}">
-        <input type="hidden" name="redirect_uri" value="{redirect_uri}">
-        <input type="hidden" name="code_challenge" value="{code_challenge}">
-        <input type="hidden" name="state" value="{state}">
-        <button type="submit" style="background:#22c55e;color:white;padding:.5em 1.5em;border:none;border-radius:4px;cursor:pointer">Allow Access</button>
-    </form>
-    </body></html>"""
+    try:
+        import webbrowser
+        webbrowser.open(f"{base}/authorize/confirm?code={code}&state={state}")
+    except Exception:
+        pass
 
-    return Response(html, media_type="text/html")
+    return RedirectResponse(f"{redirect_uri}?code={code}&state={state}", status_code=302)
 
 
 async def authorize_confirm(request: Request) -> Response:
@@ -493,31 +509,6 @@ async def authorize_confirm(request: Request) -> Response:
     state = form_data.get("state") or request.query_params.get("state") or ""
 
     if not client_id or not redirect_uri or not code_challenge:
-        # Обратная совместимость для старых тестов (GET/POST /authorize/confirm?code=...)
-        code = request.query_params.get("code", "")
-        if code:
-            if request.method == "POST":
-                if code not in _codes:
-                    return Response("Authorization session expired or invalid.", status_code=400)
-                html_success: str = """<!DOCTYPE html><html><body style="font-family:sans-serif;padding:2em;text-align:center">
-                <h2 style="color:#22c55e">Access Granted!</h2>
-                <p>You can close this window now and return to your chat application.</p>
-                </body></html>"""
-                return Response(html_success, media_type="text/html")
-            else:
-                base: str = PUBLIC_URL if PUBLIC_URL else _base_url(request)
-                html: str = f"""<!DOCTYPE html><html><body style="font-family:sans-serif;padding:2em">
-                <h2>Mnemostroma — Authorization Request</h2>
-                <p>An external chat application is requesting access to your local Mnemostroma memory.</p>
-                <p><b>Code:</b> {code[:8]}...</p>
-                <form method="get" action="{base}/authorize/confirm?code={code}&state={state}">
-                    <input type="hidden" name="code" value="{code}">
-                    <input type="hidden" name="state" value="{state}">
-                    <button type="submit" style="background:#22c55e;color:white;padding:.5em 1.5em;border:none;border-radius:4px;cursor:pointer">Allow Access</button>
-                </form>
-                </body></html>"""
-                return Response(html, media_type="text/html")
-
         return Response("Missing required OAuth parameters.", status_code=400)
 
     # Генерируем реальный одноразовый code при подтверждении
@@ -685,12 +676,25 @@ async def handle_mcp_config(request: Request) -> JSONResponse:
     routes = route_cfg.routes if isinstance(route_cfg, FullRouteConfig) else route_cfg
     routes_out = {}
     for path, cfg in routes.items():
+        auth_modes = cfg.get("auth", [])
+        base_url = f"{serveo_url}{path}" if serveo_url else None
+
+        has_oauth = "oauth" in auth_modes
+        has_bearer = "bearer" in auth_modes
+
+        if has_bearer and not has_oauth and tunnel_token and base_url:
+            full_url = f"{base_url}?api_key={tunnel_token}"
+        else:
+            full_url = base_url
+
         routes_out[path] = {
-            "url": f"{serveo_url}{path}" if serveo_url else None,
-            "auth": cfg["auth"],
+            "url": base_url,
+            "fullurl": full_url,
+            "auth": auth_modes,
             "client": cfg.get("client"),
             "transport": cfg.get("transport"),
-            "bearer_token": tunnel_token if "bearer" in cfg["auth"] else None,
+            "bearer_token": tunnel_token if has_bearer else None,
+            "needs_token": has_bearer and not has_oauth,
         }
     return JSONResponse({
         "serveo_url": serveo_url,
@@ -803,8 +807,10 @@ _METHODS_MAP: dict[str, list[str]] = {
 }
 
 _SERVICE_ENTRIES: dict[str, RouteEntry] = {
-    "/.well-known/oauth-authorization-server": RouteEntry([AuthMode.NONE], oauth_metadata, ["GET"]),
-    "/.well-known/oauth-protected-resource":   RouteEntry([AuthMode.NONE], protected_resource_metadata, ["GET"]),
+    "/.well-known/oauth-authorization-server":      RouteEntry([AuthMode.NONE], oauth_metadata, ["GET"]),
+    "/.well-known/oauth-protected-resource":        RouteEntry([AuthMode.NONE], protected_resource_metadata, ["GET"]),
+    "/mcp/.well-known/oauth-protected-resource":    RouteEntry([AuthMode.NONE], protected_resource_metadata, ["GET"]),
+    "/.well-known/oauth-protected-resource/mcp":    RouteEntry([AuthMode.NONE], protected_resource_metadata, ["GET"]),
     "/register":          RouteEntry([AuthMode.NONE], register,          ["POST"]),
     "/authorize":         RouteEntry([AuthMode.NONE], authorize,         ["GET"]),
     "/authorize/confirm": RouteEntry([AuthMode.NONE], authorize_confirm, ["GET", "POST"]),
@@ -1035,26 +1041,41 @@ class DebugMiddleware:
         body = await request.body()
 
         logger.debug("─" * 60)
-        logger.debug(">>> %s %s", request.method, str(request.url))
+        safe_url = re.sub(r'(api_key=)[^&]+', r'\1***', str(request.url))
+        logger.debug(">>> %s %s", request.method, safe_url)
         logger.debug(">>> Headers: %s", dict(request.headers))
         if body:
             logger.debug(">>> Body: %s", body.decode(errors="replace")[:2000])
 
         response_body = bytearray()
+        is_streaming = False
 
         async def send_wrapper(message):
+            nonlocal is_streaming
             if message["type"] == "http.response.start":
                 logger.debug("<<< Status: %d", message.get("status", 0))
             elif message["type"] == "http.response.body":
                 chunk = message.get("body", b"")
-                response_body.extend(chunk)
                 if message.get("more_body"):
-                    return
-                logger.debug("<<< Body: %s", bytes(response_body).decode(errors="replace")[:2000])
+                    is_streaming = True
+                    # SSE: log chunk inline and always forward immediately
+                    if chunk:
+                        logger.debug("<<< SSE: %s", chunk.decode(errors="replace")[:500])
+                else:
+                    response_body.extend(chunk)
+                    if not is_streaming:
+                        logger.debug("<<< Body: %s", bytes(response_body).decode(errors="replace")[:2000])
             await send(message)
 
+        # Must pass the real receive so SSE/streaming can detect http.disconnect
+        _consumed = False
+
         async def receive_wrapper():
-            return {"type": "http.request", "body": body, "more_body": False}
+            nonlocal _consumed
+            if not _consumed:
+                _consumed = True
+                return {"type": "http.request", "body": body, "more_body": False}
+            return await receive()
 
         await self.app(scope, receive_wrapper, send_wrapper)
 
