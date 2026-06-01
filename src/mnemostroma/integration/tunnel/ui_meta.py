@@ -37,6 +37,12 @@ CHAT_UI_META: dict[str, ChatMeta] = {
         "hint":        "Settings → MCP Server URL + Bearer Token",
         "needs_token": True,    # Bearer — пользователь вставляет токен вручную
     },
+    "cm": {
+        "label":       "Context Memory",
+        "icon":        "🧠",
+        "hint":        "Settings → Custom connector → Streamable HTTP",
+        "needs_token": False,
+    },
 }
 
 # Fallback для неизвестных клиентов из routes.json

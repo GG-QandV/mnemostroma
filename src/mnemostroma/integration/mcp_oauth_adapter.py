@@ -82,7 +82,7 @@ DEFAULT_ROUTES: dict[str, dict] = {
     "/sse":                    {"auth": ["oauth", "bearer"],  "client": "claude",       "transport": "sse"},
     "/messages/":              {"auth": ["oauth", "bearer"],  "client": "claude",       "transport": "sse-messages"},
     "/mcp/chatgpt":            {"auth": ["oauth", "bearer"],  "client": "chatgpt",      "transport": "streamable-http"},
-    "/mcp/grok":               {"auth": ["bearer"],           "client": "grok",         "transport": "streamable-http"},
+    "/mcp/grok":               {"auth": ["oauth", "bearer"],  "client": "grok",         "transport": "streamable-http"},
     "/context-manager":        {"auth": ["bearer"],           "client": "internal",     "transport": "proxy"},
     "/context-manager/{rest:path}": {"auth": ["bearer"],      "client": "internal",     "transport": "proxy"},
 }
@@ -133,7 +133,7 @@ def load_route_config(path: Path | None = None) -> FullRouteConfig:
         interval=wc.get("interval", 2.0),
         backend=wc.get("backend", "auto"),
     )
-    return FullRouteConfig(routes=data.get("routes", {}), watcher=watcher)
+    return FullRouteConfig(routes={**DEFAULT_ROUTES, **data.get("routes", {})}, watcher=watcher)
 
 
 def _build_routes(route_cfg: dict) -> list[Route]:
@@ -509,7 +509,12 @@ async def authorize_confirm(request: Request) -> Response:
     state = form_data.get("state") or request.query_params.get("state") or ""
 
     if not client_id or not redirect_uri or not code_challenge:
-        return Response("Missing required OAuth parameters.", status_code=400)
+        # Вызов из браузера после авто-redirect /authorize — показываем инфо-страницу
+        return Response(
+            "<html><body><h2>Authorization complete</h2><p>You may close this tab.</p></body></html>",
+            status_code=200,
+            media_type="text/html",
+        )
 
     # Генерируем реальный одноразовый code при подтверждении
     code = secrets.token_urlsafe(32)
