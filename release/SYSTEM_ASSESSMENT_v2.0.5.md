@@ -11,7 +11,8 @@
 | Component                       | Role                                              | RAM Baseline | RAM Peak    | Active Port / Binding                                                |
 | ------------------------------- | ------------------------------------------------- | ------------ | ----------- | -------------------------------------------------------------------- |
 | **Observer (v2.0)**            | Unified browser extension & DOM capturing          | ~45 MB       | ~90 MB      | Streams to port `8766` (Localhost)                                   |
-| **SSE Adapter**                 | Server-Sent Events MCP router                     | ~15 MB       | ~30 MB      | Port `8765` (Public, token-auth) / `8766` (Local, no-auth)           |
+| **SSE Adapter** *(embedded)*    | SSE MCP router — встроен в daemon (v2.3.2+)        | 0 MB extra   | 0 MB extra  | Port `8765` (Public, token-auth) / `8766` (Local, no-auth)           |
+| **HTTP Adapter** *(embedded)*   | Streamable HTTP MCP router — встроен в daemon      | 0 MB extra   | 0 MB extra  | Port `8768` (Public, token-auth)                                     |
 | **TLS Passthrough Proxy**       | HTTPS tunnel proxy (e.g. for Claude Code)          | ~10 MB       | ~25 MB      | Port `8767` (Localhost, self-signed TLS)                             |
 | **Session Classifier**          | Session type classification (Code/Research)       | ~5 MB        | ~15 MB      | Internal pipeline only                                               |
 | **Dreamer**                     | Background distillation & consolidation           | ~30 MB       | ~60 MB      | Background thread pools                                              |
@@ -30,7 +31,8 @@
 
 | Interface (Port) | Target Binding | Protocol | Authorization | Client Type | Purpose |
 | ---------------- | -------------- | -------- | ------------- | ----------- | ------- |
-| **SSE Port 8765**| `0.0.0.0`      | HTTP/SSE | Bearer Token  | Cloud IDE (`claude.ai`) | Exposes 12 MCP retrieval and memory tools. |
+| **HTTP Port 8768**| `127.0.0.1`   | HTTP     | Bearer Token  | VS Code, Antigravity, OpenCode, Qoder | Streamable HTTP MCP (основной транспорт). |
+| **SSE Port 8765**| `127.0.0.1`    | HTTP/SSE | Bearer Token  | Cursor, Claude Code, Grok, Perplexity | SSE MCP transport. |
 | **OBS Port 8766**| `127.0.0.1`    | HTTP/POST| None (local)  | Browser Extension | Receives raw DOM-parsed chat streams. |
 | **TLS Port 8767**| `127.0.0.1`    | HTTPS    | None (local)  | CLI Clients (`Claude Code`) | Intercepts, observes, and forwards API queries. |
 

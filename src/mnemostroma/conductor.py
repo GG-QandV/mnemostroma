@@ -42,6 +42,8 @@ class Conductor:
         self.proxy: ConductorProxy | None = None
         self._last_observe_at: float = 0.0
         self._dreamer_task: asyncio.Task | None = None
+        self._sse_task: asyncio.Task | None = None
+        self._http_task: asyncio.Task | None = None
         self._pulse_writer: PulseWriter | None = None
         self._status_writer: StatusWriter | None = None
         self._backup_worker: Any | None = None
@@ -359,6 +361,22 @@ class Conductor:
     async def stop(self):
         """Shutdown the system and save state."""
         self._stopping = True
+
+        # Stop embedded HTTP server — close client connections cleanly
+        if self._http_task and not self._http_task.done():
+            self._http_task.cancel()
+            try:
+                await asyncio.wait_for(asyncio.shield(self._http_task), timeout=5.0)
+            except (asyncio.CancelledError, asyncio.TimeoutError):
+                pass
+
+        # Stop embedded SSE server
+        if self._sse_task and not self._sse_task.done():
+            self._sse_task.cancel()
+            try:
+                await asyncio.wait_for(asyncio.shield(self._sse_task), timeout=5.0)
+            except (asyncio.CancelledError, asyncio.TimeoutError):
+                pass
         # F-1: conductor.shutdown telemetry — fired before teardown sequence
         import time as _t_stop
         try:

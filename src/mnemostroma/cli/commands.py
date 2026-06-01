@@ -208,6 +208,17 @@ async def _run_daemon(
 
     try:
         from mnemostroma.core.bootstrap import bootstrap
+        # Kill any pre-existing daemon instances before taking over
+        _my_pid = os.getpid()
+        for _dup in _find_mnemo_processes():
+            if _dup.pid == _my_pid:
+                continue
+            try:
+                _dup.kill()
+                logger.warning(f"Killed duplicate daemon PID {_dup.pid} before startup")
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
+        (_MNEMO_DIR / "daemon.sock").unlink(missing_ok=True)
         _write_pid()
         conductor = await bootstrap(config_path, db_path, model_dir)
         
@@ -223,13 +234,10 @@ async def _run_daemon(
     except Exception as e:
         logger.error(f"Daemon failed: {e}", exc_info=True)
     finally:
-        _remove_pid()
         logger.info("Shutting down daemon...")
-        # Since bootstrap returned, it might have already stopped or we stop it here.
-        # But wait, if bootstrap blocked and then was cancelled, the finally block here 
-        # is the right place to clean up.
         if 'conductor' in locals():
-            await conductor.stop()
+            await asyncio.shield(conductor.stop())
+        _remove_pid()
         logger.info("Shutdown complete.")
 
 # ---------------------------------------------------------------------------
@@ -623,7 +631,7 @@ _BANNER = f"""
   ██║╚██╔╝██║██║╚████║██╔══╝  ██║╚██╔╝██║██║   ██║
   ██║ ╚═╝ ██║██║ ╚███║███████╗██║ ╚═╝ ██║╚██████╔╝
   ╚═╝     ╚═╝╚═╝  ╚══╝╚══════╝╚═╝     ╚═╝ ╚═════╝
-                    MNEMOSTROMA v{__version__} Beta
+                    MNEMOSTROMA v{__version__}
 """
 
 def _cmd_cleanup(args: list) -> bool:
@@ -961,7 +969,7 @@ def _cmd_service_linux() -> None:
         "mnemostroma-proxy.service",
         "mnemostroma-watchdog.service",
         "mnemostroma-ui.service",
-        "mnemostroma-sse.service",
+        # "mnemostroma-sse.service",  # REMOVED: SSE embedded in daemon (see SPEC_sse_daemon_embed_v1.1)
         "mnemostroma-tunnel.service",  # Cloudflare Tunnel & OAuth Adapter
     ]
 
@@ -1292,13 +1300,21 @@ def dispatch(args_namespace: argparse.Namespace) -> None:
         except Exception as e:
             print(f"\n❌ Tray failure: {e}")
             sys.exit(1)
-    elif command == "sse":  # PATCH-2026-05-17
+    elif command == "sse":  # standalone/debug mode — conductor=None uses IPC fallback
         try:
             from mnemostroma.integration.mcp_sse_adapter import run as sse_run
-            asyncio.run(sse_run())
+            asyncio.run(sse_run(conductor=None))
         except ImportError:
             print("\n❌ Error: 'sse' dependencies missing.")
             print("   Install: pip install 'mnemostroma[sse]'")
+            sys.exit(1)
+    elif command == "http":  # standalone/debug mode — conductor=None uses IPC fallback
+        try:
+            from mnemostroma.integration.mcp_http_adapter import run as http_run
+            asyncio.run(http_run(conductor=None))
+        except ImportError:
+            print("\n❌ Error: 'http' dependencies missing.")
+            print("   Install: pip install 'mnemostroma[http]'")
             sys.exit(1)
         except KeyboardInterrupt:
             pass

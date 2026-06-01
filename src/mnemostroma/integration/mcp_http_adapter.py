@@ -7,7 +7,6 @@ from pathlib import Path
 
 import uvicorn
 from mcp.server import Server
-from mcp.server.lowlevel import NotificationOptions
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.types import TextContent, Tool
 from starlette.applications import Starlette
@@ -37,14 +36,8 @@ from .mcp_stdio_adapter import _TOOLS  # Reuse tools definition from stdio adapt
 
 # ── MCP Server factory ────────────────────────────────────────────────
 
-def _make_mcp_server() -> Server:
+def _make_mcp_server(conductor=None) -> Server:
     srv = Server("mnemostroma")
-
-    _orig_create_init = srv.create_initialization_options
-    srv.create_initialization_options = lambda *a, **kw: _orig_create_init(
-        notification_options=NotificationOptions(tools_changed=True),
-        experimental_capabilities=kw.get("experimental_capabilities", {}),
-    )
 
     @srv.list_tools()
     async def list_tools() -> list[Tool]:
@@ -60,7 +53,12 @@ def _make_mcp_server() -> Server:
     @srv.call_tool()
     async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         try:
-            result = await safe_ipc_call(name, arguments)
+            if conductor is not None:
+                from mnemostroma.ipc_server import _serialize
+                raw = await conductor.dispatch(name, arguments)
+                result = _serialize(raw)
+            else:
+                result = await safe_ipc_call(name, arguments)
             text = json.dumps(
                 result if isinstance(result, (dict, list)) else {"result": result},
                 default=str,
@@ -68,6 +66,7 @@ def _make_mcp_server() -> Server:
             )
             return [TextContent(type="text", text=text)]
         except Exception as exc:
+            logger.error(f"call_tool {name!r} failed: {exc}", exc_info=True)
             return [TextContent(type="text", text=json.dumps({"error": str(exc)}))]
 
     return srv
@@ -167,20 +166,20 @@ async def handle_mcp_config(request: Request) -> JSONResponse:
 from contextlib import asynccontextmanager
 
 
-@asynccontextmanager
-async def lifespan(app):
-    sm = StreamableHTTPSessionManager(
-        app=_make_mcp_server(),
-        event_store=None,
-        json_response=True,
-        stateless=True,
-    )
-    async with sm.run():
-        app.state.sm = sm
-        yield
+def make_mcp_app(conductor=None):
+    @asynccontextmanager
+    async def lifespan(app):
+        sm = StreamableHTTPSessionManager(
+            app=_make_mcp_server(conductor=conductor),
+            event_store=None,
+            json_response=True,
+            stateless=True,
+        )
+        async with sm.run():
+            app.state.sm = sm
+            yield
 
-def make_mcp_app():
-    return Starlette(  # PATCH-2026-05-17
+    return Starlette(
         debug=os.getenv("MNEMO_DEBUG", "false").lower() == "true",
         lifespan=lifespan,
         routes=[
@@ -217,22 +216,36 @@ def is_port_in_use(port: int, host: str = "127.0.0.1") -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         return s.connect_ex((host, port)) == 0
 
-async def run():
-    logging.basicConfig(level=logging.INFO)
+async def run(
+    conductor=None,
+    port: int = 8768,
+    host: str = "127.0.0.1",
+) -> None:
+    embedded = conductor is not None
+    mcp_host = host if embedded else "0.0.0.0"
 
-    mcp_config = uvicorn.Config(make_mcp_app(),     host="0.0.0.0",   port=8768, log_level="info")
-    obs_config = uvicorn.Config(make_observe_app(), host="127.0.0.1", port=8766, log_level="info")
-
+    mcp_config = uvicorn.Config(
+        make_mcp_app(conductor=conductor),
+        host=mcp_host,
+        port=port,
+        log_level="warning" if embedded else "info",
+    )
     servers = [uvicorn.Server(mcp_config)]
 
-    logger.info("Mnemostroma HTTP Adapter starting...")
-    logger.info("  MCP HTTP: http://127.0.0.1:8768/mcp (Auth required)")
-    
-    if not is_port_in_use(8766, "127.0.0.1"):
-        servers.append(uvicorn.Server(obs_config))
-        logger.info("  Observe: http://127.0.0.1:8766/observe (Localhost only)")
+    if not embedded:
+        logging.basicConfig(level=logging.INFO)
+        logger.info("Mnemostroma HTTP Adapter starting...")
+        logger.info("  MCP HTTP: http://127.0.0.1:%s/mcp (Auth required)", port)
+        obs_config = uvicorn.Config(
+            make_observe_app(), host="127.0.0.1", port=8766, log_level="info"
+        )
+        if not is_port_in_use(8766, "127.0.0.1"):
+            servers.append(uvicorn.Server(obs_config))
+            logger.info("  Observe: http://127.0.0.1:8766/observe (Localhost only)")
+        else:
+            logger.info("  Observe: Port 8766 already in use (handled by another adapter)")
     else:
-        logger.info("  Observe: Port 8766 already in use (handled by another adapter)")
+        logger.info("Embedded MCP HTTP server starting on %s:%s", mcp_host, port)
 
     await asyncio.gather(*(s.serve() for s in servers))
 

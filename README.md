@@ -2,14 +2,14 @@
 
 ### The memory layer for AI agents
 
-![Version](https://img.shields.io/badge/version-v2.3.1-blue)
+![Version](https://img.shields.io/badge/version-v2.3.2-blue)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue)
 ![Tests](https://img.shields.io/badge/tests-831%20passing-brightgreen)
 ![License](https://img.shields.io/badge/license-FSL--1.1--MIT-lightgrey)
 
 > *μνήμη (mnḗmē, memory) + στρῶμα (strôma, layer) — the substrate everything rests on.*
 
-> **v2.3.1 is stable.** Upgrading from v1.9.1 or earlier? → [See UPGRADE.md](./UPGRADE.md)
+> **v2.3.2 is stable.** Upgrading from v1.9.1 or earlier? → [See UPGRADE.md](./UPGRADE.md)
 
 ---
 
@@ -164,7 +164,7 @@ This is not a database with TTL. This is how human memory works.
 
 ## Status
 
-**Current:** v2.3.1 | 2026-05-30
+**Current:** v2.3.2 | 2026-06-01
 
 | Component | Status |
 |---|---|
@@ -187,6 +187,7 @@ This is not a database with TTL. This is how human memory works.
 | **Tunnel UI Controls — Tray menu + Extension ring** | ✅ DONE |
 | **Tunnel Headless Launch — Path resolution, PID restore, atomic state** | ✅ DONE |
 | **Windows 10/11 Compatibility — Task Scheduler, DPI, tooltip** | ✅ DONE |
+| **SSE + HTTP Adapters embedded in daemon** | ✅ DONE — v2.3.2 |
 
 ---
 
@@ -194,7 +195,7 @@ This is not a database with TTL. This is how human memory works.
 
 **Requires Python 3.12+**
 
-> **v2.3.1 is stable.** Upgrading from v1.9.1 or earlier? → [See UPGRADE.md](./UPGRADE.md)
+> **v2.3.2 is stable.** Upgrading from v1.9.1 or earlier? → [See UPGRADE.md](./UPGRADE.md)
 
 ---
 
@@ -576,15 +577,15 @@ powershell -ExecutionPolicy Bypass -File "$env:TEMP\mnemo-install.ps1"
 
 > **Architecture note:** Clients (VS Code, Claude Code, Cursor) will spawn lightweight adapter processes (~70 MB) that connect to this daemon via socket. The daemon persists to maintain cross-session memory; adapters are ephemeral.
 
-### Claude.ai (Web Interface) — Custom MCP Connector (Beta)
+### Claude.ai (Web Interface) — Custom MCP Connector
 
 Claude.ai supports connecting custom remote MCP servers. While Server-Sent Events (SSE) was the legacy transport, **Streamable HTTP** is the current, modern standard as of the latest MCP specifications. Mnemostroma fully supports both transports.
 
 To connect Mnemostroma as a Custom Connector in **Claude.ai → Settings → Integrations → Add Custom Connector** (or via `https://claude.ai/customize/connectors?modal=add-custom-connector`):
 
-1. **Start the appropriate adapter** in a separate terminal:
-   * **Streamable HTTP (Recommended, port 8768):** Started by default with the daemon. Or run manually: `python3 -m mnemostroma.integration.mcp_http_adapter`
-   * **SSE (Legacy, port 8765):** Run manually: `mnemostroma sse` (requires `pip install mnemostroma[sse]`)
+1. **Both adapters start automatically with the daemon** (`mnemostroma on`):
+   * **Streamable HTTP (Recommended, port 8768):** embedded in daemon, no separate step needed.
+   * **SSE (port 8765):** embedded in daemon, no separate step needed.
 2. **Expose the local port** to the internet via Cloudflare Tunnel (recommended) or a similar secure tunneling service (e.g. Serveo), since Claude's servers require a publicly accessible HTTPS URL.
 3. **Fill the Add Custom Connector form** in Claude.ai with the following values:
 
@@ -938,7 +939,7 @@ Cloud Sync, Subconscious Layer (personalized models), Shared Experience, and Tea
 ---
 
 *Mnemostroma — the memory layer for AI agents*
-*offline · ~650MB RAM (baseline) · ~20ms · 831 tests · v2.3.1*
+*offline · ~650MB RAM (baseline) · ~20ms · 831 tests · v2.3.2*
 
 # [mnemostroma-protocol]
 

@@ -291,6 +291,21 @@ class WatchdogConfig:
     startup_failsafe_sec: int = 100
 
 @dataclass(frozen=True)
+class SseConfig:
+    autostart: bool = True
+    port: int = 8765
+    port_extension: int = 8766
+    host: str = "127.0.0.1"
+
+
+@dataclass(frozen=True)
+class HttpConfig:
+    autostart: bool = True
+    port: int = 8768
+    host: str = "127.0.0.1"
+
+
+@dataclass(frozen=True)
 class Config:
     resources: ResourcesConfig
     score: ScoreConfig
@@ -323,6 +338,8 @@ class Config:
     prompt: PromptConfig = field(default_factory=PromptConfig)
     watchdog: WatchdogConfig = field(default_factory=WatchdogConfig)
     ui: UiConfig = field(default_factory=UiConfig)
+    sse: SseConfig = field(default_factory=SseConfig)
+    http: HttpConfig = field(default_factory=HttpConfig)
     manifest: ModelManifest | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -382,5 +399,7 @@ class Config:
             prompt=PromptConfig(**filter_keys(PromptConfig, data['prompt'])) if 'prompt' in data else PromptConfig(),
             watchdog=WatchdogConfig(**filter_keys(WatchdogConfig, data['watchdog'])) if 'watchdog' in data else WatchdogConfig(),
             ui=UiConfig(**filter_keys(UiConfig, data['ui'])) if 'ui' in data else UiConfig(),
+            sse=SseConfig(**filter_keys(SseConfig, data['sse'])) if 'sse' in data else SseConfig(),
+            http=HttpConfig(**filter_keys(HttpConfig, data['http'])) if 'http' in data else HttpConfig(),
             manifest=ModelManifest.load(Path(path).parent / "models_manifest.json") if (Path(path).parent / "models_manifest.json").exists() else None
         )

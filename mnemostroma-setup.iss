@@ -11,7 +11,7 @@
 ; =============================================================================
 
 #define AppName      "Mnemostroma"
-#define AppVersion   "2.3.0"
+#define AppVersion   "2.3.2"
 #define AppPublisher "GG-QandV"
 #define AppURL       "https://github.com/GG-QandV/mnemostroma"
 #define AppExeName   "mnemostroma-service.exe"

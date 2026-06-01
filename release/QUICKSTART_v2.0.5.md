@@ -7,8 +7,9 @@ Mnemostroma v2.0.5 is a major stable release that bridges the local memory layer
 ### What's new in v2.0.5
 
 - **Mnemostroma Browser Extension (v1.0.4)**: Automatically captures chat sessions in real-time from Claude, ChatGPT, Perplexity, Gemini, DeepSeek, and Grok.
-- **Secure SSE Adapter (`mnemostroma sse`)**: Starts local ports for unified memory streaming:
-  - `8765`: Authenticated MCP SSE endpoint for external integrations (e.g. `claude.ai`).
+- **Embedded SSE + HTTP Adapters** (v2.3.2+): Both adapters start automatically inside the daemon — no separate process or step needed.
+  - `8768`: Streamable HTTP MCP endpoint (primary transport — VS Code, Antigravity, OpenCode, Qoder).
+  - `8765`: SSE MCP endpoint (Cursor, Claude Code, Grok, Perplexity).
   - `8766`: Local unauthenticated port for the browser extension's DOM observer (localhost-only).
   - `8767`: Local TLS passthrough proxy for CLI clients (like `Claude Code`).
 - **Release Guard Stability**: The browser extension runs with `IS_MCP_TUNNELING_ENABLED = false` by default for the public release, utilizing a 100% stable DOM-based observer to feed the local daemon seamlessly, while keeping the network interception footprint minimal.
@@ -68,7 +69,7 @@ To feed your chats from `claude.ai`, ChatGPT, Gemini, etc. into Mnemostroma:
 <details>
 <summary><b>Security & Ports</b></summary>
 
-- **Authorization**: Mandatory Bearer token validation for the public SSE port (:8765).
+- **Authorization**: Mandatory Bearer token validation for HTTP (:8768) and SSE (:8765) ports.
 - **Isolation**: Browser observer port (:8766) is bound to `127.0.0.1` and accepts only local traffic.
 - **Credentials Security**: Automatically generates cryptographically secure url-safe tokens with strict `0600` file permissions.
 

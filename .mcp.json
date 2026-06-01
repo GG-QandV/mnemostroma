@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "mnemostroma": {
+      "serverUrl": "http://127.0.0.1:8768/mcp",
+      "headers": {
+        "Authorization": "Bearer 5xRNJRBJ3JUHrxjuv62nfUG8dWgHzrkUNRc_Jo6eYdU"
+      }
+    }
+  }
+}

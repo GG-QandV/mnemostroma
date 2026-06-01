@@ -1,4 +1,33 @@
-## Upgrading to v2.3.1 (Current)
+## Upgrading to v2.3.2 (Current)
+
+### What changed
+- SSE и HTTP адаптеры теперь запускаются **внутри daemon** — отдельные процессы и systemd-юниты больше не нужны.
+- `mnemostroma-sse.service` — устарел, не устанавливается автоматически.
+- `mnemostroma-http.service` — удалён.
+- Команды `mnemostroma sse` и `mnemostroma http` сохраняются для debug/standalone режима.
+- Версия 2.3.2, убрана метка Beta.
+
+### Migration steps
+
+**Если использовали `mnemostroma-sse.service` или запускали адаптер вручную:**
+```bash
+systemctl --user stop mnemostroma-sse
+systemctl --user disable mnemostroma-sse
+mnemostroma off && mnemostroma on
+```
+SSE и HTTP стартуют автоматически внутри daemon.
+
+**Если хотите отключить embedded SSE или HTTP:**
+```bash
+mnemostroma config set sse.autostart false
+mnemostroma config set http.autostart false
+```
+
+**Если не использовали отдельные адаптеры** — никаких действий не нужно. Запустите `bash scripts/update.sh` как обычно.
+
+---
+
+## Upgrading to v2.3.1
 
 ### What changed
 - `mnemostroma tunnel` now uses **Cloudflare Tunnel** instead of Serveo SSH.

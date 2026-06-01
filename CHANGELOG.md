@@ -1,3 +1,31 @@
+## [Unreleased] — в процессе
+
+### Added
+- **feat(http)**: HTTP адаптер встроен в daemon — `run(conductor=)`, прямой `conductor.dispatch()`, без IPC round-trip (~45 MB RAM saved).
+- **feat(http)**: `HttpConfig` dataclass (`autostart`, `port`, `host`) + `Config.load()`.
+- **feat(http)**: `mnemostroma http` — standalone/debug режим с IPC fallback.
+- **feat(monitoring)**: `is_port_in_use()` check перед стартом embedded SSE/HTTP — `warning` + пропуск если порт занят (защита при апгрейде).
+- **docs(mcp)**: `MCP_CLIENT_CONFIGS.md` — актуальные настройки всех CLI/IDE клиентов (Antigravity, VS Code, Cursor, Claude Code, OpenCode, Qoder).
+
+### Fixed
+- **fix(opencode)**: OpenCode MCP config переключён с SSE (:8765) на Streamable HTTP (:8768) — устраняет ошибку аутентификации (`type: "remote"` требует HTTP).
+- **fix(sse)**: Убраны `NotificationOptions` и `install_signal_handlers` из SSE адаптера — конфликтовали с daemon event loop на Windows.
+
+### Changed
+- **chore**: Версия 2.3.1 → 2.3.2.
+- **chore**: Убрана метка Beta из CLI баннера и документации.
+- **chore**: `.iss` installer файлы обновлены до версии 2.3.2.
+- **docs(mcp)**: `SPEC_http_daemon_embed_v1.0.md` — архитектурная спека HTTP embed.
+
+### Planned
+- B.2: continuation detection (HNSW + tags + recency combined scoring)
+- B.3: mention_type (focus vs passing)
+- Safe/debug logging mode
+- mnemostroma install-models CLI
+- Decay Engine (Stage C)
+
+---
+
 ## 2.3.3 — 2026-05-25
 
 ### Added
