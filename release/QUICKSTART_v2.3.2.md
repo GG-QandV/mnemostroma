@@ -8,6 +8,7 @@ Starting from v2.3.2, SSE and Streamable HTTP adapters run **inside the daemon**
 
 - **Streamable HTTP embedded (port 8768)**: primary transport for VS Code, Antigravity, OpenCode, Qoder — starts with daemon automatically.
 - **SSE embedded (port 8765)**: transport for Cursor, Claude Code, Grok, Perplexity — starts with daemon automatically.
+- **5 local clients migrated** from stdio to Streamable HTTP transport (Antigravity, VS Code, Qoder, OpenCode — HTTP :8768; Cursor, Claude Code — SSE :8765).
 - **Port conflict protection**: if an old standalone adapter is running, daemon warns and skips — no crash.
 - **OpenCode fix**: transport corrected to Streamable HTTP (was incorrectly SSE).
 - **Beta label removed** from CLI and docs.
@@ -35,6 +36,7 @@ powershell -ExecutionPolicy Bypass -Command "iwr https://raw.githubusercontent.c
   "mnemostroma[all] @ git+https://github.com/GG-QandV/mnemostroma.git"
 systemctl --user stop mnemostroma-sse    # если был запущен отдельно
 systemctl --user disable mnemostroma-sse
+systemctl --user disable --now mnemostroma-http.service 2>/dev/null || true
 mnemostroma off && mnemostroma on
 ```
 
@@ -42,13 +44,13 @@ mnemostroma off && mnemostroma on
 
 ### Ports after `mnemostroma on`
 
-| Port | Transport | Clients |
-|------|-----------|---------|
-| `8768` | Streamable HTTP | VS Code, Antigravity, OpenCode, Qoder |
-| `8765` | SSE | Cursor, Claude Code, Grok, Perplexity |
-| `8766` | HTTP/POST | Browser Extension (localhost only) |
-| `8767` | HTTPS Proxy | Claude Code passthrough |
-| `8769` | MCP OAuth Adapter | Remote tunnel (Serveo/Cloudflare) |
+| Port | Transport | Clients | Access |
+|------|-----------|---------|--------|
+| `8768` | Streamable HTTP | VS Code, Antigravity, OpenCode, Qoder | Local |
+| `8765` | SSE | Cursor, Claude Code | Local |
+| `8766` | HTTP/POST | Browser Extension | localhost only |
+| `8767` | HTTPS Proxy | Claude Code passthrough | Local |
+| `8769` | MCP OAuth Adapter | Remote: Perplexity, Grok, Claude.ai, ChatGPT | Tunnel (Serveo/Cloudflare) |
 
 Token: `cat ~/.mnemostroma/sse_token`
 
@@ -83,6 +85,13 @@ Full reference: `docs/mcp/MCP_CLIENT_CONFIGS.md`
 }
 ```
 
+**Remote clients (tunnel)** — Perplexity, Grok, Claude.ai, ChatGPT:
+
+See full guides:
+- `docs/mcp/serveo_perplexity_none_auth_guide.md` — Perplexity via Serveo + no auth
+- `docs/tunnel/TUNNEL_SETUP.md` — Claude.ai, ChatGPT OAuth setup
+- `docs/mcp/mcp_oauth_adapter/guide.md` — OAuth adapter reference
+
 ---
 
 ### 📢 Browser Extension
@@ -90,7 +99,7 @@ Full reference: `docs/mcp/MCP_CLIENT_CONFIGS.md`
 1. Open `chrome://extensions`
 2. Enable **Developer mode**
 3. Click **Load unpacked**
-4. Select: `~/.mnemostroma/extension/`
+4. Select: `~/.mnemostroma/extension/` (Linux/macOS) or `%USERPROFILE%\.mnemostroma\extension` (Windows)
 
 ---
 
@@ -99,7 +108,7 @@ Full reference: `docs/mcp/MCP_CLIENT_CONFIGS.md`
 <details>
 <summary><b>Benchmarks & Stability</b></summary>
 
-- **Tests**: 831/831 passed (100% Green).
+- **Tests**: 926/926 passed (100% Green).
 - **RAM Footprint**: ~650 MB baseline (~65 MB saved vs v2.3.1 — adapters embedded).
 - **Search Latency**: ~20ms (Semantic) / ~5ms (SQL).
 
@@ -123,4 +132,4 @@ Full reference: `docs/mcp/MCP_CLIENT_CONFIGS.md`
 ---
 
 **Generated:** 2026-06-01  
-**v2.3.2** | 831 tests green | [Full Release Notes](./RELEASE_NOTES_v2.3.2.md)
+**v2.3.2** | 926 tests green | [Full Release Notes](./RELEASE_NOTES_v2.3.2.md)

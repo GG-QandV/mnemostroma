@@ -9,6 +9,7 @@ Mnemostroma v2.3.2 eliminates the separate SSE and HTTP adapter processes. Both 
 ### Key Changes
 
 #### 1. HTTP Adapter Embedded in Daemon
+
 <img src="https://raw.githubusercontent.com/GG-QandV/mnemostroma/main/src/extension/assets/head-circuit-256.png" width="96" align="right" />
 
 - **Streamable HTTP (port 8768)** starts automatically with `mnemostroma on` — no separate terminal, no separate service.
@@ -41,14 +42,14 @@ Mnemostroma v2.3.2 eliminates the separate SSE and HTTP adapter processes. Both 
 
 All local clients switched from stdio to Streamable HTTP transport:
 
-| Client | Transport | Config file |
-|---|---|---|
+| Client      | Transport  | Config file                        |
+| ----------- | ---------- | ---------------------------------- |
 | Antigravity | HTTP :8768 | `~/.gemini/config/mcp_config.json` |
-| VS Code | HTTP :8768 | `~/.config/Code/User/mcp.json` |
-| Qoder | HTTP :8768 | `~/.qoder/mcp.json` |
-| OpenCode | HTTP :8768 | `~/.opencode/opencode.json` |
-| Cursor | SSE :8765 | `~/.cursor/mcp.json` |
-| Claude Code | SSE :8765 | `~/.claude/mcp.json` |
+| VS Code     | HTTP :8768 | `~/.config/Code/User/mcp.json`     |
+| Qoder       | HTTP :8768 | `~/.qoder/mcp.json`                |
+| OpenCode    | HTTP :8768 | `~/.opencode/opencode.json`        |
+| Cursor      | SSE :8765  | `~/.cursor/mcp.json`               |
+| Claude Code | SSE :8765  | `~/.claude/mcp.json`               |
 
 See `docs/mcp/MCP_CLIENT_CONFIGS.md` for full reference.
 
@@ -66,6 +67,7 @@ See `docs/mcp/MCP_CLIENT_CONFIGS.md` for full reference.
 See [UPGRADE.md](../UPGRADE.md) → *Upgrading to v2.3.2*
 
 **TL;DR:**
+
 ```bash
 ~/.mnemostroma/venv/bin/pip install --upgrade \
   "mnemostroma[all] @ git+https://github.com/GG-QandV/mnemostroma.git"
@@ -78,7 +80,7 @@ mnemostroma off && mnemostroma on
 
 ### Technical State
 
-- **Tests**: 831 passing
+- **Tests**: 926 passing
 - **RAM Footprint**: ~650 MB baseline (adapters embedded — ~65 MB saved vs previous)
 - **Search Latency**: ~20ms semantic / ~5ms SQL
 - **Regressions**: 0
@@ -87,4 +89,4 @@ mnemostroma off && mnemostroma on
 
 **Generated:** 2026-06-01  
 **Mnemostroma:** The offline-first memory layer for AI agents  
-**v2.3.2** | 831 tests passing | 0 regressions | Embedded Adapters Release
+**v2.3.2** | 926 tests passing | 0 regressions | Embedded Adapters Release

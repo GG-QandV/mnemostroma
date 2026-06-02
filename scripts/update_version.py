@@ -56,7 +56,7 @@ REPLACEMENTS = [
     (
         "README.md",
         r'\*offline · ~650MB RAM \(baseline\) · ~20ms · \d+ tests · v[\d\.]+(?:\s+Beta)?\*',
-        f'*offline · ~650MB RAM (baseline) · ~20ms · 831 tests · v{VERSION}*',
+        f'*offline · ~650MB RAM (baseline) · ~20ms · 926 tests · v{VERSION}*',
         1,
     ),
     (

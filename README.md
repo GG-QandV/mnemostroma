@@ -4,7 +4,7 @@
 
 ![Version](https://img.shields.io/badge/version-v2.3.2-blue)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue)
-![Tests](https://img.shields.io/badge/tests-831%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-926%20passing-brightgreen)
 ![License](https://img.shields.io/badge/license-FSL--1.1--MIT-lightgrey)
 
 > *μνήμη (mnḗmē, memory) + στρῶμα (strôma, layer) — the substrate everything rests on.*
@@ -168,7 +168,7 @@ This is not a database with TTL. This is how human memory works.
 
 | Component | Status |
 |---|---|
-| Core backend — Observer, Memory, Storage | ✅ DONE — 831 tests |
+| Core backend — Observer, Memory, Storage | ✅ DONE — 926 tests |
 | Golden Standard Launch (Shell Guards) | ✅ DONE — v1.11.1 |
 | Anchor Layer / Emotional Patterns | ✅ DONE |
 | Implicit Feedback (v1.5) | ✅ DONE |
@@ -910,7 +910,7 @@ It gives your agent an actual memory.
 git clone https://github.com/GG-QandV/mnemostroma.git
 cd mnemostroma
 pip install -e ".[dev]"
-pytest tests/                          # run all 831 tests
+pytest tests/                          # run all 926 tests
 pytest tests/ --ignore=tests/test_memory_layers.py \
               --ignore=tests/test_data_contracts.py  # fast mode (~14s)
 ```
@@ -939,7 +939,7 @@ Cloud Sync, Subconscious Layer (personalized models), Shared Experience, and Tea
 ---
 
 *Mnemostroma — the memory layer for AI agents*
-*offline · ~650MB RAM (baseline) · ~20ms · 831 tests · v2.3.2*
+*offline · ~650MB RAM (baseline) · ~20ms · 926 tests · v2.3.2*
 
 # [mnemostroma-protocol]
 
