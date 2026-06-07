@@ -33,7 +33,7 @@ from typing import Any, Protocol
 
 import httpx
 import uvicorn
-from mcp.server import Server as MCPServer
+from mcp.server import NotificationOptions, Server as MCPServer
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.server import Server
 from mcp.types import TextContent, Tool
@@ -78,11 +78,11 @@ def _validate_oauth_token(token: str) -> bool:
 # ── Route config (Sprint+1) ──────────────────────────────────────────────────
 
 DEFAULT_ROUTES: dict[str, dict] = {
-    "/mcp":                    {"auth": ["api_key"],           "client": "perplexity",  "transport": "streamable-http"},
+    "/mcp":                    {"auth": ["none"],              "client": "perplexity",  "transport": "streamable-http"},
     "/sse":                    {"auth": ["oauth", "bearer"],  "client": "claude",       "transport": "sse"},
     "/messages/":              {"auth": ["oauth", "bearer"],  "client": "claude",       "transport": "sse-messages"},
     "/mcp/chatgpt":            {"auth": ["oauth", "bearer"],  "client": "chatgpt",      "transport": "streamable-http"},
-    "/mcp/grok":               {"auth": ["oauth", "bearer"],  "client": "grok",         "transport": "streamable-http"},
+    "/mcp/grok":               {"auth": ["bearer"],           "client": "grok",         "transport": "streamable-http"},
     "/context-manager":        {"auth": ["bearer"],           "client": "internal",     "transport": "proxy"},
     "/context-manager/{rest:path}": {"auth": ["bearer"],      "client": "internal",     "transport": "proxy"},
 }
@@ -133,7 +133,8 @@ def load_route_config(path: Path | None = None) -> FullRouteConfig:
         interval=wc.get("interval", 2.0),
         backend=wc.get("backend", "auto"),
     )
-    return FullRouteConfig(routes={**DEFAULT_ROUTES, **data.get("routes", {})}, watcher=watcher)
+    merged = {**DEFAULT_ROUTES, **data.get("routes", {})}
+    return FullRouteConfig(routes=merged, watcher=watcher)
 
 
 def _build_routes(route_cfg: dict) -> list[Route]:
@@ -160,6 +161,7 @@ def _build_routes(route_cfg: dict) -> list[Route]:
             routes.append(Route(path, endpoint=AuthSelector(modes).require_starlette(proxy_messages), methods=["POST"]))
         elif transport == "proxy":
             routes.append(Route(path, endpoint=AuthSelector(modes).require_starlette(proxy_to_cm), methods=["GET", "HEAD", "POST", "PUT", "DELETE", "PATCH"]))
+
     return routes
 
 
@@ -310,8 +312,48 @@ class OAuthTokenMiddleware:
 # ── MCP Server factory ────────────────────────────────────────────────────────
 
 # Keeps strong references to fire-and-forget tasks so GC doesn't kill them.
+_bg_tasks: set[asyncio.Task] = set()
+
+
+class _NotifyingServer(MCPServer):
+    """Advertises tools.listChanged=true and sends list_changed after GET stream is ready."""
+
+    def create_initialization_options(self, notification_options=None, experimental_capabilities=None):
+        return super().create_initialization_options(
+            notification_options=NotificationOptions(tools_changed=True),
+            experimental_capabilities=experimental_capabilities,
+        )
+
+    # SDK silently drops a server-initiated notification if the client's GET/SSE
+    # stream isn't registered yet (no exception, just a debug log) — there is no
+    # readiness callback to await. Sending at two staggered delays instead of one
+    # guess covers slow/fast clients; a duplicate list_changed is harmless (the
+    # client just re-fetches tools/list).
+    _LIST_CHANGED_DELAYS = (0.3, 1.2)
+
+    async def _handle_message(self, message, session, lifespan_context, raise_exceptions=False):
+        from mcp.types import ClientNotification, InitializedNotification
+        await super()._handle_message(message, session, lifespan_context, raise_exceptions)
+        if isinstance(message, ClientNotification) and isinstance(message.root, InitializedNotification):
+            task = asyncio.create_task(self._send_list_changed_staggered(session))
+            _bg_tasks.add(task)
+            task.add_done_callback(_bg_tasks.discard)
+
+    @classmethod
+    async def _send_list_changed_staggered(cls, session):
+        elapsed = 0.0
+        for delay in cls._LIST_CHANGED_DELAYS:
+            await asyncio.sleep(delay - elapsed)
+            elapsed = delay
+            try:
+                await session.send_tool_list_changed()
+                logger.debug("Sent notifications/tools/list_changed (t=+%.1fs)", delay)
+            except Exception as exc:
+                logger.warning("send_tool_list_changed failed (t=+%.1fs): %s", delay, exc)
+
+
 def _make_mcp_server() -> MCPServer:
-    srv = Server("mnemostroma")
+    srv = _NotifyingServer("mnemostroma")
 
     @srv.list_tools()
     async def list_tools() -> list[Tool]:
@@ -551,6 +593,8 @@ async def token(request: Request) -> JSONResponse:
         "token_type": "bearer",
         "expires_in": 3600,
     })
+
+
 
 
 # ── SSE proxy → mcpsseadapter :8765 ──────────────────────────────────────────
@@ -832,13 +876,16 @@ def _config_to_entries(routes: dict) -> dict[str, RouteEntry]:
     entries = {}
     for path, cfg in routes.items():
         transport = cfg.get("transport", "streamable-http")
-        handler = _HANDLER_MAP.get(transport)
-        if handler is None:
-            raise ValueError(f"Unknown transport: {transport!r}")
+
+        else:
+            handler = _HANDLER_MAP.get(transport)
+            if handler is None:
+                raise ValueError(f"Unknown transport: {transport!r}")
+            methods = list(_METHODS_MAP[transport])
         entries[path] = RouteEntry(
             auth_modes=[AuthMode(m) for m in cfg["auth"]],
             handler=handler,
-            methods=list(_METHODS_MAP[transport]),
+            methods=methods,
         )
     return entries
 
