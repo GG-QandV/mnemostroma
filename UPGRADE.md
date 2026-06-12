@@ -1,4 +1,4 @@
-## Upgrading to v2.3.2 (Current)
+## Upgrading to v2.4.0 (Current)
 
 ### What changed
 - SSE и HTTP адаптеры теперь запускаются **внутри daemon** — отдельные процессы и systemd-юниты больше не нужны.

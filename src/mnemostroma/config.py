@@ -143,6 +143,9 @@ class ExperienceConfig:
     negative_exp_resolution_floor: float
     cluster_min_samples: int
     intuition_fire_threshold: float
+    evaluator_vecs_cap: int = 50
+    closure_idle_sec: int = 1800
+    step_log_sessions_cap: int = 100
     # Maturity thresholds (sessions count per level)
     maturity_apprentice: int = 5
     maturity_practitioner: int = 10

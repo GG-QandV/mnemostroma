@@ -68,15 +68,88 @@ class Dreamer:
     async def _run(self) -> None:
         """Poll for idle state; run a dream cycle when idle."""
         poll_sec = 60  # check every minute
+        first_idle = True
         while self._running:
             try:
                 await asyncio.sleep(poll_sec)
                 if self._conductor.is_idle():
+                    if first_idle:
+                        await self._restore_step_logs()
+                        first_idle = False
+                    await self._idle_flush_step_logs()
                     await self.dream()
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.error("Dreamer._run error: %s", e, exc_info=True)
+
+    async def _restore_step_logs(self):
+        if not self._ctx.config.experience.process_vec_enabled or not self._ctx.persistence:
+            return
+        idle_sec = self._ctx.config.experience.closure_idle_sec
+        now = int(time.time())
+        unprocessed = await self._ctx.persistence.find_unprocessed_step_sessions(now - idle_sec)
+        for sid in unprocessed:
+            steps = await self._ctx.persistence.load_session_steps(sid)
+            if steps:
+                await self._build_and_save_process_vec(sid, steps)
+            await self._ctx.persistence.mark_steps_processed(sid)
+            logger.info(f"Restored and processed step_log for {sid}")
+
+    async def _idle_flush_step_logs(self):
+        if not getattr(self._ctx, "step_logs", None) or not self._ctx.config.experience.process_vec_enabled or not self._ctx.persistence:
+            return
+        idle_sec = self._ctx.config.experience.closure_idle_sec
+        now = int(time.time())
+        sids_to_remove = []
+        for sid, logs in self._ctx.step_logs.items():
+            last_ts = logs[-1]["ts"] if logs else 0
+            if now - last_ts > idle_sec:
+                if logs:
+                    await self._ctx.persistence.insert_session_steps(list(logs))
+                steps = await self._ctx.persistence.load_session_steps(sid)
+                if steps:
+                    await self._build_and_save_process_vec(sid, steps)
+                await self._ctx.persistence.mark_steps_processed(sid)
+                sids_to_remove.append(sid)
+        
+        for sid in sids_to_remove:
+            self._ctx.step_logs.pop(sid, None)
+            if hasattr(self._ctx, "step_counters"):
+                self._ctx.step_counters.pop(sid, None)
+
+    async def _build_and_save_process_vec(self, session_id: str, steps: list[dict]):
+        from ..memory.process_vec import build_process_vec
+        embedder = self._ctx.models.embedder if self._ctx.models else None
+        if not embedder:
+            return
+        
+        import numpy as np
+        tag_counts = {}
+        first_seen = {}
+        for i, step in enumerate(steps):
+            for t in step.get("tags", []):
+                tag_counts[t] = tag_counts.get(t, 0) + 1
+                if t not in first_seen:
+                    first_seen[t] = i
+        
+        if not tag_counts:
+            return
+        
+        dom_tag = max(tag_counts.keys(), key=lambda k: (tag_counts[k], -first_seen[k]))
+        
+        try:
+            vec = build_process_vec(steps, embedder)
+            w0 = 1.0
+            ts = steps[-1]["ts"]
+            cap = self._ctx.config.experience.evaluator_vecs_cap
+            await self._ctx.persistence.insert_experience_vector(
+                dom_tag, "process", vec.astype(np.float16).tobytes(), len(vec), w0, ts, cap
+            )
+            if self._ctx.experience_index:
+                self._ctx.experience_index.record_vec([dom_tag], vec, "process", w0, ts)
+        except Exception as e:
+            logger.error(f"Failed to build process_vec for {session_id}: {e}")
 
     # ------------------------------------------------------------------
     # Dream cycle

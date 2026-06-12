@@ -101,3 +101,19 @@ class SessionRepo:
             return ok(res)
         except Exception as e:
             return err(StorageError(f"Time window search failed: {e}"))
+
+    async def null_content_full(self, session_id: str) -> Result[None, StorageError]:
+        """Nullify content_full for a session (called during dissolution at Skeleton level).
+
+        Used by Dissolver/Consolidation to remove full content when session descends
+        to Skeleton dissolution level (decay_level >= 2) to reduce storage footprint.
+        """
+        try:
+            await self._storage.db.execute(
+                "UPDATE sessions SET content_full = NULL WHERE session_id = ?",
+                (session_id,)
+            )
+            await self._storage.db.commit()
+            return ok(None)
+        except Exception as e:
+            return err(StorageError(f"Failed to nullify content_full for {session_id}: {e}"))

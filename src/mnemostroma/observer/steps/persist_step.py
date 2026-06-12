@@ -81,7 +81,9 @@ class PersistStep:
             deadline_ts=pctx.metadata.get("deadline_ts"),
             bare_entity=is_bare,
             embedding=embedding_f32,
-            embedding_model_version="multilingual-e5-small"
+            embedding_model_version="multilingual-e5-small",
+            content_full=pctx.event.text or None,
+            event_role=getattr(pctx.event, "role", None),
         )
 
         # ── Content Branch routing (Mechanism #12) ──────────────────────────
@@ -282,6 +284,39 @@ class PersistStep:
                 intensity = float(getattr(emo, 'intensity', 0.5))
                 ctx.experience_index.update_emotion(pctx.sb.tags, charge_val, intensity)
             
+            # Polarity Matrix (SPEC §1.3)
+            charge = None
+            w0 = 1.0
+            
+            has_neg_emo = False
+            has_pos_emo = False
+            for e in resolved_emotions:
+                val = e.charge.value if hasattr(e.charge, 'value') else str(e.charge)
+                if val == "negative": has_neg_emo = True
+                if val == "positive": has_pos_emo = True
+
+            if has_neg_emo:
+                charge = "negative"
+                emo = next(e for e in resolved_emotions if (e.charge.value if hasattr(e.charge, 'value') else str(e.charge)) == "negative")
+                w0 = float(getattr(emo, 'intensity', 0.5))
+            elif pctx.sb.conflict_flag:
+                charge = "negative"
+                w0 = 0.7  # W_CONFLICT
+            elif has_pos_emo:
+                charge = "positive"
+                emo = next(e for e in resolved_emotions if (e.charge.value if hasattr(e.charge, 'value') else str(e.charge)) == "positive")
+                w0 = float(getattr(emo, 'intensity', 0.5))
+            elif not is_new_entity:
+                charge = "positive"
+                w0 = 0.5  # W_DEEP_USE
+            
+            if charge and embedding_f32 is not None:
+                ctx.experience_index.record_vec(pctx.sb.tags, embedding_f32, charge, w0, ts=created_at)
+                if ctx.persistence:
+                    cap = ctx.config.experience.evaluator_vecs_cap
+                    for tag in pctx.sb.tags:
+                        await ctx.persistence.insert_experience_vector(tag, charge, embedding_f32.astype(np.float16).tobytes(), len(embedding_f32), w0, created_at, cap)
+
             if ctx.persistence:
                 for tag in pctx.sb.tags:
                     cluster = ctx.experience_index.get(tag)
@@ -296,6 +331,43 @@ class PersistStep:
                             emotion_negative=cluster.emotion_negative,
                             emotion_intensity_sum=cluster.emotion_intensity_sum,
                         )
+
+        # step_log collection (SPEC §4)
+        if ctx.config.experience.process_vec_enabled:
+            if session_id not in ctx.step_counters:
+                if len(ctx.step_logs) >= ctx.config.experience.step_log_sessions_cap:
+                    # Use last known ts from last flushed entry; fall back to 0 only if truly empty
+                    oldest_sid = min(ctx.step_logs.keys(), key=lambda k: ctx.step_logs[k][-1]["ts"] if ctx.step_logs[k] else ctx.step_counters.get(k, 0))
+                    if oldest_sid in ctx.step_logs and ctx.persistence and ctx.step_logs[oldest_sid]:
+                        asyncio.create_task(ctx.persistence.insert_session_steps(list(ctx.step_logs[oldest_sid])))
+                    ctx.step_logs.pop(oldest_sid, None)
+                    ctx.step_counters.pop(oldest_sid, None)
+                ctx.step_counters[session_id] = 1
+                ctx.step_logs[session_id] = []
+            else:
+                ctx.step_counters[session_id] += 1
+            
+            idx = ctx.step_counters[session_id]
+            if len(ctx.step_logs[session_id]) < 500:
+                ctx.step_logs[session_id].append({
+                    "session_id": session_id,
+                    "msg_index": idx,
+                    "ts": created_at,
+                    "importance": pctx.importance,
+                    "tags": pctx.sb.tags[:3],  # SPEC §4: max 3 tags per step entry
+                    "outcome": detected_flags.get("outcome")
+                })
+                
+                flush_n = ctx.config.experience.process_vec_step_flush_every_n
+                if idx % flush_n == 0:
+                    if ctx.persistence and ctx.step_logs[session_id]:
+                        asyncio.create_task(ctx.persistence.insert_session_steps(list(ctx.step_logs[session_id])))
+                    ctx.step_logs[session_id].clear()
+            else:
+                # cap 500 reached — warn once (first time len == 500), then silently stop
+                if len(ctx.step_logs[session_id]) == 500:
+                    logger.warning("Session %s hit step_log cap (500 steps). Accumulation stopped.", session_id)
+
 
         # 8.5. Precision RAM update
         if ctx.config.precision_guard.enabled:

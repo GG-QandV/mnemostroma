@@ -54,3 +54,8 @@ class SessionBrief:
     # Content Branch classification (set by Observer PersistStep)
     # Values: "content" | "research" | "context" | None (unclassified)
     session_type: str | None = None
+
+    # Full content text (set by Observer PersistStep from pctx.event.text)
+    content_full: str | None = None
+    # Source role for the session (user/agent, set by Observer from pctx.event.role)
+    event_role: str | None = None

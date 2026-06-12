@@ -1049,13 +1049,34 @@ class DatabaseManager:
 
                     await self.db.execute(
                         """
-                        INSERT OR REPLACE INTO sessions
+                        INSERT INTO sessions
                         (session_id, created_at, updated_at, importance, tags, brief,
                          conflict, urgency, deadline_ts, urgency_active, urgency_expired,
-                         bare_entity, embedding_model_version, embedding, 
+                         bare_entity, embedding_model_version, embedding,
                          use_count, deep_use_count, last_use_ts, implicit_score,
-                         resolution, intensity)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         resolution, intensity, content_full, event_role)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(session_id) DO UPDATE SET
+                            updated_at = excluded.updated_at,
+                            importance = excluded.importance,
+                            tags = excluded.tags,
+                            brief = excluded.brief,
+                            conflict = excluded.conflict,
+                            urgency = excluded.urgency,
+                            deadline_ts = excluded.deadline_ts,
+                            urgency_active = excluded.urgency_active,
+                            urgency_expired = excluded.urgency_expired,
+                            bare_entity = excluded.bare_entity,
+                            embedding_model_version = excluded.embedding_model_version,
+                            embedding = excluded.embedding,
+                            use_count = excluded.use_count,
+                            deep_use_count = excluded.deep_use_count,
+                            last_use_ts = excluded.last_use_ts,
+                            implicit_score = excluded.implicit_score,
+                            resolution = excluded.resolution,
+                            intensity = excluded.intensity,
+                            content_full = COALESCE(excluded.content_full, content_full),
+                            event_role = COALESCE(excluded.event_role, event_role)
                         """,
                         (
                             session.session_id,
@@ -1078,6 +1099,8 @@ class DatabaseManager:
                             getattr(session, 'implicit_score', 0.5),
                             getattr(session, 'resolution', 1.0),
                             getattr(session, 'intensity', 0.0),
+                            getattr(session, 'content_full', None),
+                            getattr(session, 'event_role', None),
                         )
                     )
 
@@ -1144,6 +1167,129 @@ class DatabaseManager:
 
 
 # Backward compatibility alias
+    async def insert_session_steps(self, rows: list[dict]) -> None:
+        try:
+            query = """
+                INSERT OR IGNORE INTO session_steps
+                (session_id, msg_index, ts, importance, tags, outcome, processed)
+                VALUES (?, ?, ?, ?, ?, ?, 0)
+            """
+            values = [
+                (
+                    r["session_id"],
+                    r["msg_index"],
+                    r["ts"],
+                    r["importance"],
+                    json.dumps(r.get("tags", []), ensure_ascii=False),
+                    r.get("outcome")
+                )
+                for r in rows
+            ]
+            await self.db.executemany(query, values)
+            await self.db.commit()
+        except Exception as e:
+            logger.error(f"insert_session_steps failed: {e}")
+
+    async def load_session_steps(self, session_id: str) -> list[dict]:
+        results = []
+        try:
+            async with self.db.execute(
+                """SELECT session_id, msg_index, ts, importance, tags, outcome, processed
+                   FROM session_steps
+                   WHERE session_id = ?
+                   ORDER BY msg_index""",
+                (session_id,)
+            ) as cursor:
+                async for row in cursor:
+                    tags = []
+                    try:
+                        if row[4]:
+                            tags = json.loads(row[4])
+                    except Exception:
+                        pass
+                    results.append({
+                        "session_id": row[0],
+                        "msg_index": row[1],
+                        "ts": row[2],
+                        "importance": row[3],
+                        "tags": tags,
+                        "outcome": row[5],
+                        "processed": row[6]
+                    })
+        except Exception as e:
+            logger.error(f"load_session_steps failed: {e}")
+        return results
+
+    async def insert_experience_vector(self, tag: str, charge: str,
+                                       vec: bytes, dim: int, w0: float,
+                                       ts: int, cap: int) -> None:
+        try:
+            await self.db.execute(
+                """INSERT INTO experience_vectors
+                   (tag, charge, vec, dim, w0, ts)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (tag, charge, vec, dim, w0, ts)
+            )
+            await self.db.execute(
+                """DELETE FROM experience_vectors
+                   WHERE id IN (
+                       SELECT id FROM experience_vectors
+                       WHERE tag = ? AND charge = ?
+                       ORDER BY ts DESC LIMIT -1 OFFSET ?
+                   )""",
+                (tag, charge, cap)
+            )
+            await self.db.commit()
+        except Exception as e:
+            logger.error(f"insert_experience_vector failed: {e}")
+
+    async def load_experience_vectors(self) -> list[dict]:
+        results = []
+        try:
+            async with self.db.execute(
+                """SELECT tag, charge, vec, dim, w0, ts
+                   FROM experience_vectors"""
+            ) as cursor:
+                async for row in cursor:
+                    results.append({
+                        "tag": row[0],
+                        "charge": row[1],
+                        "vec": row[2],
+                        "dim": row[3],
+                        "w0": row[4],
+                        "ts": row[5]
+                    })
+        except Exception as e:
+            logger.error(f"load_experience_vectors failed: {e}")
+        return results
+
+    async def find_unprocessed_step_sessions(self, idle_before_ts: int) -> list[str]:
+        results = []
+        try:
+            async with self.db.execute(
+                """SELECT session_id
+                   FROM session_steps
+                   WHERE processed = 0
+                   GROUP BY session_id
+                   HAVING MAX(ts) < ?""",
+                (idle_before_ts,)
+            ) as cursor:
+                async for row in cursor:
+                    results.append(row[0])
+        except Exception as e:
+            logger.error(f"find_unprocessed_step_sessions failed: {e}")
+        return results
+
+    async def mark_steps_processed(self, session_id: str) -> None:
+        try:
+            await self.db.execute(
+                "UPDATE session_steps SET processed = 1 WHERE session_id = ?",
+                (session_id,)
+            )
+            await self.db.commit()
+        except Exception as e:
+            logger.error(f"mark_steps_processed failed: {e}")
+
     async def delete_anchors_by_session(self, session_id: str) -> None:
         """Delete all anchors associated with a specific session."""
         try:

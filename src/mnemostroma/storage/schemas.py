@@ -137,7 +137,33 @@ CREATE TABLE IF NOT EXISTS experience_metrics (
 INDICES_EXPERIENCE = [
     "CREATE INDEX IF NOT EXISTS idx_exp_score ON experience_metrics(score_sum);",
     "CREATE INDEX IF NOT EXISTS idx_exp_count ON experience_metrics(session_count);",
+    "CREATE INDEX IF NOT EXISTS idx_expvec_tag_charge ON experience_vectors(tag, charge);",
 ]
+
+SCHEMA_SESSION_STEPS = """
+CREATE TABLE IF NOT EXISTS session_steps (
+    session_id   TEXT,
+    msg_index    INTEGER,
+    ts           INTEGER,
+    importance   TEXT,
+    tags         TEXT,
+    outcome      TEXT,
+    processed    INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (session_id, msg_index)
+);
+"""
+
+SCHEMA_EXPERIENCE_VECTORS = """
+CREATE TABLE IF NOT EXISTS experience_vectors (
+    id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    tag     TEXT    NOT NULL,
+    charge  TEXT    NOT NULL,
+    vec     BLOB    NOT NULL,
+    dim     INTEGER NOT NULL,
+    w0      REAL    NOT NULL DEFAULT 1.0,
+    ts      INTEGER NOT NULL
+);
+"""
 
 ALL_SCHEMAS = [
     SCHEMA_SESSIONS,
@@ -147,4 +173,6 @@ ALL_SCHEMAS = [
     SCHEMA_CONTENT_VERSIONS,
     SCHEMA_MODEL_REGISTRY,
     SCHEMA_EXPERIENCE,
+    SCHEMA_SESSION_STEPS,
+    SCHEMA_EXPERIENCE_VECTORS,
 ] + INDICES + INDICES_EXPERIENCE

@@ -17,6 +17,7 @@ import asyncio
 import json
 import logging
 import sys
+import time as _time
 from pathlib import Path
 from typing import Any
 
@@ -47,6 +48,7 @@ def _serialize(obj: Any) -> Any:
 _MNEMO_DIR = Path.home() / ".mnemostroma"
 SOCKET_PATH = _MNEMO_DIR / "daemon.sock"
 PIPE_NAME = r"\\.\pipe\mnemostroma"
+_READY_FILE = _MNEMO_DIR / "daemon.ready"
 
 
 class IPCServer:
@@ -67,6 +69,7 @@ class IPCServer:
                 self._server = await asyncio.start_server(
                     self._handle_client,
                     pipe=PIPE_NAME,
+                    limit=1024 * 1024 * 16,
                 )
                 logger.info(f"IPC server listening on {PIPE_NAME}")
             except OSError as e:
@@ -75,6 +78,7 @@ class IPCServer:
                     self._handle_client,
                     host="127.0.0.1",
                     port=8767,
+                    limit=1024 * 1024 * 16,
                 )
                 logger.info(f"IPC server listening on TCP 127.0.0.1:8767 (pipe failed: {e})")
         else:
@@ -84,6 +88,7 @@ class IPCServer:
                 self._server = await asyncio.start_unix_server(
                     self._handle_client,
                     path=str(SOCKET_PATH),
+                    limit=1024 * 1024 * 16,
                 )
                 logger.info(f"IPC server listening on {SOCKET_PATH}")
             except OSError as e:
@@ -92,8 +97,15 @@ class IPCServer:
                     self._handle_client,
                     host="127.0.0.1",
                     port=8767,
+                    limit=1024 * 1024 * 16,
                 )
                 logger.info(f"IPC server listening on TCP 127.0.0.1:8767 (unix socket failed: {e})")
+
+        # Signal readiness to _cmd_on() after bind, before serve_forever
+        try:
+            _READY_FILE.write_text(str(int(_time.time())))
+        except Exception:
+            pass
 
         async with self._server:
             await self._server.serve_forever()

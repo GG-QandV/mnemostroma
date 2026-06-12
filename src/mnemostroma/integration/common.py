@@ -122,7 +122,7 @@ if sys.platform == "win32":
     async def _open_pipe() -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
         """Open Windows Named Pipe connection using Proactor loop."""
         loop = asyncio.get_running_loop()
-        reader = asyncio.StreamReader()
+        reader = asyncio.StreamReader(limit=1024 * 1024 * 16)
         protocol = asyncio.StreamReaderProtocol(reader)
         transport, _ = await loop.create_pipe_connection(
             lambda: protocol,
@@ -142,7 +142,7 @@ async def safe_ipc_call(tool: str, args: dict[str, Any], timeout: float = 5.0) -
 
     if use_tcp:
         try:
-            reader, writer = await asyncio.open_connection("127.0.0.1", _IPC_TCP_PORT)
+            reader, writer = await asyncio.open_connection("127.0.0.1", _IPC_TCP_PORT, limit=1024 * 1024 * 16)
         except OSError as e:
             raise ConnectionError(
                 f"Mnemostroma daemon not running (TCP fallback failed): {e}\n"
@@ -153,7 +153,7 @@ async def safe_ipc_call(tool: str, args: dict[str, Any], timeout: float = 5.0) -
             reader, writer = await _open_pipe()
         except OSError as pipe_err:
             try:
-                reader, writer = await asyncio.open_connection("127.0.0.1", _IPC_TCP_PORT)
+                reader, writer = await asyncio.open_connection("127.0.0.1", _IPC_TCP_PORT, limit=1024 * 1024 * 16)
             except OSError:
                 raise ConnectionError(
                     f"Mnemostroma daemon not running (pipe and TCP failed): {pipe_err}\n"
@@ -163,10 +163,10 @@ async def safe_ipc_call(tool: str, args: dict[str, Any], timeout: float = 5.0) -
         if not _SOCKET_PATH.exists():
             raise ConnectionError("Mnemostroma daemon not running.")
         try:
-            reader, writer = await asyncio.open_unix_connection(str(_SOCKET_PATH))
+            reader, writer = await asyncio.open_unix_connection(str(_SOCKET_PATH), limit=1024 * 1024 * 16)
         except OSError as sock_err:
             try:
-                reader, writer = await asyncio.open_connection("127.0.0.1", _IPC_TCP_PORT)
+                reader, writer = await asyncio.open_connection("127.0.0.1", _IPC_TCP_PORT, limit=1024 * 1024 * 16)
             except OSError:
                 raise ConnectionError(f"Mnemostroma daemon not running: {sock_err}") from sock_err
 

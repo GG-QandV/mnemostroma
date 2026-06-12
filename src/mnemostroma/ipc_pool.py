@@ -31,7 +31,7 @@ class _IPCConn:
         self._lock   = asyncio.Lock()
 
     async def connect(self) -> None:
-        self._reader, self._writer = await asyncio.open_unix_connection(self._path)
+        self._reader, self._writer = await asyncio.open_unix_connection(self._path, limit=1024 * 1024 * 16)
         logger.debug(f"IPC connected: {self._path}")
 
     @property
@@ -96,16 +96,32 @@ class IPCPool:
         self._size = size
         self._pool: asyncio.Queue[_IPCConn] = asyncio.Queue(maxsize=size)
         self._started = False
+        self._start_lock = asyncio.Lock()
 
     async def start(self) -> None:
-        if self._started:
-            return
-        for _ in range(self._size):
-            conn = _IPCConn(self._path)
-            await conn.connect()
-            await self._pool.put(conn)
-        self._started = True
-        logger.info(f"IPCPool: {self._size} connections → {self._path}")
+        async with self._start_lock:
+            if self._started:
+                return
+            conns = []
+            try:
+                for _ in range(self._size):
+                    conn = _IPCConn(self._path)
+                    await conn.connect()
+                    conns.append(conn)
+                # Ensure queue is clear before filling
+                while not self._pool.empty():
+                    self._pool.get_nowait()
+                for conn in conns:
+                    await self._pool.put(conn)
+                self._started = True
+                logger.info(f"IPCPool: {self._size} connections → {self._path}")
+            except Exception as e:
+                for conn in conns:
+                    try:
+                        await conn.close()
+                    except Exception:
+                        pass
+                raise e
 
     async def stop(self) -> None:
         while not self._pool.empty():
@@ -114,6 +130,8 @@ class IPCPool:
         self._started = False
 
     async def call(self, tool: str, args: dict) -> Any:
+        if not self._started:
+            await self.start()
         conn = await self._pool.get()
         try:
             return await conn.call(tool, args)

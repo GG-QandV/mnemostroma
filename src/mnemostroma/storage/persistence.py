@@ -209,6 +209,24 @@ class PersistenceLayer:
         """
         return await self._db.find_sessions_by_flags(**kwargs)
 
+    async def insert_session_steps(self, rows: list[dict]) -> None:
+        await self._db.insert_session_steps(rows)
+
+    async def load_session_steps(self, session_id: str) -> list[dict]:
+        return await self._db.load_session_steps(session_id)
+
+    async def insert_experience_vector(self, tag: str, charge: str, vec: bytes, dim: int, w0: float, ts: int, cap: int) -> None:
+        await self._db.insert_experience_vector(tag, charge, vec, dim, w0, ts, cap)
+
+    async def load_experience_vectors(self) -> list[dict]:
+        return await self._db.load_experience_vectors()
+
+    async def find_unprocessed_step_sessions(self, idle_before_ts: int) -> list[str]:
+        return await self._db.find_unprocessed_step_sessions(idle_before_ts)
+
+    async def mark_steps_processed(self, session_id: str) -> None:
+        await self._db.mark_steps_processed(session_id)
+
     def pending_writes(self) -> int:
         """Return current queue depth (pending session writes)."""
         return self._db.queue.qsize()

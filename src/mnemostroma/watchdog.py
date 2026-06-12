@@ -56,12 +56,26 @@ async def _socket_responsive() -> bool:
     if not _SOCKET_PATH.exists():
         return False
     try:
-        r, w = await asyncio.wait_for(
+        _, w = await asyncio.wait_for(
             asyncio.open_unix_connection(str(_SOCKET_PATH)),
             timeout=2.0,
         )
         w.close()
         await w.wait_closed()
+        return True
+    except Exception:
+        return False
+
+
+async def _sse_healthy(timeout: int = 2) -> bool:
+    """TCP connect check — embedded SSE server (port 8765)."""
+    try:
+        _, writer = await asyncio.wait_for(
+            asyncio.open_connection("127.0.0.1", 8765),
+            timeout=timeout,
+        )
+        writer.close()
+        await writer.wait_closed()
         return True
     except Exception:
         return False
@@ -86,34 +100,69 @@ def _kill(pid_file: Path, sig: signal.Signals = signal.SIGKILL) -> None:
         pid = int(pid_file.read_text().strip())
         os.kill(pid, sig)
         logger.warning(f"Sent {sig.name} to PID {pid} ({pid_file.name})")
-    except (FileNotFoundError, ProcessLookupError, ValueError):
+    except (FileNotFoundError, ProcessLookupError, ValueError, PermissionError):
         pass
 
 
-def _kill_all_daemon_instances(known_pid: int | None = None) -> None:
-    """Kill all 'mnemostroma run' processes except this watchdog.
+def _read_daemon_pid() -> int | None:
+    """Read daemon PID from pid file, None if missing or invalid."""
+    try:
+        return int(_PID_DAEMON.read_text().strip())
+    except Exception:
+        return None
 
-    Catches orphan daemons that overwrote daemon.pid and became invisible
-    to the normal _kill() mechanism.
+
+def _kill_all_daemon_instances(known_pid: int | None = None) -> int:
+    """Kill orphan/duplicate daemon instances.
+
+    Strategy:
+    - 0 found   → nothing to do
+    - 1 found == known_pid → healthy official daemon, leave it alone
+    - 1 found != known_pid → orphan (known_pid is dead), kill it
+    - 2+ found  → duplicates detected: kill ALL, let systemd restart one clean instance
+
+    Returns count of killed processes.
     """
     import subprocess
     try:
-        result = subprocess.run(  # PATCH-WD-2026-05-17
+        result = subprocess.run(
             ["pgrep", "-f", r"python.*-m mnemostroma run"],
-            capture_output=True, text=True
+            capture_output=True, text=True,
         )
         my_pid = os.getpid()
+        pids = []
         for pid_str in result.stdout.strip().splitlines():
             try:
                 pid = int(pid_str)
-                if pid == my_pid or pid == known_pid:
-                    continue
+                if pid != my_pid:
+                    pids.append(pid)
+            except ValueError:
+                pass
+
+        if not pids:
+            return 0
+
+        if len(pids) == 1 and pids[0] == known_pid:
+            return 0  # single healthy official daemon
+
+        if len(pids) > 1:
+            logger.warning(
+                f"Found {len(pids)} daemon instances {pids} — killing all for clean restart"
+            )
+
+        killed = 0
+        for pid in pids:
+            try:
                 os.kill(pid, signal.SIGKILL)
-                logger.warning(f"Killed orphan daemon PID {pid}")
+                logger.warning(f"Killed daemon PID {pid}")
+                killed += 1
             except (ProcessLookupError, ValueError):
                 pass
+        return killed
+
     except Exception as e:
         logger.error(f"_kill_all_daemon_instances failed: {e}")
+        return 0
 
 
 def _clean_socket() -> None:
@@ -143,8 +192,11 @@ async def _check_daemon(hb_timeout: int) -> None:  # PATCH-WD-2026-05-17
         _kill(_PID_DAEMON, signal.SIGKILL)
         _kill_all_daemon_instances()
         _clean_socket()
-    # else: heartbeat файла нет и сокета нет — daemon ещё не поднялся,
-    # не убиваем (Phase 2 мог войти чуть раньше чем daemon записал heartbeat)
+    else:
+        # Сокет жив, heartbeat файла нет — аномалия, daemon жив но не пишет heartbeat
+        logger.warning(
+            "Daemon anomaly: socket alive but heartbeat file absent — daemon may not have initialised fully"
+        )
 
 
 async def _check_proxy(timeout: int) -> None:
@@ -157,6 +209,7 @@ async def run() -> None:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s watchdog %(levelname)s %(message)s",
+        force=True,
     )
     
     # Load Config
@@ -194,7 +247,7 @@ async def run() -> None:
             phase1_ok = True
             break
 
-        if elapsed >= startup_failsafe - 20:
+        if startup_failsafe > 20 and elapsed >= startup_failsafe - 20:
             logger.warning(
                 f"Boot slow ({elapsed:.0f}s / {startup_failsafe}s max)... still waiting"
             )
@@ -222,6 +275,8 @@ async def run() -> None:
         _notify_systemd()  # держать systemd WatchdogSec живым во время boot
         await asyncio.sleep(5)
 
+    _notify_systemd()  # немедленный keepalive при входе в Phase 2
+
     # PHASE 2: Active Monitoring
     _iteration = 0  # PATCH-WD-2026-05-17
     while True:
@@ -229,10 +284,19 @@ async def run() -> None:
         if _iteration % 10 == 0:
             logger.info(f"Watchdog alive, iteration #{_iteration}, daemon/proxy checks ok")
 
+        # Periodic duplicate sweep — runs even when daemon appears healthy
+        if _iteration % 4 == 0:
+            if _kill_all_daemon_instances(known_pid=_read_daemon_pid()) > 0:
+                _clean_socket()
+
         await asyncio.gather(  # PATCH-WD-2026-05-17
-            _check_daemon(hb_timeout), 
+            _check_daemon(hb_timeout),
             _check_proxy(proxy_timeout)
         )
+
+        # Embedded SSE health — warn only, do not kill daemon
+        if not await _sse_healthy():
+            logger.warning("Embedded SSE server not responding on port 8765 — daemon alive but SSE task may have crashed")
         _notify_systemd()
         await asyncio.sleep(check_int)
 

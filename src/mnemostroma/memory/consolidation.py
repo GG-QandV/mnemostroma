@@ -215,6 +215,10 @@ class ConsolidationWorker:
             if self.ctx.persistence:
                 await self.ctx.persistence.save_anchor(anchor)
 
+            # Nullify content_full at Skeleton level (decay_level >= 2) to reduce storage
+            if anchor.decay_level >= 2 and self.ctx.persistence:
+                await self.ctx.persistence.null_content_full(anchor.anchor_id)
+
             logger.debug(
                 "anchor.decay | id=%s level=%d facts=%d inactive_days=%.1f",
                 anchor.anchor_id, anchor.decay_level,

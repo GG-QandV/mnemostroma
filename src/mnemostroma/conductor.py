@@ -1,3 +1,4 @@
+from mnemostroma.storage.log_writer import LogWriter
 # SPDX-License-Identifier: FSL-1.1-MIT
 import asyncio
 import logging
@@ -194,11 +195,19 @@ class Conductor:
                 maturity_practitioner=config.experience.maturity_practitioner,
                 maturity_expert=config.experience.maturity_expert,
                 maturity_master=config.experience.maturity_master,
+                vecs_cap=getattr(config.experience, "evaluator_vecs_cap", 50),
             )
             rows = await persistence.load_experience()
             exp_index.load(rows)
+            # Evaluator v1.5 vector hydration (guarded until BRIEF A storage lands)
+            _load_vecs = getattr(persistence, "load_experience_vectors", None)
+            n_vecs = 0
+            if _load_vecs:
+                vec_rows = await _load_vecs()
+                exp_index.load_vectors(vec_rows, expected_dim=config.search.embedding_dim)
+                n_vecs = len(vec_rows)
             self.ctx.experience_index = exp_index
-            logger.info(f"Experience Layer loaded: {len(rows)} clusters")
+            logger.info(f"Experience Layer loaded: {len(rows)} clusters, {n_vecs} vectors")
         
         # Integration Proxy
         self.proxy = ConductorProxy(self.ctx)
@@ -401,6 +410,17 @@ class Conductor:
 
         if self.ctx:
             logger.info("Stopping Mnemostroma...")
+            
+            # B4: Synchronous flush of all ctx.step_logs without build_process_vec
+            if getattr(self.ctx, "step_logs", None) and self.ctx.persistence:
+                for sid, logs in list(self.ctx.step_logs.items()):
+                    if logs:
+                        await self.ctx.persistence.insert_session_steps(list(logs))
+                self.ctx.step_logs.clear()
+                if hasattr(self.ctx, "step_counters"):
+                    self.ctx.step_counters.clear()
+                logger.info("Flushed step_logs on shutdown.")
+
             if self._pulse_writer:
                 await self._pulse_writer.stop()
             if self._status_writer:

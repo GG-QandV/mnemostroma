@@ -153,7 +153,36 @@ class ConductorProxy:
                 for s in signals:
                     cluster = self.ctx.experience_index.get(s["tag"])
 
-        # 3. Assemble Full XML
+        # 2c. Subconscious Evaluator signals (B5 — confidence / caution)
+        # Drain the queue: consume all pending signals and clear to prevent memory leak.
+        subconscious_xml = ""
+        raw_signals: list[dict] = []
+        if getattr(self.ctx, 'subconscious_signals', None):
+            raw_signals = list(self.ctx.subconscious_signals)
+            self.ctx.subconscious_signals.clear()
+
+        if raw_signals:
+            # Priority ordering per SPEC §2.3:
+            # TENSION > caution > REPEL > AMBIVALENT > ATTRACT > confidence > DO_THIS > AVOID_THIS
+            _PRIORITY: dict[str, int] = {
+                "TENSION": 7, "caution": 6, "REPEL": 5,
+                "AMBIVALENT": 4, "ATTRACT": 3, "confidence": 2,
+                "DO_THIS": 1, "AVOID_THIS": 0,
+            }
+            raw_signals.sort(key=lambda s: _PRIORITY.get(s.get("signal", ""), -1), reverse=True)
+            lines = [
+                f'  <signal type="{s["signal"]}" tag="{s.get("tag", "")}" score="{round(s.get("score", 0.0), 3)}"/>'
+                for s in raw_signals
+            ]
+            subconscious_xml = "<subconscious>\n" + "\n".join(lines) + "\n</subconscious>"
+            # Observability: log each fired subconscious signal
+            for s in raw_signals:
+                await _sc_log(self.ctx, "subconscious.evaluator", "fire", {
+                    "signal": s.get("signal"),
+                    "tag": s.get("tag"),
+                    "score": round(s.get("score", 0.0), 3),
+                })
+
         now_str = datetime.now(UTC).isoformat().replace("+00:00", "Z")
         if not self._static_cache and not relevant_xml:
             context_string = f'<memory_context updated="{now_str}">\n<status>First session. Memory is empty — learning from this conversation.</status>\n</memory_context>'
@@ -164,6 +193,8 @@ class ConductorProxy:
                 context_string += relevant_xml + "\n"
             if intuition_xml:
                 context_string += intuition_xml + "\n"
+            if subconscious_xml:
+                context_string += subconscious_xml + "\n"
             context_string += '</memory_context>'
             
         # 4. Tools payload

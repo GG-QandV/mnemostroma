@@ -4,7 +4,7 @@
 Следует документации Serveo (https://serveo.net/docs):
 - autossh -M 0 для авто-переподключения
 - ServerAliveInterval=60 + ServerAliveCountMax=3
-- ExitOnForwardFailure=yes
+- ExitOnForwardFailure убран (autossh сам переподключает форвардинг без выхода)
 - StrictHostKeyChecking=accept-new
 - ConnectTimeout=10 для быстрого определения отказа
 - Порт 443 fallback если 22 не отвечает
@@ -65,7 +65,6 @@ def _ssh_opts(ssh_port: int = SERVEO_PORT_22) -> str:
     opts = (
         f"-o ServerAliveInterval=60 "
         f"-o ServerAliveCountMax=3 "
-        f"-o ExitOnForwardFailure=yes "
         f"-o StrictHostKeyChecking=accept-new "
         f"-o ConnectTimeout={_CONNECT_TIMEOUT} "
     )

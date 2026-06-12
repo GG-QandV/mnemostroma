@@ -17,6 +17,29 @@ except ImportError:
     pass
 
 
+def restart_daemon_services() -> None:
+    """Restart daemon via systemctl without stopping the tray.
+
+    systemd handles the cascade via BindsTo/Wants in the unit files.
+    Fallback for non-systemd: _cmd_off() + _cmd_on() (blocks caller thread up to ~60s).
+    """
+    import shutil
+    if sys.platform != "win32" and shutil.which("systemctl"):
+        try:
+            subprocess.run(
+                ["systemctl", "--user", "restart", "mnemostroma-daemon"],
+                capture_output=True,
+            )
+        except Exception as e:
+            print(f"systemctl restart failed: {e}")
+        return
+    # Non-systemd fallback
+    from mnemostroma.cli.commands import _cmd_off, _cmd_on
+    _cmd_off()
+    time.sleep(1)
+    _cmd_on()
+
+
 def stop_services() -> None:
     """Stop all Mnemostroma services based on the operating system."""
     if sys.platform == "win32":
@@ -54,7 +77,6 @@ def stop_services() -> None:
             "mnemostroma-proxy.service",
             "mnemostroma-watchdog.service",
             "mnemostroma-ui.service",
-            "mnemostroma-sse.service",
             "mnemostroma-tunnel.service",
             "mnemostroma-serveo.service"
         ]
@@ -100,7 +122,7 @@ def start_services() -> None:
     else:
         print("Starting systemd user services...")
         # Start daemon, proxy, watchdog
-        for svc in ["mnemostroma-daemon.service", "mnemostroma-proxy.service", "mnemostroma-watchdog.service"]:
+        for svc in ["mnemostroma-daemon.service", "mnemostroma-proxy.service", "mnemostroma-watchdog.service", "mnemostroma-tunnel.service"]:
             try:
                 subprocess.run(
                     ["systemctl", "--user", "start", svc],

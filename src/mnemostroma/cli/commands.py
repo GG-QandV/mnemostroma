@@ -17,6 +17,7 @@ logger = logging.getLogger("mnemostroma")
 
 _MNEMO_DIR = Path.home() / ".mnemostroma"
 _PID_FILE  = _MNEMO_DIR / "daemon.pid"
+_READY_FILE = _MNEMO_DIR / "daemon.ready"
 _CONFIG_PATH = _MNEMO_DIR / "config.json"
 
 _EXT_SRC_DIST = Path(__file__).parent.parent / "extension" / "dist"
@@ -208,6 +209,8 @@ async def _run_daemon(
 
     try:
         from mnemostroma.core.bootstrap import bootstrap
+        # КП-3: удалить stale ready-файл до старта (SIGKILL не запускает finally)
+        _READY_FILE.unlink(missing_ok=True)
         # Kill any pre-existing daemon instances before taking over
         _my_pid = os.getpid()
         for _dup in _find_mnemo_processes():
@@ -221,14 +224,7 @@ async def _run_daemon(
         (_MNEMO_DIR / "daemon.sock").unlink(missing_ok=True)
         _write_pid()
         conductor = await bootstrap(config_path, db_path, model_dir)
-        
-        # Note: monitoring and signal handlers are now handled inside bootstrap/lifecycle
-        # We just need to keep the event loop alive.
-        # However, bootstrap returns 'conductor' which we might need for shutdown control.
-        # Wait, bootstrap now calls run_background_workers which BLOCKS.
-        # So we don't need a loop here anymore, unless bootstrap returns early.
-        # In current bootstrap implementation, it awaits run_background_workers().
-        
+
     except asyncio.CancelledError:
         logger.info("Main task cancelled (graceful shutdown).")
     except Exception as e:
@@ -237,6 +233,7 @@ async def _run_daemon(
         logger.info("Shutting down daemon...")
         if 'conductor' in locals():
             await asyncio.shield(conductor.stop())
+        _READY_FILE.unlink(missing_ok=True)
         _remove_pid()
         logger.info("Shutdown complete.")
 
@@ -726,6 +723,9 @@ def _cmd_on() -> None:
             print(f"Mnemostroma already running (PID {pid}, uptime {uptime}). Use 'mnemostroma off' to stop.")
             return
 
+    # Stale guard: удалить ready-файл от предыдущего запуска
+    _READY_FILE.unlink(missing_ok=True)
+
     log_path = _MNEMO_DIR / "daemon.log"
     _MNEMO_DIR.mkdir(parents=True, exist_ok=True)
     with open(log_path, "w") as log_f:
@@ -736,11 +736,22 @@ def _cmd_on() -> None:
 
     print(_BANNER)
     print(f"  Starting...  PID {proc.pid}")
-    _time.sleep(1.2)
+
+    deadline = _time.time() + 60
+    while _time.time() < deadline:
+        if proc.poll() is not None:
+            print("  ✗ Daemon exited early — see ~/.mnemostroma/daemon.log")
+            sys.exit(1)
+        if _READY_FILE.exists():
+            print(f"  ⚡ Daemon ready   PID {proc.pid}")
+            return
+        _time.sleep(0.3)
+
     if proc.poll() is None:
-        print(f"  ⚡ Daemon running   PID {proc.pid}")
+        print(f"  ⚠ Daemon started (PID {proc.pid}) but not ready within 60s.")
+        print("    Check: mnemostroma status | journalctl --user -u mnemostroma-daemon -n 30")
     else:
-        print("  ✗ Daemon exited early")
+        print("  ✗ Daemon exited — see ~/.mnemostroma/daemon.log")
         sys.exit(1)
 
 def _cmd_off() -> None:
@@ -760,12 +771,14 @@ def _cmd_off() -> None:
         if not _is_process_alive(pid):
             print("stopped")
             _remove_pid_safe(pid)
+            _READY_FILE.unlink(missing_ok=True)
             return
     try:
         os.kill(pid, signal.SIGKILL)
     except OSError:
         pass
     _remove_pid_safe(pid)
+    _READY_FILE.unlink(missing_ok=True)
     print("killed")
 
 def _print_status(pid_path: Path = _PID_FILE) -> None:
@@ -970,7 +983,9 @@ def _cmd_service_linux() -> None:
         "mnemostroma-watchdog.service",
         "mnemostroma-ui.service",
         # "mnemostroma-sse.service",  # REMOVED: SSE embedded in daemon (see SPEC_sse_daemon_embed_v1.1)
-        "mnemostroma-tunnel.service",  # Cloudflare Tunnel & OAuth Adapter
+        "mnemostroma-tunnel.service",           # Serveo Tunnel & OAuth Adapter
+        "mnemostroma-tunnel-keepalive.service", # Tunnel HTTP keepalive (activated by timer)
+        "mnemostroma-tunnel-keepalive.timer",   # Keepalive timer — 25min interval
     ]
 
     try:
@@ -1017,7 +1032,9 @@ def _cmd_service_linux() -> None:
     core_units = [u for u in installed if u not in (
         "mnemostroma-ui.service",
         "mnemostroma-sse.service",
-        "mnemostroma-tunnel.service",  # не auto-enable — только по запросу
+        "mnemostroma-tunnel.service",           # не auto-enable — только по запросу
+        "mnemostroma-tunnel-keepalive.service", # активируется таймером, не напрямую
+        "mnemostroma-tunnel-keepalive.timer",   # не auto-enable — включается вместе с tunnel
     )]
     failed_enable = []
     for unit in core_units:
@@ -1113,6 +1130,11 @@ def _cmd_tunnel(args: list) -> None:
 
         if use_systemd:
             subprocess.run(["systemctl", "--user", "start", "mnemostroma-tunnel"])
+            # Keepalive timer: enable+start если ещё не активен
+            subprocess.run(
+                ["systemctl", "--user", "enable", "--now", "mnemostroma-tunnel-keepalive.timer"],
+                capture_output=True,
+            )
             print("✓ Mnemostroma tunnel started via systemd")
             # Ждем появления tunnel_url
             for _ in range(20):
@@ -1243,6 +1265,17 @@ def _cmd_tunnel(args: list) -> None:
             token = get_tunnel_token() or "<not generated>"
             print(f"  Public URL: {url}")
             print(f"  Static token: {token}")
+            prev_url_file = _MNEMO_DIR / "tunnel_url.prev"
+            if prev_url_file.exists():
+                prev_url = prev_url_file.read_text().strip()
+                if prev_url and prev_url != url:
+                    print(f"  ⚠ URL изменился (было: {prev_url})")
+                    print(f"    Обновите настройки Perplexity / Claude.ai на новый URL.")
+            # Обновляем prev после отображения
+            try:
+                prev_url_file.write_text(url, encoding="utf-8")
+            except OSError:
+                pass
     else:
         print(f"Unknown tunnel subcommand: {subcmd}")
         print("Usage: mnemostroma tunnel [start|stop|status]")

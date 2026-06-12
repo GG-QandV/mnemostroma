@@ -171,6 +171,10 @@ class SystemContext:
     # Index concurrency lock — search+add must be atomic
     index_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
+    # Lifecycle step_log
+    step_logs: dict[str, list[dict]] = field(default_factory=dict)
+    step_counters: dict[str, int] = field(default_factory=dict)
+
     # Pending emotions awaiting entity binding (Memory Model v2 § 5.2)
     pending_emotions: list[Any] = field(default_factory=list)
 
@@ -204,6 +208,7 @@ class SystemContext:
 
     # Phase 11.A/C: Associative Surfacing + Anchor Guardian queues
     surfaced_queue: list[Any] = field(default_factory=list)
+    subconscious_signals: list[Any] = field(default_factory=list)
     conflict_warnings: list[Any] = field(default_factory=list)
     recently_warned: dict[str, float] = field(default_factory=dict)  # anchor_id → timestamp
 

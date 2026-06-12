@@ -248,14 +248,27 @@ async def ctx_search(
     return results[:limit]
 
 
-async def ctx_full(session_id: str, ctx: SystemContext) -> dict[str, Any] | None:
-    """Load full session record via session_repo including content_full."""
+async def ctx_full(
+    session_id: str,
+    ctx: SystemContext,
+    max_chars: int = 2000
+) -> dict[str, Any] | None:
+    """Load full session record via session_repo including content_full.
+
+    Truncates content_full to max_chars to prevent token bloat in agent contexts.
+    """
     if not ctx.session_repo:
         return None
 
     data, error = await ctx.session_repo.load_full(session_id)
     if error is not None:
         return None
+
+    # Apply truncation guard to content_full
+    if data and data.get("content_full"):
+        content = data["content_full"]
+        if len(content) > max_chars:
+            data["content_full"] = content[:max_chars] + "\n...[truncated]"
 
     await signal_use(session_id, ctx)
     return data

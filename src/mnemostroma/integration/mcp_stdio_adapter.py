@@ -166,14 +166,14 @@ def _next_id() -> int:
 if sys.platform == "win32":
     async def _open_connection() -> tuple:
         loop = asyncio.get_running_loop()
-        reader = asyncio.StreamReader()
+        reader = asyncio.StreamReader(limit=1024 * 1024 * 16)
         protocol = asyncio.StreamReaderProtocol(reader)
         transport, _ = await loop.create_pipe_connection(lambda: protocol, _PIPE_NAME)
         writer = asyncio.StreamWriter(transport, protocol, reader, loop)
         return reader, writer
 else:
     async def _open_connection() -> tuple:
-        return await asyncio.open_unix_connection(str(_SOCKET_PATH))
+        return await asyncio.open_unix_connection(str(_SOCKET_PATH), limit=1024 * 1024 * 16)
 
 
 async def _ipc_call(tool: str, args: dict) -> Any:

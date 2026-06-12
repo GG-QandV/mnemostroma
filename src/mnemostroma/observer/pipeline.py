@@ -94,7 +94,14 @@ async def observer_pipeline(
         ctx.config.anchor_guardian.enabled
         or ctx.config.associative_surfacing.enabled
         or ctx.config.open_loop.enabled
+        or ctx.config.experience.layer_enabled
     ):
+        if ctx.config.experience.layer_enabled:
+            from ..subconscious.evaluator import subconscious_evaluate
+            eval_res = subconscious_evaluate(embedding_f32, ctx.experience_index, ctx.config, int(time.time()))
+            if eval_res:
+                ctx.subconscious_signals.append(eval_res)
+
         tasks = []
         if ctx.config.anchor_guardian.enabled:
             from ..subconscious.guardian import anchor_guardian

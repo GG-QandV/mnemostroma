@@ -9,6 +9,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
+import numpy as np
+
 logger = logging.getLogger("mnemostroma.experience")
 
 # Score events (spec §3)
@@ -43,6 +45,12 @@ class ExperienceCluster:
     emotion_negative: int = 0
     emotion_intensity_sum: float = 0.0
     _thresholds: tuple = field(default=(100, 30, 10, 5), repr=False)
+    # Evaluator v1.5 vector memory (SPEC_subconscious_gaps_v1.0 §2.1)
+    # entries: (vec float32 ndarray, w0, ts); FIFO-capped by _vecs_cap
+    positive_vecs: list = field(default_factory=list, repr=False)
+    negative_vecs: list = field(default_factory=list, repr=False)
+    process_vecs: list = field(default_factory=list, repr=False)
+    _vecs_cap: int = field(default=50, repr=False)
 
     @property
     def maturity(self) -> str:
@@ -94,6 +102,23 @@ class ExperienceCluster:
             self.conflict_count += 1
         self.last_updated = int(time.time())
 
+    def record_vec(self, vec: np.ndarray, charge: str, w0: float, ts: int | None = None) -> None:
+        """Store an experience vector. charge: 'positive' | 'negative' | 'process'.
+
+        FIFO eviction at _vecs_cap. Vector kept as float32 in RAM.
+        """
+        target = {
+            "positive": self.positive_vecs,
+            "negative": self.negative_vecs,
+            "process": self.process_vecs,
+        }.get(charge)
+        if target is None:
+            return
+        target.append((np.asarray(vec, dtype=np.float32), float(w0), int(ts or time.time())))
+        if len(target) > self._vecs_cap:
+            del target[: len(target) - self._vecs_cap]
+        self.last_updated = int(time.time())
+
     def record_emotion(self, charge: str, intensity: float) -> None:
         """Record one emotion event. charge: 'positive' | 'negative'."""
         if charge == "positive":
@@ -131,10 +156,19 @@ class ExperienceIndex:
 
     def __init__(self, signal_threshold: float = 0.75,
                  maturity_apprentice: int = 5, maturity_practitioner: int = 10,
-                 maturity_expert: int = 30, maturity_master: int = 100):
+                 maturity_expert: int = 30, maturity_master: int = 100,
+                 vecs_cap: int = 50):
         self._clusters: dict[str, ExperienceCluster] = {}
         self._signal_threshold = signal_threshold
         self._thresholds = (maturity_master, maturity_expert, maturity_practitioner, maturity_apprentice)
+        self._vecs_cap = vecs_cap
+
+    def _get_or_create(self, tag: str) -> ExperienceCluster:
+        if tag not in self._clusters:
+            self._clusters[tag] = ExperienceCluster(
+                tag=tag, _thresholds=self._thresholds, _vecs_cap=self._vecs_cap
+            )
+        return self._clusters[tag]
 
     def get(self, tag: str) -> ExperienceCluster | None:
         return self._clusters.get(tag)
@@ -148,9 +182,13 @@ class ExperienceIndex:
         if is_conflict:
             score += SCORE_CONFLICT
         for tag in tags:
-            if tag not in self._clusters:
-                self._clusters[tag] = ExperienceCluster(tag=tag, _thresholds=self._thresholds)
-            self._clusters[tag].record(score, is_conflict=is_conflict)
+            self._get_or_create(tag).record(score, is_conflict=is_conflict)
+
+    def record_vec(self, tags: list[str], vec: np.ndarray, charge: str,
+                   w0: float, ts: int | None = None) -> None:
+        """Store an experience vector in the cluster of every tag (SPEC §1.5)."""
+        for tag in tags:
+            self._get_or_create(tag).record_vec(vec, charge, w0, ts)
 
     def update_emotion(self, tags: list[str], charge: str, intensity: float) -> None:
         """Record an emotion event for all given tags.
@@ -159,9 +197,7 @@ class ExperienceIndex:
         intensity: 0.0–1.0
         """
         for tag in tags:
-            if tag not in self._clusters:
-                self._clusters[tag] = ExperienceCluster(tag=tag, _thresholds=self._thresholds)
-            self._clusters[tag].record_emotion(charge, intensity)
+            self._get_or_create(tag).record_emotion(charge, intensity)
 
     def load(self, rows: list[dict[str, Any]]) -> None:
         """Hydrate from SQLite rows on bootstrap."""
@@ -177,6 +213,33 @@ class ExperienceIndex:
                 emotion_negative=row.get("emotion_negative", 0),
                 emotion_intensity_sum=row.get("emotion_intensity_sum", 0.0),
                 _thresholds=self._thresholds,
+                _vecs_cap=self._vecs_cap,
+            )
+
+    def load_vectors(self, rows: list[dict[str, Any]], expected_dim: int) -> None:
+        """Hydrate experience vectors from SQLite rows on bootstrap (SPEC §3.4).
+
+        Row keys: tag, charge, vec (f16 bytes), dim, w0, ts.
+        Rows with dim != expected_dim are skipped (embedder change) — one WARN total.
+        """
+        skipped = 0
+        for row in rows:
+            if row.get("dim") != expected_dim:
+                skipped += 1
+                continue
+            try:
+                vec = np.frombuffer(row["vec"], dtype=np.float16).astype(np.float32)
+            except (ValueError, TypeError):
+                skipped += 1
+                continue
+            self._get_or_create(row["tag"]).record_vec(
+                vec, row.get("charge", "positive"),
+                row.get("w0", 1.0), row.get("ts"),
+            )
+        if skipped:
+            logger.warning(
+                "Experience vectors: skipped %d rows (dim mismatch or corrupt blob, expected dim=%d)",
+                skipped, expected_dim,
             )
 
     def apply_decay(self, threshold_days: int = 90, rate: float = 0.01) -> list[str]:

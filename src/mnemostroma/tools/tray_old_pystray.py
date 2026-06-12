@@ -165,22 +165,20 @@ def run_tray(db_path: Path, interval: int = 3):
             pass  # notifications not supported on all platforms
 
     def _restart_daemon(icon, item):
-        """Restart Mnemostroma services in a cascade."""
+        """Restart daemon via systemctl; tray stays alive."""
         try:
-            from mnemostroma.tools.cleanup import start_services, stop_services
+            from mnemostroma.tools.cleanup import restart_daemon_services
+
             def run_restart():
                 try:
-                    stop_services()
-                    time.sleep(1.0)
-                    start_services()
-                    print("All services restarted in cascade.")
+                    restart_daemon_services()
+                    print("Daemon restart initiated.")
                 except Exception as e:
-                    print(f"Error in cascade restart thread: {e}")
+                    print(f"Error in restart: {e}")
 
-            thread = threading.Thread(target=run_restart)
-            thread.daemon = True
+            thread = threading.Thread(target=run_restart, daemon=True)
             thread.start()
-            print("Restart cascade thread started.")
+            print("Restart thread started.")
         except Exception as e:
             print(f"Error starting restart cascade: {e}")
 
