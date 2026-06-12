@@ -76,8 +76,13 @@ async def list_tools() -> list[Tool]:
     """Expose Mnemostroma memory tools to the agent."""
     return [
         Tool(
+            name="ctx_help",
+            description="Returns a brief markdown cheat sheet on when and how to use Mnemostroma memory tools. Call this if you are unsure which tool to use.",
+            inputSchema={"type": "object", "properties": {}}
+        ),
+        Tool(
             name="ctx_semantic",
-            description="Semantic search in memory. Returns relevant sessions based on meaning.",
+            description="Semantic search in memory. Use this FIRST when you need to find past context, decisions, or code based on meaning or vague descriptions. (~20ms)",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -101,21 +106,27 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="ctx_search",
-            description="Search for sessions using tags. Faster than semantic search, requires exact tag matches.",
+            description=(
+                "Search for sessions using exact tags (e.g., bug, docs) OR by exact time. "
+                "Faster than semantic search. "
+                "Combination guide: You can pass tags only, exact_time only, or both. "
+                "For exact_time, use masks like '27/04/26 21:18:XX' (minute precision)."
+            ),
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "tags": {"type": "array", "items": {"type": "string"}, "description": "List of tags to filter by"},
+                    "tags": {"type": "array", "items": {"type": "string"}, "description": "List of tags to filter by. Pass [] if searching only by time."},
+                    "exact_time": {"type": "string", "description": "Time string with optional X-mask, e.g. '27/04/26 21:18:XX'"},
                     "importance": {"type": "string", "description": "critical | important | background | principle"},
                     "age": {"type": "string", "description": "Filter by age signal"},
                     "limit": {"type": "integer", "default": 10}
                 },
-                "required": ["tags"]
+                "required": []
             }
         ),
         Tool(
             name="ctx_full",
-            description="Get the complete session transcript including full content from SQLite. Use only when exact wording is required.",
+            description="Get the complete session transcript from SQLite. Use this ONLY when you need the exact verbatim text, code snippets, or full history that was truncated in search results. Heavy call.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -126,7 +137,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="ctx_anchors",
-            description="Retrieve subconscious layer anchors: decisions, facts, people, events, or deadlines. Fast RAM access. type=deadline replaces ctx_urgent.",
+            description="Retrieve subconscious layer anchors: decisions, deadlines, facts, or events. Use this when you need to check hard constraints, agreed decisions, or project deadlines. Fast RAM access.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -150,7 +161,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="content_search",
-            description="Semantic search across the content branch (code, configs, docs). Returns block metadata.",
+            description="Semantic search across the content branch (code, configs, docs). Use this to find specific project files or documentation blocks.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -162,19 +173,6 @@ async def list_tools() -> list[Tool]:
                 "required": ["query"]
             }
         ),
-        # DISABLED content_get — API minimization 2026-04-28
-        # Tool(
-        #     name="content_get",
-        #     description="Retrieve metadata for a specific content block by ID. version=null returns the latest active version.",
-        #     inputSchema={
-        #         "type": "object",
-        #         "properties": {
-        #             "content_id": {"type": "string"},
-        #             "version": {"type": "integer", "description": "Specific version number (optional)"}
-        #         },
-        #         "required": ["content_id"]
-        #     }
-        # ),
         Tool(
             name="content_raw",
             description="Retrieve the full raw text of a content version. High latency call — use only when exact text is needed.",
@@ -200,12 +198,12 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="ctx_bridge",
-            description="Generate a structured context bridge package for handoff to the next agent (intent, decisions, conflicts, deadlines).",
+            description="Generate a structured context bridge package. Use this BEFORE ending a session if work continues, a decision was made, or a blocker remains.",
             inputSchema={"type": "object", "properties": {}}
         ),
         Tool(
             name="ctx_recent",
-            description="Retrieve sessions from the last N days. by='created' (creation date) or by='accessed' (last access date).",
+            description="Retrieve sessions from the last N days. Use this to catch up on what happened recently (e.g., 'what did I do yesterday?').",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -215,56 +213,6 @@ async def list_tools() -> list[Tool]:
                 },
             },
         ),
-        # Tool(
-        #     name="ctx_active",
-        #     description="Summary of current active context: goals, variables, deadlines, conflicts.",
-        #     inputSchema={"type": "object", "properties": {}}
-        # ),
-        # Tool(
-        #     name="ctx_urgent",
-        #     description="Urgent tasks and deadlines for the near future.",
-        #     inputSchema={
-        #         "type": "object",
-        #         "properties": {
-        #             "hours_ahead": {"type": "number", "default": 72.0}
-        #         }
-        #     }
-        # ),
-        # Tool(
-        #     name="ctx_expire",
-        #     description="Mark a session's urgency status as expired.",
-        #     inputSchema={
-        #         "type": "object",
-        #         "properties": {
-        #             "session_id": {"type": "string", "description": "Session ID"}
-        #         },
-        #         "required": ["session_id"]
-        #     }
-        # ),
-        # Tool(
-        #     name="ctx_load",
-        #     description="Lazy load a session from cold storage into the RAM index.",
-        #     inputSchema={
-        #         "type": "object",
-        #         "properties": {
-        #             "session_id": {"type": "string", "description": "Session ID"}
-        #         },
-        #         "required": ["session_id"]
-        #     }
-        # ),
-        # Tool(
-        #     name="save_content",
-        #     description="Save a new version of a content block (code, text, data).",
-        #     inputSchema={
-        #         "type": "object",
-        #         "properties": {
-        #             "content_id": {"type": "string"},
-        #             "text": {"type": "string", "description": "Full content text"},
-        #             "why_changed": {"type": "string", "description": "Reason for change"}
-        #         },
-        #         "required": ["content_id", "text"]
-        #     }
-        # ),
     ]
 
 
@@ -293,7 +241,23 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             logger.warning(f"Failed dynamic SessionRepo healing: {e}")
 
     try:
-        if name == "ctx_semantic":
+        if name == "ctx_help":
+            help_text = (
+                "## Mnemostroma Tools Guide\n\n"
+                "| Tool | When to use |\n"
+                "|---|---|\n"
+                "| `ctx_semantic` | **DEFAULT.** Find past context by meaning/topic. Use this FIRST. (~20ms) |\n"
+                "| `ctx_anchors` | Find explicit decisions, deadlines, or constraints. (<1ms) |\n"
+                "| `ctx_search` | Find sessions by exact tags (e.g. 'bug', 'docs'). (<1ms) |\n"
+                "| `ctx_full` | Retrieve the FULL verbatim text of a session. Heavy call, use only for exact code/quotes. |\n"
+                "| `ctx_bridge` | Call this BEFORE ending your turn if work is unfinished or a decision was made. |\n"
+                "| `content_search` | Find documentation or code snippets in the Content Branch. |\n"
+                "| `ctx_recent` | See what happened in the last N days. |\n\n"
+                "**MANDATORY RULE:** Never claim you don't have context without trying `ctx_semantic` first."
+            )
+            return [TextContent(type="text", text=json.dumps({"guide": help_text}, ensure_ascii=False))]
+
+        elif name == "ctx_semantic":
             from mnemostroma.tools.read import ctx_semantic
             results = await ctx_semantic(
                 query=arguments["query"],
@@ -310,11 +274,12 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         elif name == "ctx_search":
             from mnemostroma.tools.read import ctx_search
             result = await ctx_search(
-                tags=arguments["tags"],
+                tags=arguments.get("tags", []),
                 ctx=ctx,
                 importance=arguments.get("importance"),
                 age=arguments.get("age"),
                 limit=arguments.get("limit", 10),
+                exact_time=arguments.get("exact_time"),
             )
             return [TextContent(type="text", text=_serialize(result))]
 
