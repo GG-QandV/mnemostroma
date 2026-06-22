@@ -236,52 +236,52 @@ pip install "git+https://github.com/GG-QandV/mnemostroma.git[all]"
 mnemostroma setup
 ```
 
-**Windows — установка:**
+**Windows:**
 
-> ⚠️ **Сначала установите Git** — он нужен для скачивания Mnemostroma.
+> **Install Git first** — Mnemostroma requires Git to download dependencies.
 >
-> 👉 **[Скачать Git для Windows](https://git-scm.com/download/win)** — установите с настройками по умолчанию.
+> **[Download Git for Windows](https://git-scm.com/download/win)** — install with default settings.
 >
-> Python устанавливается автоматически во время установки Mnemostroma.
+> Python is installed automatically during Mnemostroma setup.
 
-**Шаг 1.** Скачайте файл установщика:
+**Step 1.** Download the installer:
 
-👉 **[Скачать install-windows.bat](https://raw.githubusercontent.com/GG-QandV/mnemostroma/main/scripts/install-windows.bat)**
+**[Download install-windows.bat](https://raw.githubusercontent.com/GG-QandV/mnemostroma/main/scripts/install-windows.bat)**
 
-*(правая кнопка мыши → «Сохранить ссылку как» → Рабочий стол или папка Загрузки)*
+*(right-click → "Save link as" → Desktop or Downloads folder)*
 
-**Шаг 2.** Дважды кликните на `install-windows.bat`.
+**Step 2.** Double-click `install-windows.bat`.
 
-Появится чёрное окно — это нормально. Установщик автоматически:
-- проверит и установит Python, если нужно
-- скачает Mnemostroma (~300 МБ моделей AI)
-- настроит автозапуск при входе в Windows
+A black terminal window will appear — this is normal. The installer will automatically:
+- check and install Python if needed
+- download Mnemostroma (~300 MB of AI models)
+- set up autostart on Windows login
 
-**Шаг 3.** Дождитесь сообщения `Done. You can close this window.` и закройте окно.
+**Step 3.** Wait for the message `Done. You can close this window.` and close the window.
 
-> 💡 Если Windows показывает «Неизвестный издатель» — нажмите **«Подробнее» → «Выполнить в любом случае»**.
-> На семейном ПК — запустите установщик под каждой учётной записью отдельно.
+> If Windows shows "Unknown publisher" — click **"More info" → "Run anyway"**.
+> On a family PC — run the installer under each user account separately.
 
 
-**Что создаётся после установки:**
+**What gets created after installation:**
 
-| Файл | Назначение |
+| File | Purpose |
 |---|---|
-| `%USERPROFILE%\.mnemostroma\install.log` | Полный лог установки для диагностики |
-| `%USERPROFILE%\.mnemostroma\install-manifest.json` | Манифест установки (используется при удалении) |
-| `%USERPROFILE%\.mnemostroma\daemon.log` | Лог работы демона |
+| `%USERPROFILE%\.mnemostroma\install.log` | Full install log for diagnostics |
+| `%USERPROFILE%\.mnemostroma\install-manifest.json` | Install manifest (used for uninstall) |
+| `%USERPROFILE%\.mnemostroma\daemon.log` | Daemon runtime log |
 
-> 🤖 **Если что-то пошло не так:** откройте `install.log` из папки `%USERPROFILE%\.mnemostroma\`,
-> скопируйте содержимое и вставьте в [ChatGPT](https://chat.openai.com), [Claude](https://claude.ai) или [Gemini](https://gemini.google.com) с вопросом «что здесь пошло не так?».
+> **Having issues?** Open `install.log` from `%USERPROFILE%\.mnemostroma\`,
+> copy the contents and paste into [ChatGPT](https://chat.openai.com), [Claude](https://claude.ai) or [Gemini](https://gemini.google.com) with the question "what went wrong here?".
 
-**Удаление:**
+**Uninstall:**
 
-👉 **[Скачать uninstall-windows.bat](https://raw.githubusercontent.com/GG-QandV/mnemostroma/main/scripts/uninstall-windows.bat)**
+**[Download uninstall-windows.bat](https://raw.githubusercontent.com/GG-QandV/mnemostroma/main/scripts/uninstall-windows.bat)**
 
-Двойной клик — удалит задачи автозапуска, PATH и venv. Данные памяти спросит отдельно.
+Double-click — removes autostart tasks, PATH entries, and venv. Memory data will prompt separately.
 
 <details>
-<summary>Ручная установка (для опытных пользователей)</summary>
+<summary>Manual setup (for advanced users)</summary>
 
 ```powershell
 py -3.12 -m venv "$env:USERPROFILE\.mnemostroma\venv"
