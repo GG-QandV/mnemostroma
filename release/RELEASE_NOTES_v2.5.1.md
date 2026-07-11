@@ -2,13 +2,9 @@
 
 ## Gateway Provider Dispatch
 
-Mnemostroma v2.5.1 introduces a complete Gateway Provider Dispatch pipeline — an OpenAI-compatible, non-streaming Chat Completions endpoint with memory injection, observation, admission control, and response normalization. Also includes the HTTP Read Adapter (v2.5.0) and embedded Streamable HTTP MCP.
-
----
+Mnemostroma v2.5.1 introduces a complete Gateway Provider Dispatch pipeline — an OpenAI-compatible, non-streaming Chat Completions endpoint with memory injection, observation, admission control, and response normalization.
 
 ### Key Changes
-
-#### 1. Gateway Provider Dispatch (R6b–R19)
 
 - **Provider Transport**: `HttpxProviderTransport` — production HTTP transport with configurable timeouts, retries, and TLS verification.
 - **Memory Injection**: `MemoryInjector` Protocol — injects `<memorycontext>` into every provider request (in `active` mode).
@@ -22,27 +18,12 @@ Mnemostroma v2.5.1 introduces a complete Gateway Provider Dispatch pipeline — 
 - **Content-Safe Metrics**: `GatewayMetrics` — 12 fixed counters, 5 latency aggregates, no PII.
 - **ConductorProxy Adapters**: `ConductorProxyMemoryInjector`, `ConductorProxyCompletionObserver` — wire Gateway into daemon memory.
 
-#### 2. HTTP Read Adapter (v2.5.0)
+### New Ports
 
-- Ultra-low latency REST endpoint on port `8762` for CLI/scripts/browsers.
-- Direct memory read access without MCP protocol overhead.
-- Full `ctx_semantic`, `ctx_anchors`, `ctx_search`, `ctx_recent`, `ctx_bridge` via HTTP GET.
-
-#### 3. Embedded Streamable HTTP MCP
-
-- Streamable HTTP transport (port `8768`) runs inside the daemon — no separate process.
-- Primary transport for VS Code, Antigravity, OpenCode, Qoder.
-- Bearer token auth, auto-generated on daemon start.
-
-#### 4. Config & Ports
-
-| Port   | Service             | Description                        |
-| ------ | ------------------- | ---------------------------------- |
-| `8762` | HTTP Read Adapter   | REST endpoint for CLI/scripts      |
-| `8765` | SSE MCP             | Cursor, Claude Code                |
-| `8768` | Streamable HTTP MCP | VS Code, Antigravity, OpenCode     |
-| `8780` | Gateway (basic)     | OpenAI-compatible Chat Completions |
-| `8781` | Gateway (full)      | + memory injection & observation   |
+| Port   | Service         | Description                        |
+| ------ | --------------- | ---------------------------------- |
+| `8780` | Gateway (basic) | OpenAI-compatible Chat Completions |
+| `8781` | Gateway (full)  | + memory injection & observation   |
 
 ---
 
