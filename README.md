@@ -2,14 +2,14 @@
 
 ### The memory layer for AI agents
 
-![Version](https://img.shields.io/badge/version-v2.5.0-blue)
+![Version](https://img.shields.io/badge/version-v2.5.1-blue)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue)
 ![Tests](https://img.shields.io/badge/tests-926%20passing-brightgreen)
 ![License](https://img.shields.io/badge/license-FSL--1.1--MIT-lightgrey)
 
 > *μνήμη (mnḗmē, memory) + στρῶμα (strôma, layer) — the substrate everything rests on.*
 
-> **v2.5.0 is stable.** **NEW in v2.5.0:** HTTP Read Adapter (port 8762) — ultra-low latency REST endpoint for CLI/scripts/browsers. See [TRANSPORT_COMPARISON_v2.5.md](./docs/integration/TRANSPORT_COMPARISON_v2.5.md).
+> **v2.5.1 is stable.** **NEW in v2.5.0:** HTTP Read Adapter (port 8762) — ultra-low latency REST endpoint for CLI/scripts/browsers. See [TRANSPORT_COMPARISON_v2.5.md](./docs/integration/TRANSPORT_COMPARISON_v2.5.md).
 > **NEW:** Gateway Provider Dispatch — OpenAI-compatible non-streaming Chat Completions with memory injection, observation, admission control and response normalization. See [GATEWAY_PROVIDER.md](./docs/GATEWAY_PROVIDER.md).
 
 ---
@@ -165,7 +165,7 @@ This is not a database with TTL. This is how human memory works.
 
 ## Status
 
-**Current:** v2.5.0 | 2026-07-09
+**Current:** v2.5.1 | 2026-07-11
 
 | Component | Status |
 |---|---|
@@ -196,7 +196,7 @@ This is not a database with TTL. This is how human memory works.
 
 **Requires Python 3.12+**
 
-> **v2.5.0 is stable.** **NEW in v2.5.0:** HTTP Read Adapter (port 8762) — ultra-low latency REST endpoint for CLI/scripts/browsers. See [TRANSPORT_COMPARISON_v2.5.md](./docs/integration/TRANSPORT_COMPARISON_v2.5.md).
+> **v2.5.1 is stable.** **NEW in v2.5.0:** HTTP Read Adapter (port 8762) — ultra-low latency REST endpoint for CLI/scripts/browsers. See [TRANSPORT_COMPARISON_v2.5.md](./docs/integration/TRANSPORT_COMPARISON_v2.5.md).
 
 ---
 
@@ -940,7 +940,7 @@ Cloud Sync, Subconscious Layer (personalized models), Shared Experience, and Tea
 ---
 
 *Mnemostroma — the memory layer for AI agents*
-*offline · ~650MB RAM (baseline) · ~20ms · 926 tests · v2.4.0*
+*offline · ~650MB RAM (baseline) · ~20ms · 926 tests · v2.5.1*
 
 # [mnemostroma-protocol]
 
