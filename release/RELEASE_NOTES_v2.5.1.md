@@ -36,13 +36,13 @@ Mnemostroma v2.5.1 introduces a complete Gateway Provider Dispatch pipeline — 
 
 #### 4. Config & Ports
 
-| Port | Service | Description |
-|------|---------|-------------|
-| `8762` | HTTP Read Adapter | REST endpoint for CLI/scripts |
-| `8765` | SSE MCP | Cursor, Claude Code |
-| `8768` | Streamable HTTP MCP | VS Code, Antigravity, OpenCode |
-| `8780` | Gateway (basic) | OpenAI-compatible Chat Completions |
-| `8781` | Gateway (full) | + memory injection & observation |
+| Port   | Service             | Description                        |
+| ------ | ------------------- | ---------------------------------- |
+| `8762` | HTTP Read Adapter   | REST endpoint for CLI/scripts      |
+| `8765` | SSE MCP             | Cursor, Claude Code                |
+| `8768` | Streamable HTTP MCP | VS Code, Antigravity, OpenCode     |
+| `8780` | Gateway (basic)     | OpenAI-compatible Chat Completions |
+| `8781` | Gateway (full)      | + memory injection & observation   |
 
 ---
 
@@ -62,7 +62,7 @@ mnemostroma off && mnemostroma on
 
 ### Technical State
 
-- **Tests**: 1477 passing (+446 gateway tests, +105 new)
+- **Tests**: 1477 passing (+217 gateway & integration tests over v2.4.0)
 - **RAM Footprint**: ~650 MB baseline
 - **Search Latency**: ~20ms semantic / ~5ms SQL
 - **Gateway Latency**: ~50ms overhead (memory inject + observe)
