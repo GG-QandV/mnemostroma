@@ -39,16 +39,16 @@ mnemostroma off && mnemostroma on
 
 ### Ports after `mnemostroma on`
 
-| Port | Transport | Clients | Access |
-|------|-----------|---------|--------|
-| `8762` | HTTP/REST | CLI, scripts, browsers | Local |
-| `8765` | SSE | Cursor, Claude Code | Local |
-| `8766` | HTTP/POST | Browser Extension | localhost only |
-| `8767` | HTTPS Proxy | Claude Code passthrough | Local |
-| `8768` | Streamable HTTP | VS Code, Antigravity, OpenCode, Qoder | Local |
-| `8769` | MCP OAuth Adapter | Remote: Perplexity, Grok, Claude.ai, ChatGPT | Tunnel |
-| `8780` | OpenAI Chat Completions | Any OpenAI client (basic) | Local |
-| `8781` | OpenAI Chat Completions | Any OpenAI client (memory) | Local |
+| Port   | Transport               | Clients                                      | Access         |
+| ------ | ----------------------- | -------------------------------------------- | -------------- |
+| `8762` | HTTP/REST               | CLI, scripts, browsers                       | Local          |
+| `8765` | SSE                     | Cursor, Claude Code                          | Local          |
+| `8766` | HTTP/POST               | Browser Extension                            | localhost only |
+| `8767` | HTTPS Proxy             | Claude Code passthrough                      | Local          |
+| `8768` | Streamable HTTP         | VS Code, Antigravity, OpenCode, Qoder        | Local          |
+| `8769` | MCP OAuth Adapter       | Remote: Perplexity, Grok, Claude.ai, ChatGPT | Tunnel         |
+| `8780` | OpenAI Chat Completions | Any OpenAI client (basic)                    | Local          |
+| `8781` | OpenAI Chat Completions | Any OpenAI client (memory)                   | Local          |
 
 Token: `cat ~/.mnemostroma/sse_token`
 
@@ -59,6 +59,7 @@ Token: `cat ~/.mnemostroma/sse_token`
 Full reference: `docs/mcp/MCP_CLIENT_CONFIGS.md`
 
 **Antigravity / VS Code / Qoder** (`serverUrl` или `type: http`):
+
 ```json
 "mnemostroma": {
   "serverUrl": "http://127.0.0.1:8768/mcp",
@@ -67,6 +68,7 @@ Full reference: `docs/mcp/MCP_CLIENT_CONFIGS.md`
 ```
 
 **Cursor / Claude Code** (`type: sse`):
+
 ```json
 "mnemostroma": {
   "type": "sse",
@@ -75,6 +77,7 @@ Full reference: `docs/mcp/MCP_CLIENT_CONFIGS.md`
 ```
 
 **OpenCode** (`type: remote`):
+
 ```json
 "mnemostroma": {
   "type": "remote",
@@ -84,6 +87,7 @@ Full reference: `docs/mcp/MCP_CLIENT_CONFIGS.md`
 ```
 
 **Use Gateway as OpenAI provider:**
+
 ```python
 from openai import OpenAI
 client = OpenAI(
