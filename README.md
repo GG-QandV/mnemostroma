@@ -2,14 +2,15 @@
 
 ### The memory layer for AI agents
 
-![Version](https://img.shields.io/badge/version-v2.4.0-blue)
+![Version](https://img.shields.io/badge/version-v2.5.0-blue)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue)
 ![Tests](https://img.shields.io/badge/tests-926%20passing-brightgreen)
 ![License](https://img.shields.io/badge/license-FSL--1.1--MIT-lightgrey)
 
 > *μνήμη (mnḗmē, memory) + στρῶμα (strôma, layer) — the substrate everything rests on.*
 
-> **v2.4.0 is stable.** Upgrading from v1.9.1 or earlier? → [See UPGRADE.md](./UPGRADE.md)
+> **v2.5.0 is stable.** **NEW in v2.5.0:** HTTP Read Adapter (port 8762) — ultra-low latency REST endpoint for CLI/scripts/browsers. See [TRANSPORT_COMPARISON_v2.5.md](./docs/integration/TRANSPORT_COMPARISON_v2.5.md).
+> **NEW:** Gateway Provider Dispatch — OpenAI-compatible non-streaming Chat Completions with memory injection, observation, admission control and response normalization. See [GATEWAY_PROVIDER.md](./docs/GATEWAY_PROVIDER.md).
 
 ---
 
@@ -164,7 +165,7 @@ This is not a database with TTL. This is how human memory works.
 
 ## Status
 
-**Current:** v2.4.0 | 2026-06-12
+**Current:** v2.5.0 | 2026-07-09
 
 | Component | Status |
 |---|---|
@@ -195,7 +196,7 @@ This is not a database with TTL. This is how human memory works.
 
 **Requires Python 3.12+**
 
-> **v2.4.0 is stable.** Upgrading from v1.9.1 or earlier? → [See UPGRADE.md](./UPGRADE.md)
+> **v2.5.0 is stable.** **NEW in v2.5.0:** HTTP Read Adapter (port 8762) — ultra-low latency REST endpoint for CLI/scripts/browsers. See [TRANSPORT_COMPARISON_v2.5.md](./docs/integration/TRANSPORT_COMPARISON_v2.5.md).
 
 ---
 
@@ -236,52 +237,52 @@ pip install "git+https://github.com/GG-QandV/mnemostroma.git[all]"
 mnemostroma setup
 ```
 
-**Windows:**
+**Windows — установка:**
 
-> **Install Git first** — Mnemostroma requires Git to download dependencies.
+> ⚠️ **Сначала установите Git** — он нужен для скачивания Mnemostroma.
 >
-> **[Download Git for Windows](https://git-scm.com/download/win)** — install with default settings.
+> 👉 **[Скачать Git для Windows](https://git-scm.com/download/win)** — установите с настройками по умолчанию.
 >
-> Python is installed automatically during Mnemostroma setup.
+> Python устанавливается автоматически во время установки Mnemostroma.
 
-**Step 1.** Download the installer:
+**Шаг 1.** Скачайте файл установщика:
 
-**[Download install-windows.bat](https://raw.githubusercontent.com/GG-QandV/mnemostroma/main/scripts/install-windows.bat)**
+👉 **[Скачать install-windows.bat](https://raw.githubusercontent.com/GG-QandV/mnemostroma/main/scripts/install-windows.bat)**
 
-*(right-click → "Save link as" → Desktop or Downloads folder)*
+*(правая кнопка мыши → «Сохранить ссылку как» → Рабочий стол или папка Загрузки)*
 
-**Step 2.** Double-click `install-windows.bat`.
+**Шаг 2.** Дважды кликните на `install-windows.bat`.
 
-A black terminal window will appear — this is normal. The installer will automatically:
-- check and install Python if needed
-- download Mnemostroma (~300 MB of AI models)
-- set up autostart on Windows login
+Появится чёрное окно — это нормально. Установщик автоматически:
+- проверит и установит Python, если нужно
+- скачает Mnemostroma (~300 МБ моделей AI)
+- настроит автозапуск при входе в Windows
 
-**Step 3.** Wait for the message `Done. You can close this window.` and close the window.
+**Шаг 3.** Дождитесь сообщения `Done. You can close this window.` и закройте окно.
 
-> If Windows shows "Unknown publisher" — click **"More info" → "Run anyway"**.
-> On a family PC — run the installer under each user account separately.
+> 💡 Если Windows показывает «Неизвестный издатель» — нажмите **«Подробнее» → «Выполнить в любом случае»**.
+> На семейном ПК — запустите установщик под каждой учётной записью отдельно.
 
 
-**What gets created after installation:**
+**Что создаётся после установки:**
 
-| File | Purpose |
+| Файл | Назначение |
 |---|---|
-| `%USERPROFILE%\.mnemostroma\install.log` | Full install log for diagnostics |
-| `%USERPROFILE%\.mnemostroma\install-manifest.json` | Install manifest (used for uninstall) |
-| `%USERPROFILE%\.mnemostroma\daemon.log` | Daemon runtime log |
+| `%USERPROFILE%\.mnemostroma\install.log` | Полный лог установки для диагностики |
+| `%USERPROFILE%\.mnemostroma\install-manifest.json` | Манифест установки (используется при удалении) |
+| `%USERPROFILE%\.mnemostroma\daemon.log` | Лог работы демона |
 
-> **Having issues?** Open `install.log` from `%USERPROFILE%\.mnemostroma\`,
-> copy the contents and paste into [ChatGPT](https://chat.openai.com), [Claude](https://claude.ai) or [Gemini](https://gemini.google.com) with the question "what went wrong here?".
+> 🤖 **Если что-то пошло не так:** откройте `install.log` из папки `%USERPROFILE%\.mnemostroma\`,
+> скопируйте содержимое и вставьте в [ChatGPT](https://chat.openai.com), [Claude](https://claude.ai) или [Gemini](https://gemini.google.com) с вопросом «что здесь пошло не так?».
 
-**Uninstall:**
+**Удаление:**
 
-**[Download uninstall-windows.bat](https://raw.githubusercontent.com/GG-QandV/mnemostroma/main/scripts/uninstall-windows.bat)**
+👉 **[Скачать uninstall-windows.bat](https://raw.githubusercontent.com/GG-QandV/mnemostroma/main/scripts/uninstall-windows.bat)**
 
-Double-click — removes autostart tasks, PATH entries, and venv. Memory data will prompt separately.
+Двойной клик — удалит задачи автозапуска, PATH и venv. Данные памяти спросит отдельно.
 
 <details>
-<summary>Manual setup (for advanced users)</summary>
+<summary>Ручная установка (для опытных пользователей)</summary>
 
 ```powershell
 py -3.12 -m venv "$env:USERPROFILE\.mnemostroma\venv"

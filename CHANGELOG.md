@@ -1,11 +1,50 @@
-## [Unreleased] — в процессе
+## 2.5.0 — 2026-07-01
 
 ### Added
-- **feat(http)**: HTTP адаптер встроен в daemon — `run(conductor=)`, прямой `conductor.dispatch()`, без IPC round-trip (~45 MB RAM saved).
-- **feat(http)**: `HttpConfig` dataclass (`autostart`, `port`, `host`) + `Config.load()`.
-- **feat(http)**: `mnemostroma http` — standalone/debug режим с IPC fallback.
-- **feat(monitoring)**: `is_port_in_use()` check перед стартом embedded SSE/HTTP — `warning` + пропуск если порт занят (защита при апгрейде).
-- **docs(mcp)**: `MCP_CLIENT_CONFIGS.md` — актуальные настройки всех CLI/IDE клиентов (Antigravity, VS Code, Cursor, Claude Code, OpenCode, Qoder).
+- **feat(integration)**: HTTP Read Adapter на порту 8762 — третий read-only транспорт (наряду с SSE на 8765 и MCP HTTP на 8768). POST `/memory/<tool>` → `safe_ipc_call` → IPC → conductor → tools/read.py. Без write-маршрутов; использует тот же Bearer token что и MCP HTTP adapter.
+- **feat(http-read)**: Новые READ-only маршруты: `/memory/ctx/semantic`, `/memory/ctx/anchors`, `/memory/ctx/search`, `/memory/ctx/recent`, `/memory/ctx/get`, `/memory/ctx/bridge`, `/memory/content/search`, `/memory/content/raw`.
+- **feat(http-read)**: Health endpoint `/health` проверяет подключение к daemon через `safe_ipc_call("ctx_active")`.
+- **feat(http-read)**: Routes discovery endpoint `/routes` — список доступных инструментов для IDE autocomplete.
+- **feat(config)**: `HttpReadConfig` dataclass в config.py — `port: int = 8762`, `host: str = "127.0.0.1"`, `autostart: bool = True`.
+- **feat(config)**: `config_default.json` содержит новую секцию `http_read` с default параметрами.
+- **feat(monitoring)**: Встроенный http-read-server запускается в TaskGroup вместе с SSE и MCP HTTP (если `http_read.autostart=true` и порт 8762 свободен).
+- **feat(cli)**: `mnemostroma http-read [--port=N] [--host=H]` — standalone режим для отладки, IPC fallback при conductor=None.
+- **docs(arch)**: HTTP Read Adapter архитектурная документация — IPC паттерн, маршруты, auth, response shapes, порт 8762.
+- **test(http-read)**: 28 компрехенсивных тестов (auth: Bearer/api-key/query, routing: 8 инструментов, response shapes, health, routes list, config, monitoring wiring).
+
+### Documentation
+- `docs/integration/HTTP_READ_ADAPTER_v2.5.md` — полная архитектура, маршруты, примеры, миграция с MCP, troubleshooting
+- `docs/integration/TRANSPORT_COMPARISON_v2.5.md` — таблица сравнения всех трёх транспортов (SSE, MCP HTTP, HTTP Read) по latency, use-case, auth, dependency
+- `docs/integration/IDE_CONFIG_EXAMPLES_v2.5.md` — примеры конфигов для Claude Code (curl/Python), OpenCode (MCP/HTTP Read), Antigravity (plugin), Cursor (custom commands)
+
+### Changed
+- **chore**: Версия 2.4.0 → 2.5.0.
+- **docs(README)**: Добавлена секция "Transports" с портами 8765/8766/8768/8762 и use-case каждого.
+
+---
+
+## [Unreleased] — в процессе
+
+### Planned
+- B.2: continuation detection (HNSW + tags + recency combined scoring)
+- B.3: mention_type (focus vs passing)
+- Safe/debug logging mode
+- mnemostroma install-models CLI
+- Decay Engine (Stage C)
+
+---
+
+## 2.4.0 — 2026-06-30
+
+### Added
+- **feat(mitm)**: MITM observer proxy (порт 8764) для opencode — перехватывает HTTPS-трафик opencode через локальный CA, записывает user запросы (observe_raw) и ответы LLM (observe) в раздельные потоки.
+- **feat(mitm)**: `setup/mitm_ca.py` — генерация изолированного корневого CA + per-host leaf-сертов (thread-safe кеш).
+- **feat(mitm)**: `setup/opencode_wrapper.py` — `~/.local/bin/mnemo-opencode` с `HTTPS_PROXY` + `NODE_EXTRA_CA_CERTS`.
+- **feat(mitm)**: Буферизация 100KB в `_pipe_and_observe` — complete messages, не отдельные TCP-чанки.
+- **feat(ipc)**: `dispatch("observe_raw", ...)` — запись напрямую в `raw_observations`, минуя observer pipeline (NER, embedding, RAM, consolidation). Новая таблица `raw_observations`.
+- **feat(watchdog)**: `BindsTo=mnemostroma-daemon.service` — автоматический стоп/старт вместе с daemon.
+- **docs(mitm)**: `docs/mcp/opencode_mitm_observer.md` — архитектура, IPC, установка, безопасность.
+- **test(mitm)**: `tests/test_mitm_proxy.py` — 16 тестов (парсинг CONNECT, роутинг user/assistant, буферизация, orphan tasks, concurrent).
 
 ### Fixed
 - **fix(opencode)**: OpenCode MCP config переключён с SSE (:8765) на Streamable HTTP (:8768) — устраняет ошибку аутентификации (`type: "remote"` требует HTTP).
