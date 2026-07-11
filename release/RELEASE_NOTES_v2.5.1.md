@@ -4,6 +4,8 @@
 
 Mnemostroma v2.5.1 introduces a complete Gateway Provider Dispatch pipeline — an OpenAI-compatible, non-streaming Chat Completions endpoint with memory injection, observation, admission control, and response normalization.
 
+Also includes from v2.5.0: HTTP Read Adapter (port `8762`) and embedded Streamable HTTP MCP (port `8768`).
+
 ### Key Changes
 
 - **Provider Transport**: `HttpxProviderTransport` — production HTTP transport with configurable timeouts, retries, and TLS verification.
