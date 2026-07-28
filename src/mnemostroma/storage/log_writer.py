@@ -18,6 +18,7 @@ class LogWriter:
         self._db: aiosqlite.Connection | None = None
         self._task: asyncio.Task | None = None
         self._running = False
+        self._flush_count = 0
 
     async def start(self):
         """Initialize DB and start flush worker."""
@@ -86,7 +87,7 @@ class LogWriter:
         try:
             self.queue.put_nowait(entry)
         except asyncio.QueueFull:
-            pass  # Drop — system health over telemetry
+            logger.warning("LogWriter queue full (max=1000), dropping log entry")
 
     async def log(self, component, event, data, latency_ms=0.0, session_id=None, level="INFO"):
         """Backward-compat async wrapper — delegates to log_nowait."""
@@ -119,6 +120,13 @@ class LogWriter:
                     await self._db.commit()
                     for _ in range(len(batch)):
                         self.queue.task_done()
+                    self._flush_count += len(batch)
+                    if self._flush_count >= 5000:
+                        self._flush_count = 0
+                        try:
+                            await self._db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                        except Exception as e:
+                            logger.warning(f"LogWriter checkpoint failed: {e}")
 
                 # Check exit AFTER processing batch
                 if not self._running and self.queue.empty():

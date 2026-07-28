@@ -88,3 +88,38 @@ RSS **стабилен** (~3.8 MB). Рост памяти в RSS не наблю
 - `onnx_logs`: ~6,500 записей/день (~4.5/мин) — умеренно.
 - `sessions`: ~37 сессий/день — низкая нагрузка.
 - WAL растёт быстрее DB из-за отсутствия checkpoint при интенсивной пакетной записи логов.
+
+---
+
+## UPDATE 2026-07-28 — Applied fixes
+
+### Шаг 1. Ручной checkpoint
+- `mnemostroma.db-wal`: **329 MB → 0 KB** (TRUNCATE checkpoint)
+- `logs.db-wal`: **4 MB → 0 KB**
+
+### Шаг 2. Автоматический checkpoint
+- `wal_autocheckpoint` = 1000 (дефолт) уже стоял, но не срабатывал из-за долгих open транзакций в `PersistenceLayer` и `LogWriter`.
+- **Фикс:** в `LogWriter._flush_loop` добавлен периодический `PRAGMA wal_checkpoint(TRUNCATE)` каждые 5000 записанных записей (~раз в несколько минут при текущей нагрузке).
+
+### Шаг 3. QueueFull — warning вместо silent drop
+- `src/mnemostroma/storage/log_writer.py:89` — `pass` заменён на `logger.warning("LogWriter queue full (max=1000), dropping log entry")`.
+
+### Шаг 4. ONNX-логи
+- Удалены записи старше 30 дней (ts < now - 30d). Было 663,052 → стало 629,859 записей.
+- VACUUM не выполнен — `logs.db` locked (daemon работает).
+
+### Шаг 5. Backups
+- **611 файлов, 20 GB.** Ротации нет — backups копятся с апреля 2026.
+- Рекомендация: оставить ежедневный backup за последние 14 дней (сохраняет ~14 файлов), удалить остальное (~597 файлов, ~19.5 GB).
+
+### Итоговое состояние
+
+| Метрика | До | После фикса |
+|---------|----|------------|
+| WAL mnemostroma.db | 329 MB | ~2.6 MB (растёт, но теперь чекпоинтится) |
+| WAL logs.db | 4 MB | ~10 MB |
+| onnx_logs записей | 663,052 | 629,859 |
+| backups | 20 GB (611 файлов) | не менялось |
+| ~/.mnemostroma/ всего | ~24 GB | ~23 GB |
+
+**Далее:** если backups не нужны за апрель–июнь — освободится ~19.5 GB.
