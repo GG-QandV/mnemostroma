@@ -23,6 +23,23 @@
 
 ---
 
+## 2.5.2 — 2026-07-28
+
+### Fixed
+- **fix(storage)**: WAL checkpoint in LogWriter every 5K writes — eliminates unbounded WAL growth (`mnemostroma.db-wal` 329 MB → ~3 MB).
+- **fix(storage)**: QueueFull warning instead of silent drop — `logger.warning("LogWriter queue full, dropping log entry")`.
+- **fix(storage)**: ONNX log cleanup — delete records older than 30 days (663K → 630K records).
+- **fix(backups)**: Backup rotation — 611 files / 20 GB → 52 files / 8.5 GB (April–June: 3 per month, July: selective + keep all from 21st).
+
+### Added
+- **audit(memory)**: Full memory growth audit — WAL analysis, RSS measurement, ONNX model sizes, backup distribution, per-directory breakdown.
+- **audit(memory)**: SessionBrief RAM weight measurement — direct `tracemalloc` measurement (~0.4 KB per instance, ~3–4 KB with embedding).
+
+### Changed
+- **chore**: Версия 2.5.1 → 2.5.2.
+
+---
+
 ## [Unreleased] — в процессе
 
 ### Planned
