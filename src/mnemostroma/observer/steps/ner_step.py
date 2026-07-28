@@ -26,13 +26,6 @@ class NERStep:
             except Exception as e:
                 logger.warning(f"observer: pre-ner failed: {e}")
                 pctx.entities = []
-            finally:
-                # Lazy-unload: free ~200 MB ONNX session after each run.
-                # Model reloads automatically on next extract_entities() call.
-                try:
-                    pctx.ctx.models.ner.unload()
-                except Exception:
-                    pass
         else:
             pctx.entities = []
             
