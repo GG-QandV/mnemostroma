@@ -176,6 +176,6 @@ class HybridNER:
                 return True
         return False
 
-    def close(self) -> None:
-        """Release resources."""
-        self._bert.close()
+    def close(self, *, shutdown: bool = False) -> None:
+        """Release resources. Shutdown-only."""
+        self._bert.close(shutdown=shutdown)

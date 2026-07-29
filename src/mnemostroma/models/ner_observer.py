@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
 """NER extraction using Standard BERT/DistilBERT ONNX (No Torch)."""
-import gc
 import logging
 from typing import Any
 
@@ -50,12 +49,18 @@ class NERObserver:
             raise
 
     def unload(self) -> None:
-        """Release ONNX session after observer run to free ~200 MB in idle."""
+        """Release ONNX session after observer run to free ~200 MB in idle.
+
+        No explicit gc.collect() here: a forced cyclic collect runs
+        synchronously on the daemon's shared event loop and can destroy
+        any pending asyncio Task held alive only via a reference cycle
+        (e.g. a long-lived MITM tunnel task), aborting it mid-flight.
+        Regular generational GC reclaims the ONNX session in due time.
+        """
         if not self._loaded:
             return
-        self.model.close()
+        self.model.close(shutdown=True)
         self._loaded = False
-        gc.collect()
         logger.debug("NERObserver unloaded (ONNX session released)")
 
 # For backward compatibility during migration

@@ -151,6 +151,12 @@ class SystemContext:
     # Content Management
     content: Optional['ContentManager'] = None
 
+    #: Embedding of the most recent search/query intent.
+    #: Passed to observer_pipeline() as intent_vector so new sessions
+    #: can compute relevance = dot(session_embedding, current_intent).
+    #: None when no search has been performed — relevance defaults to 0.5.
+    current_intent_vector: Any | None = None
+
     # Memory Management
     dissolver: Optional['Dissolver'] = None
     consolidation: Optional['ConsolidationWorker'] = None

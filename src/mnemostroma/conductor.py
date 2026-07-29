@@ -1,4 +1,3 @@
-from mnemostroma.storage.log_writer import LogWriter
 # SPDX-License-Identifier: FSL-1.1-MIT
 import asyncio
 import logging
@@ -43,9 +42,11 @@ class Conductor:
         self.proxy: ConductorProxy | None = None
         self._last_observe_at: float = 0.0
         self._dreamer_task: asyncio.Task | None = None
+        self._gateway_server: Any | None = None
         self._sse_task: asyncio.Task | None = None
         self._http_task: asyncio.Task | None = None
         self._pulse_writer: PulseWriter | None = None
+        self.db_manager: DatabaseManager | None = None
         self._status_writer: StatusWriter | None = None
         self._backup_worker: Any | None = None
         self._stopping: bool = False
@@ -78,7 +79,8 @@ class Conductor:
         
         # 2. Storage
         db = await init_db(Path(db_path), config=config)
-        db_manager = DatabaseManager(db, config)
+        self.db_manager = DatabaseManager(db, config)
+        db_manager = self.db_manager
         await db_manager.start()
         
         # B0.5: Dimension Migration (Wipe stale embeddings if 768 -> 384 mismatch)
@@ -262,6 +264,13 @@ class Conductor:
         if config.ui.tray_enabled:
             self._start_tray_detached()
 
+        if config.gateway and config.gateway.enabled:
+            from mnemostroma.gateway.server import GatewayServer
+            self._gateway_server = GatewayServer(
+                config.gateway, ctx=self.ctx, proxy=self.proxy, db=self.db_manager.db,
+            )
+            await self._gateway_server.start()
+
         logger.info("Mnemostroma system bootstrap complete.")
         return self.ctx
 
@@ -269,10 +278,17 @@ class Conductor:
         """Reconstruct matrix search index and RAM maps from SQLite (Cold Bootstrap)."""
         logger.info("Starting index hydration from SQLite...")
 
-        # 1. Hydrate Metadata (ram_index)
-        briefs = await ctx.persistence.get_all_session_briefs()
+        # 1. Hydrate Metadata (ram_index) — capped, spec dissolver §9
+        window = ctx.config.resources.session_window_size
+        hyd_limit = getattr(ctx.config.resources, "hydration_session_limit", 500)
+        effective_limit = min(hyd_limit, window)
+
+        briefs = await ctx.persistence.get_all_session_briefs(limit=effective_limit)
         for sb in briefs:
             ctx.ram_index[sb.session_id] = sb
+
+        logger.info(f"ram_index hydration: {len(briefs)} sessions loaded "
+                    f"(limit={effective_limit}, window={window})")
 
         # 2. Hydrate session matrix
         model_def = ctx.config.manifest.active_models.get("session_embedder") if ctx.config.manifest else None
@@ -371,6 +387,10 @@ class Conductor:
         """Shutdown the system and save state."""
         self._stopping = True
 
+        # Stop Gateway server before other transports
+        if self._gateway_server:
+            await self._gateway_server.stop()
+
         # Stop embedded HTTP server — close client connections cleanly
         if self._http_task and not self._http_task.done():
             self._http_task.cancel()
@@ -451,7 +471,10 @@ class Conductor:
             raise RuntimeError("Conductor not started. Call start() first.")
         return await self.proxy.inject(user_message, max_tokens, include_tools)
         
-    async def observe(self, session_id: str, text: str) -> asyncio.Task:
+    async def observe(
+        self, session_id: str, text: str,
+        role: str | None = None, project_id: str | None = None,
+    ) -> asyncio.Task:
         """Pass an agent output transcript to the active Observer pipeline."""
         if not self.ctx:
             raise RuntimeError("Conductor not started. Call start() first.")
@@ -460,7 +483,13 @@ class Conductor:
         self._last_observe_at = _time.time()
 
         from .observer.pipeline import observer_pipeline
-        task = asyncio.create_task(observer_pipeline(text, session_id, self.ctx))
+        task = asyncio.create_task(
+            observer_pipeline(
+                text, session_id, self.ctx,
+                intent_vector=self.ctx.current_intent_vector,
+                role=role, project_id=project_id,
+            )
+        )
         task.add_done_callback(self._handle_task_exception)
         return task
 
@@ -530,7 +559,10 @@ class Conductor:
                         await self.ctx.persistence.outbox_mark(row["id"], "failed")
                         continue
                     try:
-                        await self.observe(row["session_id"], row["text"])
+                        await self.observe(
+                            row["session_id"], row["text"],
+                            project_id=row.get("project_id"),
+                        )
                         await self.ctx.persistence.outbox_mark(row["id"], "done")
                     except Exception as e:
                         logger.warning(f"Outbox retry {row['id']}: {e}")
@@ -556,10 +588,34 @@ class Conductor:
             raise RuntimeError("Conductor not started")
 
         # READ
+        if name == "ctx_help":
+            help_text = (
+                "## Mnemostroma Tools Guide\n\n"
+                "| Tool | When to use |\n"
+                "|---|---|\n"
+                "| `ctx_semantic` | **DEFAULT.** Find past context by meaning/topic. "
+                "Use this FIRST. (~20ms) |\n"
+                "| `ctx_anchors` | Find explicit decisions, deadlines, or constraints. "
+                "(<1ms) |\n"
+                "| `ctx_search` | Find sessions by exact tags (e.g. 'bug', 'docs'). "
+                "(<1ms) |\n"
+                "| `ctx_full` | Retrieve the FULL verbatim text of a session. "
+                "Heavy call, use only for exact code/quotes. |\n"
+                "| `ctx_bridge` | Call this BEFORE ending your turn if work is "
+                "unfinished or a decision was made. |\n"
+                "| `content_search` | Find documentation or code snippets in the "
+                "Content Branch. |\n"
+                "| `ctx_recent` | See what happened in the last N days. |\n\n"
+                "**MANDATORY RULE:** Never claim you don't have context without "
+                "trying `ctx_semantic` first."
+            )
+            return {"guide": help_text}
         if name == "ctx_semantic":
             from mnemostroma.tools.read import ctx_semantic
             return await ctx_semantic(query=args["query"], ctx=ctx,
-                                      top_n=args.get("top_n", 5))
+                                      top_n=args.get("top_n", 5),
+                                      project_id=args.get("project_id"),
+                                      cross_project=args.get("cross_project", False))
         if name == "ctx_get":
             from mnemostroma.tools.read import ctx_get
             return await ctx_get(args["session_id"], ctx)
@@ -580,7 +636,9 @@ class Conductor:
             return await ctx_anchors(ctx=ctx,
                                      anchor_type=args.get("anchor_type"),
                                      session_id=args.get("session_id"),
-                                     limit=args.get("limit", 20))
+                                     limit=args.get("limit", 20),
+                                     project_id=args.get("project_id"),
+                                     cross_project=args.get("cross_project", False))
         if name == "ctx_precision":
             from mnemostroma.tools.read import ctx_precision
             return await ctx_precision(ctx=ctx,
@@ -591,7 +649,9 @@ class Conductor:
             from mnemostroma.tools.read import ctx_recent
             return await ctx_recent(ctx=ctx, days=args.get("days", 7.0),
                                     by=args.get("by", "created"),
-                                    limit=args.get("limit", 20))
+                                    limit=args.get("limit", 20),
+                                    project_id=args.get("project_id"),
+                                    cross_project=args.get("cross_project", False))
         # DISABLED write tools — API minimization 2026-04-28
         # if name == "ctx_urgent":
         #     from mnemostroma.tools.write import ctx_urgent
@@ -614,8 +674,22 @@ class Conductor:
         #         why_changed  = args.get("why_changed"),
         #     )
         if name == "observe":
-            await self.observe(args["session_id"], args["text"])
+            await self.observe(
+                args["session_id"], args["text"],
+                role=args.get("role"), project_id=args.get("project_id"),
+            )
             return {"ok": True}
+        if name == "observe_raw":
+            from mnemostroma.memory.session_index import RawObservation
+            if self.db_manager is not None:
+                self.db_manager.queue_write(
+                    RawObservation(
+                        session_id=args["session_id"],
+                        role=args.get("role", ""),
+                        text=args["text"],
+                    )
+                )
+            return {"ok": True, "mode": "raw"}
         if name == "observe_user":
             await self.observe_user(args["text"])
             return {"ok": True}
@@ -623,7 +697,7 @@ class Conductor:
         # PROXY ROUTES
         if name == "outbox_put":
             row_id = await ctx.persistence.outbox_put(
-                args["session_id"], args["text"]
+                args["session_id"], args["text"], args.get("project_id")
             )
             return {"queued": True, "id": row_id}
         if name == "inject":

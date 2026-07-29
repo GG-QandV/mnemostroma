@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
 """BertNER: Standard Token Classification for ONNX (No Torch)."""
 import logging
+import os
+import threading
 from typing import Any
 
 import numpy as np
@@ -15,10 +17,26 @@ class BertNER:
     Adheres to Mnemostroma Rule 1: No torch, no transformers.
     Supports DistilBERT/BERT int8 ONNX models.
     """
+    _instances_created: int = 0
+    _instances_lock = threading.Lock()
+
     def __init__(self, model_path: str, tokenizer_path: str):
+        with self._instances_lock:
+            type(self)._instances_created += 1
+            self._instance_id = type(self)._instances_created
+
+        logger.warning(
+            "BertNER instance created id=%d pid=%d",
+            self._instance_id,
+            os.getpid(),
+            stack_info=True,
+        )
+
         self.model_path = model_path
         self.tokenizer_path = tokenizer_path
-        self._session = None
+        self._session: ort.InferenceSession | None = None
+        self._session_lock = threading.Lock()
+        self._load_count = 0
         self._tokenizer = None
         self._id2label = {
             "0": "O",
@@ -35,15 +53,37 @@ class BertNER:
             "LOC": "address"
         }
 
-    def load(self) -> None:
-        """Initialize ONNX session with memory-safe options (Rule 5)."""
+    def _session_options(self) -> ort.SessionOptions:
         opts = ort.SessionOptions()
         opts.enable_cpu_mem_arena = False
         opts.enable_mem_pattern = False
-        
-        self._session = ort.InferenceSession(self.model_path, opts)
-        self._tokenizer = Tokenizer.from_file(self.tokenizer_path)
-        logger.info(f"BertNER loaded model: {self.model_path}")
+        return opts
+
+    def load(self) -> None:
+        """Initialize ONNX session with memory-safe options (Rule 5).
+
+        Idempotent: safe to call multiple times. Thread-safe via lock.
+        """
+        if self._session is not None:
+            return
+
+        with self._session_lock:
+            if self._session is not None:
+                return
+
+            self._session = ort.InferenceSession(
+                self.model_path,
+                sess_options=self._session_options(),
+                providers=["CPUExecutionProvider"],
+            )
+            self._tokenizer = Tokenizer.from_file(self.tokenizer_path)
+            self._tokenizer.enable_truncation(max_length=512)
+            self._load_count += 1
+            logger.warning(
+                "BertNER session created: count=%d pid=%d",
+                self._load_count, os.getpid(),
+                stack_info=True,
+            )
 
     def predict_entities(self, text: str, threshold: float = 0.5) -> list[dict[str, Any]]:
         """Predict and structure entities from text."""
@@ -141,25 +181,23 @@ class BertNER:
             result.append(e)
         return result
 
-        # 4. Post-processing: filter by threshold and clean fragments
-        result = []
-        for e in entities:
-            if e["score"] < threshold:
-                continue
-            # Strip whitespace from value
-            e["value"] = e["value"].strip()
-            # Skip empty or single-char fragments (subword artifacts)
-            if len(e["value"]) <= 1:
-                continue
-            result.append(e)
-        return result
-
     def _softmax(self, x: np.ndarray) -> np.ndarray:
         """Standard Softmax over logits."""
         e_x = np.exp(x - np.max(x, axis=-1, keepdims=True))
         return e_x / e_x.sum(axis=-1, keepdims=True)
 
-    def close(self) -> None:
-        """Release ONNX session resources."""
+    def close(self, *, shutdown: bool = False) -> None:
+        """Release ONNX session resources. Shutdown-only.
+
+        Calling close() outside Application.shutdown() will raise
+        RuntimeError — the session must not be torn down mid-lifecycle.
+        """
+        logger.error(
+            "BertNER.close called: shutdown=%s pid=%d",
+            shutdown, os.getpid(),
+            stack_info=True,
+        )
+        if not shutdown:
+            raise RuntimeError("Unexpected BertNER.close outside shutdown")
         self._session = None
         self._tokenizer = None

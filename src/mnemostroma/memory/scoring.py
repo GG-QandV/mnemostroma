@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
+import math
 import time
 from typing import Any
 
@@ -74,3 +75,41 @@ async def calculate_score(
         score *= 1.30  # PRINCIPLE_BOOST
 
     return score
+
+
+def calculate_retention_score(
+    created_at: int,
+    importance: str,
+    implicit_score: float,
+    use_count: int = 0,
+    resolution: float = 0.0,
+    urgency_active: bool = False,
+    urgency_expired: bool = False,
+    ctx: Any = None,
+) -> float:
+    """Calculate retention score for eviction/dissolution.
+
+    No query relevance component — this is a global memory value,
+    not a search ranking. Used only by Dissolver and consolidation.
+
+    Weights (first PR, not final):
+        0.35 × age
+        0.30 × importance
+        0.20 × feedback (implicit_score)
+        0.15 × usage (use_count)
+    """
+    age_days = (time.time() - created_at) / 86400
+    age = math.exp(-ctx.config.score.temporal_decay_lambda * age_days) if ctx else math.exp(-0.05 * age_days)
+
+    imp = get_importance_weight(importance, ctx) if ctx else 0.5
+    feedback = max(0.0, min(1.0, implicit_score))
+    usage = min(math.log1p(use_count) / math.log1p(10), 1.0) if use_count > 0 else 0.0
+
+    retention = 0.35 * age + 0.30 * imp + 0.20 * feedback + 0.15 * usage
+
+    if urgency_expired:
+        retention *= 0.50
+    if urgency_active or importance == "principle":
+        retention = 1.0  # non-evictable
+
+    return retention

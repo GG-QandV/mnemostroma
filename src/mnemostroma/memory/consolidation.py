@@ -112,10 +112,16 @@ class ConsolidationWorker:
                     db_sb = await self.ctx.persistence.get_session_by_id(sid)
                     assert db_sb and db_sb.urgency_expired, f"Urgency flush failed for {sid}"
 
-        # 2. Recalculate Scores
-        # We use background relevance (0.5) if not currently searching
+        # 2. Calculate retention scores for eviction (not query relevance)
+        # retention_score ≠ search score: no query relevance component
+        from ..memory.scoring import calculate_retention_score
         for sid, sb in self.ctx.ram_index.items():
-            sb.score = await calculate_score(0.5, sb.created_at, sb.importance, self.ctx)
+            sb.retention_score = calculate_retention_score(
+                sb.created_at, sb.importance, sb.implicit_score,
+                getattr(sb, "use_count", 0), getattr(sb, "resolution", 0.0),
+                getattr(sb, "urgency_active", False),
+                getattr(sb, "urgency_expired", False), self.ctx,
+            )
 
         # 2.5 Log Recalc (v1.0 spec — Point #8)
 

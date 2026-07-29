@@ -36,10 +36,6 @@ class ScoreStep:
         # Mapping float importance to string if not already set
         importance_str = pctx.importance or "background"
 
-        # Calculate R, T, I components for logging
-        I = get_importance_weight(importance_str, pctx.ctx)
-        T = 1.0  # New session
-
         pctx.score = await calculate_score(
             relevance,
             created_at,
@@ -47,6 +43,11 @@ class ScoreStep:
             pctx.ctx,
             profile="write"
         )
+
+        # Calculate components for logging (from real inputs, not hardcoded)
+        I = get_importance_weight(importance_str, pctx.ctx)
+        age_days = (time.time() - created_at) / 86400
+        T = float(np.exp(-pctx.ctx.config.score.temporal_decay_lambda * age_days))
 
         # Log Score (v1.0 Point #4) — only anomalies in safe mode, all in debug
         _log_cfg = getattr(getattr(pctx.ctx, "config", None), "logging", None)

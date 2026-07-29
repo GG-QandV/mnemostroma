@@ -8,6 +8,7 @@ from typing import Any
 
 import aiosqlite
 
+from ..memory.session_index import RawObservation
 from .schemas import ALL_SCHEMAS
 
 _LOGS_ID_DB_ = ""  # internal diagnostics id
@@ -52,9 +53,26 @@ async def init_db(db_path: str | Path, config: Any | None = None) -> aiosqlite.C
         "CREATE INDEX IF NOT EXISTS idx_snapshots_ts ON db_snapshots(ts)"
     )
 
+    # raw_observations table (observe_raw decoupling, v2.4+)
+    await db.execute("""
+        CREATE TABLE IF NOT EXISTS raw_observations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT NOT NULL,
+            role TEXT DEFAULT '',
+            text TEXT NOT NULL,
+            created_at TEXT DEFAULT (datetime('now'))
+        )
+    """)
+
     # Migrations
     await check_anchor_schema(db)
     await check_session_schema(db)
+
+    # Gateway R1: outbox/audit schema — always created, independent of
+    # gateway.enabled (ADR-006). Deferred import avoids circular dependency
+    # between storage and gateway packages.
+    from mnemostroma.gateway.outbox import ensure_gateway_schema
+    await ensure_gateway_schema(db)
 
     await db.commit()
     logger.info(f"Database initialized at {db_path}")
@@ -109,6 +127,27 @@ async def check_session_schema(db: aiosqlite.Connection) -> None:
     try:
         await db.execute("ALTER TABLE sessions ADD COLUMN session_type TEXT")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_sessions_type ON sessions(session_type)")
+        await db.commit()
+    except Exception:
+        pass
+
+    # 4. event_role (v2.4+)
+    try:
+        await db.execute("ALTER TABLE sessions ADD COLUMN event_role TEXT")
+        await db.commit()
+    except Exception:
+        pass
+
+    # 5. project_id (v2.6+)
+    try:
+        await db.execute("ALTER TABLE sessions ADD COLUMN project_id TEXT")
+        await db.commit()
+    except Exception:
+        pass
+    try:
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id)"
+        )
         await db.commit()
     except Exception:
         pass
@@ -255,9 +294,14 @@ class DatabaseManager:
         
         return results
 
-    async def get_all_session_briefs(self) -> list[Any]:
-        """Retrieve all session metadata for ram_index hydration.
-        
+    async def get_all_session_briefs(self, limit: int | None = None) -> list[Any]:
+        """Retrieve session metadata for ram_index hydration.
+
+        Args:
+            limit: Max sessions to load (hydration cap). None = all (legacy).
+                   Ordered by importance rank DESC, created_at DESC —
+                   approximates Score at bootstrap (dissolver_specification.md §9).
+
         Returns:
             List of SessionBrief objects.
         """
@@ -265,20 +309,42 @@ class DatabaseManager:
         results = []
         try:
             import numpy as np
-            async with self.db.execute(
-                """SELECT session_id, created_at, importance, tags, brief, 
-                          conflict, urgency, deadline_ts, urgency_expired, bare_entity, 
-                          implicit_score, resolution, intensity, embedding FROM sessions"""
-            ) as cursor:
+
+            sql = """SELECT session_id, created_at, importance, tags, brief,
+                             conflict, urgency, deadline_ts, urgency_expired, bare_entity,
+                             implicit_score, resolution, intensity, embedding, project_id
+                      FROM sessions
+                      ORDER BY
+                        CASE importance
+                          WHEN 'critical'  THEN 3
+                          WHEN 'principle' THEN 3
+                          WHEN 'important' THEN 2
+                          ELSE 1
+                        END DESC,
+                        created_at DESC"""
+            params: list = []
+            if limit is not None:
+                sql += " LIMIT ?"
+                params.append(limit)
+
+            async with self.db.execute(sql, params) as cursor:
                 async for row in cursor:
                     session_id, created_at, importance, tags_json, brief, conflict, \
                     urgency, deadline_ts, urgency_expired, bare_entity, \
-                    implicit_score, resolution, intensity, embed_bytes = row
+                    implicit_score, resolution, intensity, embed_bytes, project_id = row
                     
                     embedding = None
                     if embed_bytes:
                         embedding = np.frombuffer(embed_bytes, dtype=np.float16)
                     
+                    # Guard: created_at must never be None or zero
+                    if created_at is None or created_at == 0:
+                        logger.error(
+                            "Hydration invariant: session %s has created_at=%s",
+                            session_id, created_at,
+                        )
+                        continue
+
                     sb = SessionBrief(
                         session_id=session_id,
                         brief=brief,
@@ -295,6 +361,7 @@ class DatabaseManager:
                         embedding=embedding,
                         implicit_score=implicit_score,
                         intensity=intensity,
+                        project_id=project_id,
                         embedding_model_version="multilingual-e5-small"
                     )
                     results.append(sb)
@@ -314,7 +381,7 @@ class DatabaseManager:
             async with self.db.execute(
                 """SELECT session_id, created_at, importance, tags, brief,
                           conflict, urgency, deadline_ts, urgency_expired, bare_entity,
-                          implicit_score, resolution, intensity, embedding
+                          implicit_score, resolution, intensity, embedding, project_id
                    FROM sessions WHERE session_id = ?""",
                 (session_id,)
             ) as cursor:
@@ -323,7 +390,7 @@ class DatabaseManager:
                     return None
                 session_id_, created_at, importance, tags_json, brief, conflict, \
                 urgency, deadline_ts, urgency_expired, bare_entity, \
-                implicit_score, resolution, intensity, embed_bytes = row
+                implicit_score, resolution, intensity, embed_bytes, project_id = row
 
                 embedding = None
                 if embed_bytes:
@@ -345,7 +412,8 @@ class DatabaseManager:
                     embedding=embedding,
                     implicit_score=implicit_score,
                     intensity=intensity,
-                    embedding_model_version="multilingual-e5-small",
+                    project_id=project_id,
+                    embedding_model_version="multilingual-e5-small"
                 )
         except Exception as e:
             logger.error(f"get_session_by_id({session_id}): {e}")
@@ -388,7 +456,7 @@ class DatabaseManager:
             async with self.db.execute(
                 """SELECT session_id, created_at, importance, tags, brief,
                           conflict, urgency, deadline_ts, urgency_expired, bare_entity,
-                          implicit_score, resolution, intensity, embedding
+                          implicit_score, resolution, intensity, embedding, project_id
                    FROM sessions
                    ORDER BY implicit_score DESC
                    LIMIT ?""",
@@ -418,6 +486,7 @@ class DatabaseManager:
                         implicit_score=row[10] if row[10] is not None else 0.5,
                         intensity=row[12] if row[12] is not None else 0.0,
                         embedding_model_version="multilingual-e5-small",
+                        project_id=row[14] if row[14] is not None else None,
                     ))
         except Exception as e:
             logger.error(f"list_sessions_by_score failed: {e}")
@@ -734,7 +803,7 @@ class DatabaseManager:
         sql = (
             f"SELECT s.session_id, s.created_at, s.importance, s.tags, s.brief, "
             f"s.conflict, s.urgency, s.deadline_ts, s.urgency_expired, s.bare_entity, "
-            f"s.implicit_score, s.resolution, s.intensity, s.embedding "
+            f"s.implicit_score, s.resolution, s.intensity, s.embedding, s.project_id "
             f"FROM sessions s "
             f"{where} "
             f"ORDER BY s.created_at DESC "
@@ -768,6 +837,7 @@ class DatabaseManager:
                         implicit_score=row[10] if row[10] is not None else 0.5,
                         intensity=row[12] if row[12] is not None else 0.0,
                         embedding_model_version="multilingual-e5-small",
+                        project_id=row[14] if row[14] is not None else None,
                     ))
         except Exception as e:
             logger.error("find_sessions_by_flags failed: %s", e)
@@ -1052,11 +1122,12 @@ class DatabaseManager:
                         INSERT INTO sessions
                         (session_id, created_at, updated_at, importance, tags, brief,
                          conflict, urgency, deadline_ts, urgency_active, urgency_expired,
+                         project_id,
                          bare_entity, embedding_model_version, embedding,
                          use_count, deep_use_count, last_use_ts, implicit_score,
                          resolution, intensity, content_full, event_role)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        ON CONFLICT(session_id) DO UPDATE SET
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                       ON CONFLICT(session_id) DO UPDATE SET
                             updated_at = excluded.updated_at,
                             importance = excluded.importance,
                             tags = excluded.tags,
@@ -1066,6 +1137,7 @@ class DatabaseManager:
                             deadline_ts = excluded.deadline_ts,
                             urgency_active = excluded.urgency_active,
                             urgency_expired = excluded.urgency_expired,
+                            project_id = COALESCE(excluded.project_id, project_id),
                             bare_entity = excluded.bare_entity,
                             embedding_model_version = excluded.embedding_model_version,
                             embedding = excluded.embedding,
@@ -1090,6 +1162,7 @@ class DatabaseManager:
                             session.deadline_ts,
                             1 if urgency_active else 0,
                             1 if session.urgency_expired else 0,
+                            getattr(session, "project_id", None),
                             1 if session.bare_entity else 0,
                             session.embedding_model_version,
                             session.embedding.astype(np.float16).tobytes() if session.embedding is not None else None,
@@ -1151,6 +1224,13 @@ class DatabaseManager:
                             item["embedding"],
                             item["created_at"]
                         )
+                    )
+
+                # 4. Handle RawObservation (MITM observer, decoupled from event loop)
+                elif isinstance(item, RawObservation):
+                    await self.db.execute(
+                        "INSERT INTO raw_observations (session_id, role, text) VALUES (?, ?, ?)",
+                        (item.session_id, item.role, item.text),
                     )
 
             except aiosqlite.Error as e:

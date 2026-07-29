@@ -42,6 +42,11 @@ async def semantic_search(
     
     query_vector = await ctx.models.embedder.aencode(full_query)
 
+    # Save query embedding as current intent for subsequent observer_pipeline calls.
+    # This allows relevance = dot(session_embedding, intent) when new sessions are
+    # created from the current context. None = no active intent → relevance 0.5.
+    ctx.current_intent_vector = query_vector
+
     # 2. KNN Search in HNSW — lock prevents race with concurrent add_items
     async with ctx.index_lock:
         labels, distances = ctx.session_index.knn_query(query_vector, k=k)

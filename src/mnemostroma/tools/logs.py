@@ -280,10 +280,21 @@ def analyze_evictions(logs: list[dict], report: AnalysisReport):
 def analyze_feedback(logs: list[dict], report: AnalysisReport):
     """Analyze implicit feedback signals."""
     fb_logs = [l for l in logs if l["component"] == "feedback.implicit"]
-    signal_counts = Counter(l["data"].get("type") for l in fb_logs)
+    signal_counts: Counter[str | None] = Counter()
+    invalid_feedback = 0
+    for l in fb_logs:
+        data = l.get("data", {})
+        signal = data.get("signal") or data.get("type")
+        if signal not in {"USE", "DEEP_USE", "IGNORE", "REVISIT"}:
+            invalid_feedback += 1
+            continue
+        signal_counts[signal] += 1
 
+    valid_total = sum(signal_counts.values())
     report.feedback_stats = {
         "total": len(fb_logs),
+        "valid": valid_total,
+        "invalid": invalid_feedback,
         "signals": dict(signal_counts),
     }
 
@@ -366,8 +377,10 @@ def format_report(report: AnalysisReport) -> str:
 
     # Feedback
     if report.feedback_stats.get("total", 0) > 0:
-        lines.append("\n── FEEDBACK ──")
+        lines.append(f"\n── FEEDBACK ──")
         lines.append(f"  Total signals: {report.feedback_stats['total']}")
+        lines.append(f"  Valid: {report.feedback_stats.get('valid', 0)}")
+        lines.append(f"  Invalid (None): {report.feedback_stats.get('invalid', 0)}")
         lines.append(f"  Breakdown: {report.feedback_stats['signals']}")
 
     # Latency anomalies
