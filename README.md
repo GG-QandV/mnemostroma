@@ -2,15 +2,14 @@
 
 ### The memory layer for AI agents
 
-![Version](https://img.shields.io/badge/version-v2.5.1-blue)
+![Version](https://img.shields.io/badge/version-v2.5.3-blue)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue)
-![Tests](https://img.shields.io/badge/tests-1477%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-1556%20passing-brightgreen)
 ![License](https://img.shields.io/badge/license-FSL--1.1--MIT-lightgrey)
 
 > *μνήμη (mnḗmē, memory) + στρῶμα (strôma, layer) — the substrate everything rests on.*
 
-> **v2.5.1 is stable.** **NEW in v2.5.0:** HTTP Read Adapter (port 8762) — ultra-low latency REST endpoint for CLI/scripts/browsers. See [TRANSPORT_COMPARISON_v2.5.md](./docs/integration/TRANSPORT_COMPARISON_v2.5.md).
-> **NEW:** Gateway Provider Dispatch — OpenAI-compatible non-streaming Chat Completions with memory injection, observation, admission control and response normalization. See [GATEWAY_PROVIDER.md](./docs/GATEWAY_PROVIDER.md).
+> **v2.5.3 is stable.** **NEW in v2.5.3:** relevance scoring via intent_vector, NER lifecycle hardening, memory scoring fixes. See [CHANGELOG.md](./CHANGELOG.md).
 
 ---
 
@@ -165,11 +164,11 @@ This is not a database with TTL. This is how human memory works.
 
 ## Status
 
-**Current:** v2.5.1 | 2026-07-11
+**Current:** v2.5.3 | 2026-07-29
 
 | Component | Status |
 |---|---|
-| Core backend — Observer, Memory, Storage | ✅ DONE — 1477 tests |
+| Core backend — Observer, Memory, Storage | ✅ DONE — 1556 tests |
 | Golden Standard Launch (Shell Guards) | ✅ DONE — v1.11.1 |
 | Anchor Layer / Emotional Patterns | ✅ DONE |
 | Implicit Feedback (v1.5) | ✅ DONE |
@@ -196,7 +195,7 @@ This is not a database with TTL. This is how human memory works.
 
 **Requires Python 3.12+**
 
-> **v2.5.1 is stable.** **NEW in v2.5.0:** HTTP Read Adapter (port 8762) — ultra-low latency REST endpoint for CLI/scripts/browsers. See [TRANSPORT_COMPARISON_v2.5.md](./docs/integration/TRANSPORT_COMPARISON_v2.5.md).
+> **v2.5.3 is stable.** **NEW in v2.5.3:** relevance scoring via intent_vector, NER lifecycle hardening, memory scoring fixes. See [CHANGELOG.md](./CHANGELOG.md).
 
 ---
 
@@ -911,7 +910,7 @@ It gives your agent an actual memory.
 git clone https://github.com/GG-QandV/mnemostroma.git
 cd mnemostroma
 pip install -e ".[dev]"
-pytest tests/                          # run all 1477 tests
+pytest tests/                          # run all 1556 tests
 pytest tests/ --ignore=tests/test_memory_layers.py \
               --ignore=tests/test_data_contracts.py  # fast mode (~14s)
 ```
@@ -940,7 +939,7 @@ Cloud Sync, Subconscious Layer (personalized models), Shared Experience, and Tea
 ---
 
 *Mnemostroma — the memory layer for AI agents*
-*offline · ~650MB RAM (baseline) · ~20ms · 1477 tests · v2.5.1*
+*offline · ~650MB RAM (baseline) · ~20ms · 1556 tests · v2.5.3*
 
 # [mnemostroma-protocol]
 

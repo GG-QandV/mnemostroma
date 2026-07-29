@@ -23,6 +23,29 @@
 
 ---
 
+## 2.5.3 — 2026-07-29
+
+### Added
+- **fix(relevance)**: Wire intent_vector from search to observer pipeline — relevance is now computed as `dot(session_embedding, intent_vector)` instead of always defaulting to 0.5 (`core/__init__.py`, `memory/search.py`, `conductor.py`, `gateway/server.py`).
+- **test**: Intent_vector relevance scoring (3 scenarios: no intent, matching intent, opposite intent) + passthrough flow validation.
+
+### Fixed
+- **fix(ner)**: Idempotent `BertNER.load()` with thread-safe lock — eliminates duplicate ONNX InferenceSession creation (was ~575 reloads/day); `close()` is now shutdown-only with RuntimeError guard; instance counter and load counter added.
+- **fix(memory)**: Removed `calculate_score(0.5, ...)` from consolidation — was overwriting all session scores with hardcoded relevance every 300s. Added `calculate_retention_score()` (age/importance/feedback/usage) for eviction without query relevance component.
+- **fix(logging)**: Score step now logs real temporal decay T instead of hardcoded 1.0.
+- **fix(storage)**: Guard `created_at=None/0` during hydration — skips invalid sessions.
+- **fix(analytics)**: Feedback signal field `signal` → `type` in log analyzer; added valid/invalid counters.
+
+### Infrastructure
+- **ops**: Systemd override: `MemoryHigh=850M`, `MemoryMax=1000M` — eliminates OOM-kill cascade from 750M hard limit (was 17 SIGKILL/3 days).
+- **ops**: cgroup observability in health check — memory.current/peak, OOM count, auto-snapshot + pmap at 650/700MB thresholds.
+- **ops**: `duckdbInstallEnv()` in extension-loader — strips TLS-affecting env vars (NODE_EXTRA_CA_CERTS, HTTP_PROXY, etc.) from DuckDB installer child process.
+
+### Changed
+- **chore**: Версия 2.5.2 → 2.5.3.
+
+---
+
 ## 2.5.2 — 2026-07-28
 
 ### Fixed
