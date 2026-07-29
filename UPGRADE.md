@@ -1,4 +1,15 @@
-## Upgrading to v2.5.1 (Current)
+## Upgrading to v2.5.3 (Current)
+
+### v2.5.3 — Relevance + Memory Quality (2026-07-29)
+
+**No breaking changes.** Key fixes:
+
+| Area | Change | Action needed |
+|------|--------|---------------|
+| Relevance | `intent_vector` now flows from search → observer | None (None = old behaviour) |
+| NER | `load()` idempotent, `close()` shutdown-only | Restart daemon |
+| Memory scoring | `calculate_score(0.5,...)` removed from consolidation | Restart daemon |
+| Systemd | MemoryHigh=850M, MemoryMax=1000M | `systemctl --user daemon-reload` then restart |
 
 ### What changed
 - SSE и HTTP адаптеры теперь запускаются **внутри daemon** — отдельные процессы и systemd-юниты больше не нужны.
