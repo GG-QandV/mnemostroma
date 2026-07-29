@@ -15,7 +15,6 @@
 | WAL (logs.db) | ✅ ~10 MB | Normal for 630K records |
 | Backups | ✅ 8.5 GB (52 files) | Down from 20 GB (611 files) |
 | ONNX Logs | ✅ 630K records | 30-day retention enforced |
-| Whisper Model | ⚠️ Not downloaded | Pending — not blocking main functionality |
 
 ## Database
 
