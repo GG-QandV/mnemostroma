@@ -1,13 +1,17 @@
-# System Assessment — Mnemostroma v2.5.2
+# System Assessment — Mnemostroma v2.5.3
 
-**Date:** 2026-07-28
+**Date:** 2026-07-29
 
 ## Health Summary
 
 | Indicator | Status | Notes |
 |-----------|--------|-------|
-| RSS (daemon) | ✅ ~280 MB | Stable under load, no growth trend |
-| WAL (mnemostroma.db) | ✅ ~3 MB | Checkpoint runs every 5K writes |
+| RSS (daemon) | ✅ ~435 MB | Post-NER-fix baseline, no growth trend |
+| OOM kills | ✅ 0 | MemoryMax raised to 1000M |
+| BertNER instances | ✅ 1/PID | Idempotent load + lock |
+| Feedback signals | ✅ 19 valid, 0 None | signal→type fix |
+| Scores | 🟡 still flat | retention_score added, needs burn-in |
+| cgroup memory.peak | 696 MB | After cold start, within 850M High limit |
 | WAL (logs.db) | ✅ ~10 MB | Normal for 630K records |
 | Backups | ✅ 8.5 GB (52 files) | Down from 20 GB (611 files) |
 | ONNX Logs | ✅ 630K records | 30-day retention enforced |

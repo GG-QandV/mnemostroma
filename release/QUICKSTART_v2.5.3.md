@@ -1,19 +1,20 @@
-# Quick Start — Mnemostroma v2.5.2
+# Quick Start — Mnemostroma v2.5.3
 
-## Memory Growth Fix
+## Relevance + Memory Quality Release
 
-v2.5.2 fixes unbounded WAL growth and cleans up backup bloat. No new features — pure stability.
+v2.5.3 restores relevance scoring, hardens NER lifecycle, and fixes memory scoring correctness.
 
-### What's new in v2.5.2
+### What's new in v2.5.3
 
-- **WAL Checkpoint**: LogWriter now runs `PRAGMA wal_checkpoint(TRUNCATE)` every 5K writes. Prevents WAL from growing beyond a few MB.
-- **Backup Rotation**: 611 files / 20 GB → 52 files / 8.5 GB.
-- **Audit Reports**: Full memory growth analysis and SessionBrief RAM weight measurement in `docs/audit/`.
+- **Relevance**: `intent_vector` now flows from search to observer pipeline — relevance = `dot(session_embedding, query_embedding)` instead of always 0.5.
+- **NER**: BertNER.load() idempotent with lock — no more duplicate ONNX sessions (~575/day → 1).
+- **Scoring**: Removed R=0.5 overwrite from consolidation; added `calculate_retention_score()` for eviction.
+- **Infra**: Systemd MemoryMax 1000M, OOM-kills eliminated, cgroup observability.
 
 ### Upgrade
 
 ```bash
-cd /home/gg/projects/mnemostroma-public
+cd /home/gg/projects/Project_mnemostroma
 git pull origin main
 pip install -e ".[dev]"
 ```
