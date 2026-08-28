@@ -19,6 +19,7 @@ _MNEMO_DIR = Path.home() / ".mnemostroma"
 _PID_FILE  = _MNEMO_DIR / "daemon.pid"
 _READY_FILE = _MNEMO_DIR / "daemon.ready"
 _CONFIG_PATH = _MNEMO_DIR / "config.json"
+_LOCAL_BIN_DIR = Path.home() / ".local" / "bin"
 
 _EXT_SRC_DIST = Path(__file__).parent.parent / "extension" / "dist"
 _EXT_SRC_BASE = Path(__file__).parent.parent / "extension"
@@ -419,19 +420,11 @@ def _install_models(manifest_path: Path, force: bool = False):
         sys.exit(1)
 
 def _write_claude_wrapper(wrapper_path: Path, ca_cert: Path) -> None:
-    wrapper_path.parent.mkdir(parents=True, exist_ok=True)
-    wrapper_path.write_text(
-        "#!/bin/bash\n"
-        "CLAUDE_BIN=$(command -v claude 2>/dev/null)\n"
-        "if [ -z \"$CLAUDE_BIN\" ]; then echo 'mnemo: error: claude not found' >&2; exit 1; fi\n"
-        "if (echo > /dev/tcp/127.0.0.1/8767) 2>/dev/null; then\n"
-        f"  export ANTHROPIC_BASE_URL=\"https://127.0.0.1:8767\"\n"
-        f"  export NODE_EXTRA_CA_CERTS=\"{ca_cert}\"\n"
-        "fi\n"
-        "exec \"$CLAUDE_BIN\" \"$@\"\n",
-        encoding="utf-8",
-    )
-    wrapper_path.chmod(0o755)
+    """Тонкая обёртка над setup.claude_wrapper — логика лаунчера живёт там."""
+    from mnemostroma.setup.claude_wrapper import write_claude_wrapper
+
+    write_claude_wrapper(wrapper_path, ca_cert)
+
 
 # ---------------------------------------------------------------------------
 # Commands
@@ -521,9 +514,19 @@ def _cmd_setup() -> None:
     try:
         from mnemostroma.setup.tls import generate_passthrough_tls
         ca_cert, _, _ = generate_passthrough_tls(_MNEMO_DIR)
-        _write_claude_wrapper(Path.home() / ".local" / "bin" / "mnemo", ca_cert)
+        _write_claude_wrapper(_LOCAL_BIN_DIR / "mnemo", ca_cert)
     except Exception:
         pass
+
+    if shutil.which("opencode"):
+        try:
+            from mnemostroma.setup.mitm_ca import generate_mitm_ca
+            from mnemostroma.setup.opencode_wrapper import write_opencode_wrapper
+
+            mitm_ca_cert, _ = generate_mitm_ca(_MNEMO_DIR)
+            write_opencode_wrapper(_LOCAL_BIN_DIR / "mnemo-opencode", mitm_ca_cert, port=8764)
+        except Exception:
+            pass
 
     # systemd unit installation is NOT done here — use `mnemostroma service install`.
     # Separation of concerns: setup = config+models+TLS, service install = OS integration.
@@ -1030,7 +1033,6 @@ def _cmd_service_linux() -> None:
 
     # Enable units (idempotent — safe if already enabled)
     core_units = [u for u in installed if u not in (
-        "mnemostroma-ui.service",
         "mnemostroma-sse.service",
         "mnemostroma-tunnel.service",           # не auto-enable — только по запросу
         "mnemostroma-tunnel-keepalive.service", # активируется таймером, не напрямую
@@ -1089,6 +1091,15 @@ def _cmd_service(args: list) -> None:
 # ---------------------------------------------------------------------------
 # CLI Core
 # ---------------------------------------------------------------------------
+
+def _provider_from_args(args: list) -> str | None:
+    """Extract --provider <name> from tunnel CLI args (None → config default)."""
+    if "--provider" in args:
+        i = args.index("--provider")
+        if i + 1 < len(args):
+            return args[i + 1]
+    return None
+
 
 def _cmd_tunnel(args: list) -> None:
     """Управление Serveo SSH туннелем и OAuth адаптером для MCP.
@@ -1150,7 +1161,7 @@ def _cmd_tunnel(args: list) -> None:
             if foreground:
                 from mnemostroma.integration.tunnel import manager
                 try:
-                    asyncio.run(manager.run())
+                    asyncio.run(manager.run(provider=_provider_from_args(args)))
                 except KeyboardInterrupt:
                     pass
             else:
@@ -1351,6 +1362,23 @@ def dispatch(args_namespace: argparse.Namespace) -> None:
             sys.exit(1)
         except KeyboardInterrupt:
             pass
+    elif command == "http-read":
+        port = 8762
+        host = "127.0.0.1"
+        for arg in cargs:
+            if arg.startswith("--port="):
+                port = int(arg.split("=")[1])
+            elif arg.startswith("--host="):
+                host = arg.split("=")[1]
+        print(f"  Starting HTTP Read adapter on {host}:{port}")
+        print(f"  Endpoint: http://{host}:{port}/memory/<tool>")
+        print(f"  Health:   http://{host}:{port}/health")
+        print(f"  Routes:   http://{host}:{port}/routes")
+        try:
+            from mnemostroma.integration.http_read_adapter import run as http_read_run
+            asyncio.run(http_read_run(port=port, host=host))
+        except KeyboardInterrupt:
+            print("\n  HTTP Read adapter stopped.")
     elif command == "logs":
         from mnemostroma.tools.logs import run_logs
         db_path = _MNEMO_DIR / "logs.db"

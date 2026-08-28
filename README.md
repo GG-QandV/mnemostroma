@@ -4,12 +4,13 @@
 
 ![Version](https://img.shields.io/badge/version-v2.5.3-blue)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue)
-![Tests](https://img.shields.io/badge/tests-1556%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-1477%20passing-brightgreen)
 ![License](https://img.shields.io/badge/license-FSL--1.1--MIT-lightgrey)
 
 > *μνήμη (mnḗmē, memory) + στρῶμα (strôma, layer) — the substrate everything rests on.*
 
-> **v2.5.3 is stable.** **NEW in v2.5.3:** relevance scoring via intent_vector, NER lifecycle hardening, memory scoring fixes. See [CHANGELOG.md](./CHANGELOG.md).
+> **v2.5.3 is stable.** **NEW in v2.5.0:** HTTP Read Adapter (port 8762) — ultra-low latency REST endpoint for CLI/scripts/browsers. See [TRANSPORT_COMPARISON_v2.5.md](./docs/integration/TRANSPORT_COMPARISON_v2.5.md).
+> **NEW:** Gateway Provider Dispatch — OpenAI-compatible non-streaming Chat Completions with memory injection, observation, admission control and response normalization. See [GATEWAY_PROVIDER.md](./docs/GATEWAY_PROVIDER.md).
 
 ---
 
@@ -164,11 +165,11 @@ This is not a database with TTL. This is how human memory works.
 
 ## Status
 
-**Current:** v2.5.3 | 2026-07-29
+**Current:** v2.5.3 | 2026-08-28
 
 | Component | Status |
 |---|---|
-| Core backend — Observer, Memory, Storage | ✅ DONE — 1556 tests |
+| Core backend — Observer, Memory, Storage | ✅ DONE — 1477 tests |
 | Golden Standard Launch (Shell Guards) | ✅ DONE — v1.11.1 |
 | Anchor Layer / Emotional Patterns | ✅ DONE |
 | Implicit Feedback (v1.5) | ✅ DONE |
@@ -188,6 +189,7 @@ This is not a database with TTL. This is how human memory works.
 | **Tunnel Headless Launch — Path resolution, PID restore, atomic state** | ✅ DONE |
 | **Windows 10/11 Compatibility — Task Scheduler, DPI, tooltip** | ✅ DONE |
 | **SSE + HTTP Adapters embedded in daemon** | ✅ DONE — v2.3.2 |
+| **MITM Proxy Client Scoping (ADR-005)** | ✅ DONE — selective interception, no more `000` |
 
 ---
 
@@ -195,7 +197,7 @@ This is not a database with TTL. This is how human memory works.
 
 **Requires Python 3.12+**
 
-> **v2.5.3 is stable.** **NEW in v2.5.3:** relevance scoring via intent_vector, NER lifecycle hardening, memory scoring fixes. See [CHANGELOG.md](./CHANGELOG.md).
+> **v2.5.3 is stable.** **NEW in v2.5.0:** HTTP Read Adapter (port 8762) — ultra-low latency REST endpoint for CLI/scripts/browsers. See [TRANSPORT_COMPARISON_v2.5.md](./docs/integration/TRANSPORT_COMPARISON_v2.5.md).
 
 ---
 
@@ -357,6 +359,20 @@ mnemostroma off          # Stop daemon
 mnemostroma sse          # Start SSE adapter + proxy on :8767
 mnemo                    # Launch Claude Code through the proxy (falls back to direct if proxy is down)
 ```
+
+### Scoped MITM proxy (ADR-005, client registry)
+
+The MITM proxy on `:8764` intercepts **only** registered hosts (e.g.
+`api.anthropic.com`, `api.deepseek.com`). Any other host that reaches it via a
+global `HTTPS_PROXY` is either tunneled transparently (`passthrough`, the
+default) or rejected with an explicit HTTP 502 (`reject`) — never a bare
+connection reset (`000`).
+
+- Registry + validation: `src/mnemostroma/proxy/` (config section `mitm_proxy`
+  in `~/.mnemostroma/config.json`).
+- Adding a client = a config object in `mitm_proxy.clients[]`, no code changes.
+  See [docs/proxy/adding-a-new-client.md](docs/proxy/adding-a-new-client.md).
+- Design: [docs/adr/ADR-005-mitm-proxy-client-scoping.md](docs/adr/ADR-005-mitm-proxy-client-scoping.md).
 
 ## Updating
 
@@ -910,7 +926,7 @@ It gives your agent an actual memory.
 git clone https://github.com/GG-QandV/mnemostroma.git
 cd mnemostroma
 pip install -e ".[dev]"
-pytest tests/                          # run all 1556 tests
+pytest tests/                          # run all 1477 tests
 pytest tests/ --ignore=tests/test_memory_layers.py \
               --ignore=tests/test_data_contracts.py  # fast mode (~14s)
 ```
@@ -939,7 +955,7 @@ Cloud Sync, Subconscious Layer (personalized models), Shared Experience, and Tea
 ---
 
 *Mnemostroma — the memory layer for AI agents*
-*offline · ~650MB RAM (baseline) · ~20ms · 1556 tests · v2.5.3*
+*offline · ~650MB RAM (baseline) · ~20ms · 1477 tests · v2.5.3*
 
 # [mnemostroma-protocol]
 

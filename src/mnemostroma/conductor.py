@@ -1,3 +1,4 @@
+from mnemostroma.storage.log_writer import LogWriter
 # SPDX-License-Identifier: FSL-1.1-MIT
 import asyncio
 import logging
