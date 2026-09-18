@@ -168,6 +168,26 @@ CREATE TABLE IF NOT EXISTS experience_vectors (
 );
 """
 
+# Vectors of the chunks a session's text was split into (E-2, D2). `sessions.embedding`
+# holds one vector per session — the summary — and N chunk vectors cannot fit in one
+# column. Search already tolerates several labels per session (`memory/search.py:55`),
+# so what was missing was only the storage and the label allocator.
+SCHEMA_SESSION_CHUNK_VECTORS = """
+CREATE TABLE IF NOT EXISTS session_chunk_vectors (
+    session_id    TEXT    NOT NULL,
+    chunk_index   INTEGER NOT NULL,
+    vec           BLOB    NOT NULL,
+    dim           INTEGER NOT NULL,
+    model_version TEXT,
+    ts            INTEGER NOT NULL,
+    PRIMARY KEY (session_id, chunk_index)
+);
+"""
+
+INDICES_CHUNK_VECTORS = [
+    "CREATE INDEX IF NOT EXISTS idx_chunkvec_sid ON session_chunk_vectors(session_id);",
+]
+
 ALL_SCHEMAS = [
     SCHEMA_SESSIONS,
     SCHEMA_ANCHORS,
@@ -178,4 +198,5 @@ ALL_SCHEMAS = [
     SCHEMA_EXPERIENCE,
     SCHEMA_SESSION_STEPS,
     SCHEMA_EXPERIENCE_VECTORS,
-] + INDICES + INDICES_EXPERIENCE
+    SCHEMA_SESSION_CHUNK_VECTORS,
+] + INDICES + INDICES_EXPERIENCE + INDICES_CHUNK_VECTORS

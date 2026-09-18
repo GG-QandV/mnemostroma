@@ -1,220 +1,338 @@
 {
-  "_meta": {
-    "version": "1.4",
-    "product": "mnemostroma",
-    "generated": "2026-04-04",
-    "parameters_count": 81,
-    "config_profile": "default",
-    "specialization": null
-  },
-  "resources": {
-    "ram_budget_mb": 650.0,
-    "session_window_size": 200,
-    "content_max_blocks": 500,
-    "ram_soft_limit_mb": 700,
-    "ram_hard_limit_mb": 750,
-    "ram_eviction_threshold": 0.8,
-    "window_min": 50,
-    "sqlite_cache_mb": 64,
-    "sqlite_mmap_mb": 256,
-    "db_growth_budget_mb_per_day": 2.0,
-    "onnx_inter_threads": 2,
-    "onnx_intra_threads": 2
-  },
-  "score": {
-    "weight_relevance": 0.5,
-    "weight_temporal": 0.3,
-    "weight_importance": 0.2,
-    "temporal_decay_lambda": 0.05,
-    "weight_relevance_search": 0.6,
-    "weight_temporal_search": 0.3,
-    "weight_importance_search": 0.1
-  },
-  "importance": {
-    "weight_critical": 1.0,
-    "weight_important": 0.5,
-    "weight_background": 0.1,
-    "weight_principle": 1.0,
-    "ner_score_threshold": 0.5,
-    "tag_verification_threshold": 0.65,
-    "anchor_ttl_importance_multiplier_critical": 3.0,
-    "anchor_ttl_importance_multiplier_important": 1.5,
-    "anchor_ttl_importance_multiplier_background": 0.7
-  },
-  "temporal": {
-    "age_threshold_fresh_days": 1,
-    "age_threshold_actual_days": 7,
-    "age_threshold_stale_days": 30,
-    "age_threshold_archive_days": 90
-  },
-  "dissolver": {
-    "lambda_critical": 0.05,
-    "lambda_important": 0.15,
-    "lambda_background": 0.4,
-    "lambda_principle": 0.0,
-    "use_factor_coefficient": 0.8,
-    "prog_factor_max_successors": 10,
-    "prog_factor_weight": 0.3,
-    "resolution_floor_milestone": 0.05,
-    "resolution_floor_principle": 0.8,
-    "consolidation_interval_sec": 300,
-    "content_max_blocks": 500,
-    "content_evict_batch": 50,
-    "content_hot_protect_hours": 24,
-    "content_active_protect": true
-  },
-  "search": {
-    "top_k_candidates": 20,
-    "top_n_results": 5,
-    "embedding_dim": 384,
-    "matrix_dtype": "float32",
-    "pipeline_width": 2
-  },
-  "observer": {
-    "min_text_length": 20,
-    "ner_call_rate_target": 0.3,
-    "brief_max_chars": 50,
-    "active_variables_max": 9,
-    "tags_max_per_session": 7,
-    "tags_min_for_search": 1,
-    "urgency_score_modifier_expired": 0.5,
-    "urgency_score_modifier_principle": 1.3,
-    "session_type_classify_after_n": 5,
-    "gliner_mode": "small",
-    "gliner_auto_switch_precision_threshold": 0.7,
-    "gliner_auto_switch_after_sessions": 50,
-    "mention_type_enabled": true,
-    "mention_type_threshold": 0.7
-  },
-  "tuner": {
-    "conflict_signal_threshold": 0.75,
-    "semantic_drift_threshold": 0.35,
-    "anchor_ttl_days_default": 30,
-    "anchor_ttl_days_decision": 90,
-    "anchor_ttl_days_principle": 36500,
-    "recalibration_drift_threshold": 0.4,
-    "check_interval_sec": 300,
-    "conflict_hold_max_days": 7
-  },
-  "urgency": {
-    "check_interval_sec": 300,
-    "expired_score_penalty": 0.5,
-    "principle_score_boost": 1.3,
-    "default_hours_ahead": 72,
-    "bare_entity_compress_delay_sec": 0
-  },
-  "storage": {
-    "sqlite_synchronous": "NORMAL",
-    "sqlite_auto_vacuum": "INCREMENTAL",
-    "sqlite_compress_threshold_mb": 500,
-    "sqlite_archive_cutoff_years": 3,
-    "async_flush_interval_sec": 5,
-    "batch_flush_size": 50,
-    "backup_interval_hours": 3,
-    "session_repo": "new"
-  },
-  "experience": {
-    "layer_enabled": true,
-    "process_vec_enabled": true,
-    "process_vec_step_flush_every_n": 20,
-    "negative_exp_lambda": 0.1,
-    "negative_exp_resolution_floor": 0.05,
-    "cluster_min_samples": 5,
-    "intuition_fire_threshold": 0.82,
-    "maturity_apprentice": 5,
-    "maturity_practitioner": 10,
-    "maturity_expert": 30,
-    "maturity_master": 100,
-    "exp_decay_days_threshold": 90,
-    "exp_decay_rate": 0.01
-  },
-  "calibration": {
-    "enabled": true,
-    "max_sessions": 50,
-    "source": null,
-    "save_history": false,
-    "min_onboarding_sessions": 10,
-    "continuation_threshold": 0.82,
-    "calibration_complete": false
-  },
-  "security": {
-    "verify_models_on_bootstrap": true,
-    "manifest_path": "models/manifest.json",
-    "principle_confirmation_required": true,
-    "max_principles_per_session": 3,
-    "sanitize_input": true
-  },
-  "cloud_sync": {
-    "enabled": false,
-    "endpoint": null,
-    "layers": [
-      "SQLite_Archive",
-      "SQLite_Eternal"
-    ],
-    "interval_sec": 300,
-    "encrypted": true,
-    "device_id": null
-  },
-  "anchor_decay": {
-    "enabled": true,
-    "interval_min": 60,
-    "threshold_days": 30,
-    "rate": 0.1
-  },
-  "dreamer": {
-    "enabled": true,
-    "idle_threshold_min": 5,
-    "max_anchors_per_cycle": 20
-  },
-  "logging": {
-    "enabled": true,
-    "mode": "safe",
-    "db_path": "logs.db"
-  },
-  "feedback": {
-    "weights": {
-      "USE": 1.0,
-      "DEEP_USE": 1.5,
-      "IGNORE": -0.5,
-      "REVISIT": 2.0
+    "_meta": {
+        "version": "1.4",
+        "product": "mnemostroma",
+        "generated": "2026-04-04",
+        "parameters_count": 81,
+        "config_profile": "default",
+        "specialization": null
     },
-    "ema_alpha": 0.1,
-    "ignore_window_sec": 5.0,
-    "revisit_threshold": 3
-  },
-  "temporal_retrieval": {
-    "ctx_recent_enabled": true,
-    "time_weighted_search": false,
-    "half_life_days": 30,
-    "time_weight_exempt_importance": ["critical", "principle"]
-  },
-  "anchor_guardian": {
-    "enabled": true,
-    "threshold": 0.72,
-    "cooldown_sec": 3600,
-    "guardian_types": ["principle", "constraint", "critical", "decision"]
-  },
-  "associative_surfacing": {
+    "resources": {
+        "ram_budget_mb": 650.0,
+        "session_window_size": 200,
+        "content_max_blocks": 500,
+        "ram_soft_limit_mb": 700,
+        "ram_hard_limit_mb": 750,
+        "ram_eviction_threshold": 0.8,
+        "window_min": 50,
+        "sqlite_cache_mb": 64,
+        "sqlite_mmap_mb": 256,
+        "db_growth_budget_mb_per_day": 2.0,
+        "onnx_inter_threads": 2,
+        "onnx_intra_threads": 2,
+        "hydration_session_limit": 500
+    },
+    "score": {
+        "weight_relevance": 0.5,
+        "weight_temporal": 0.3,
+        "weight_importance": 0.2,
+        "temporal_decay_lambda": 0.05,
+        "weight_relevance_search": 0.6,
+        "weight_temporal_search": 0.3,
+        "weight_importance_search": 0.1
+    },
+    "importance": {
+        "weight_critical": 1.0,
+        "weight_important": 0.5,
+        "weight_background": 0.1,
+        "weight_principle": 1.0,
+        "ner_score_threshold": 0.5,
+        "tag_verification_threshold": 0.65,
+        "anchor_ttl_importance_multiplier_critical": 3.0,
+        "anchor_ttl_importance_multiplier_important": 1.5,
+        "anchor_ttl_importance_multiplier_background": 0.7
+    },
+    "temporal": {
+        "age_threshold_fresh_days": 1,
+        "age_threshold_actual_days": 7,
+        "age_threshold_stale_days": 30,
+        "age_threshold_archive_days": 90
+    },
+    "dissolver": {
+        "lambda_critical": 0.05,
+        "lambda_important": 0.15,
+        "lambda_background": 0.4,
+        "lambda_principle": 0.0,
+        "use_factor_coefficient": 0.8,
+        "prog_factor_max_successors": 10,
+        "prog_factor_weight": 0.3,
+        "resolution_floor_milestone": 0.05,
+        "resolution_floor_principle": 0.8,
+        "consolidation_interval_sec": 300,
+        "content_max_blocks": 500,
+        "content_evict_batch": 50,
+        "content_hot_protect_hours": 24,
+        "content_active_protect": true
+    },
+    "search": {
+        "top_k_candidates": 20,
+        "top_n_results": 5,
+        "embedding_dim": 384,
+        "matrix_dtype": "float32",
+        "pipeline_width": 2
+    },
+    "observer": {
+        "min_text_length": 20,
+        "ner_call_rate_target": 0.3,
+        "brief_max_chars": 50,
+        "active_variables_max": 9,
+        "tags_max_per_session": 7,
+        "tags_min_for_search": 1,
+        "urgency_score_modifier_expired": 0.5,
+        "urgency_score_modifier_principle": 1.3,
+        "session_type_classify_after_n": 5,
+        "gliner_mode": "small",
+        "gliner_auto_switch_precision_threshold": 0.7,
+        "gliner_auto_switch_after_sessions": 50,
+        "mention_type_enabled": true,
+        "mention_type_threshold": 0.7
+    },
+    "tuner": {
+        "conflict_signal_threshold": 0.75,
+        "semantic_drift_threshold": 0.35,
+        "anchor_ttl_days_default": 30,
+        "anchor_ttl_days_decision": 90,
+        "anchor_ttl_days_principle": 36500,
+        "recalibration_drift_threshold": 0.4,
+        "check_interval_sec": 300,
+        "conflict_hold_max_days": 7,
+        "conflict_min_age_sec": 7200
+    },
+    "urgency": {
+        "check_interval_sec": 300,
+        "expired_score_penalty": 0.5,
+        "principle_score_boost": 1.3,
+        "default_hours_ahead": 72,
+        "bare_entity_compress_delay_sec": 0
+    },
+    "storage": {
+        "sqlite_synchronous": "NORMAL",
+        "sqlite_auto_vacuum": "INCREMENTAL",
+        "sqlite_compress_threshold_mb": 500,
+        "sqlite_archive_cutoff_years": 3,
+        "async_flush_interval_sec": 5,
+        "batch_flush_size": 50,
+        "backup_interval_hours": 3,
+        "session_repo": "new"
+    },
+    "experience": {
+        "layer_enabled": true,
+        "process_vec_enabled": true,
+        "process_vec_step_flush_every_n": 20,
+        "negative_exp_lambda": 0.1,
+        "negative_exp_resolution_floor": 0.05,
+        "cluster_min_samples": 5,
+        "intuition_fire_threshold": 0.82,
+        "evaluator_vecs_cap": 50,
+        "closure_idle_sec": 1800,
+        "step_log_sessions_cap": 100,
+        "maturity_apprentice": 5,
+        "maturity_practitioner": 10,
+        "maturity_expert": 30,
+        "maturity_master": 100,
+        "exp_decay_days_threshold": 90,
+        "exp_decay_rate": 0.01
+    },
+    "calibration": {
+        "enabled": true,
+        "max_sessions": 50,
+        "source": null,
+        "save_history": false,
+        "min_onboarding_sessions": 10,
+        "continuation_threshold": 0.82,
+        "calibration_complete": false
+    },
+    "security": {
+        "verify_models_on_bootstrap": true,
+        "manifest_path": "models/manifest.json",
+        "principle_confirmation_required": true,
+        "max_principles_per_session": 3,
+        "sanitize_input": true
+    },
+    "cloud_sync": {
+        "enabled": false,
+        "endpoint": null,
+        "layers": [
+            "SQLite_Archive",
+            "SQLite_Eternal"
+        ],
+        "interval_sec": 300,
+        "encrypted": true,
+        "device_id": null
+    },
+    "anchor_decay": {
+        "enabled": true,
+        "interval_min": 60,
+        "threshold_days": 30,
+        "rate": 0.1
+    },
+    "dreamer": {
+        "enabled": true,
+        "idle_threshold_min": 5,
+        "max_anchors_per_cycle": 20
+    },
+    "logging": {
+        "enabled": true,
+        "mode": "safe",
+        "db_path": "logs.db"
+    },
+    "feedback": {
+        "weights": {
+            "USE": 1.0,
+            "DEEP_USE": 1.5,
+            "IGNORE": -0.5,
+            "REVISIT": 2.0
+        },
+        "ema_alpha": 0.1,
+        "ignore_window_sec": 5.0,
+        "revisit_threshold": 3
+    },
+    "temporal_retrieval": {
+        "ctx_recent_enabled": true,
+        "time_weighted_search": false,
+        "half_life_days": 30,
+        "time_weight_exempt_importance": [
+            "critical",
+            "principle"
+        ]
+    },
+    "anchor_guardian": {
+        "enabled": true,
+        "threshold": 0.72,
+        "cooldown_sec": 3600,
+        "guardian_types": [
+            "principle",
+            "constraint",
+            "critical",
+            "decision"
+        ]
+    },
+    "associative_surfacing": {
+        "enabled": false,
+        "anchor_threshold": 0.75,
+        "session_threshold": 0.78,
+        "max_results": 3
+    },
+    "precision_guard": {
+        "enabled": true,
+        "ram_cap": 1000
+    },
+    "open_loop": {
+        "enabled": true,
+        "cooldown_sec": 7200,
+        "threshold": 0.75,
+        "max_results": 5
+    },
+    "urgency_pulse": {
+        "enabled": true
+    },
+    "session_closure": {
+        "enabled": true,
+        "cooldown_sec": 1800
+    },
+    "sse": {
+        "autostart": true,
+        "port": 8765,
+        "port_extension": 8766,
+        "host": "127.0.0.1"
+    },
+    "http_read": {
+        "autostart": true,
+        "port": 8762,
+        "host": "127.0.0.1"
+    },
+    "gateway": {
     "enabled": false,
-    "anchor_threshold": 0.75,
-    "session_threshold": 0.78,
-    "max_results": 3
-  },
-  "precision_guard": {
-    "enabled": true,
-    "ram_cap": 1000
-  },
-  "open_loop": {
-    "enabled": true,
-    "cooldown_sec": 7200,
-    "threshold": 0.75,
-    "max_results": 5
-  },
-  "urgency_pulse": {
-    "enabled": true
-  },
-  "session_closure": {
-    "enabled": true,
-    "cooldown_sec": 1800
-  }
+    "host": "127.0.0.1",
+    "port": 8780,
+        "auth_mode": "local_bearer",
+        "token_env": "MNEMO_GATEWAY_TOKEN",
+        "limits": {
+            "max_request_bytes": 8388608,
+            "max_concurrent_streams": 16,
+            "max_context_tokens": 600,
+            "connect_timeout_sec": 10.0,
+            "first_byte_timeout_sec": 60.0,
+            "stream_idle_timeout_sec": 300.0
+        },
+        "outbox": {
+            "batch_size": 25,
+            "max_attempts": 12,
+            "retention_hours": 168
+        },
+        "memory_mode": "off",
+        "memory_max_tokens": 600,
+        "provider_mode": "disabled",
+        "provider_base_url": null,
+        "provider_token_env": null,
+        "provider_timeout_seconds": 30.0,
+        "dispatch_mode": "dry_run",
+        "observation_mode": "off",
+        "max_concurrent_dispatches": 8,
+        "max_concurrent_memory_requests": 2,
+        "profiles": {},
+        "providers": {
+            "deepseek": {
+                "provider_id": "deepseek",
+                "protocol": "openai",
+                "base_url": "https://api.deepseek.com/v1",
+                "credential_env": "DEEPSEEK_API_KEY",
+                "allowed_hosts": ["api.deepseek.com"],
+                "exposed_models": ["deepseek-chat", "deepseek-reasoner"],
+                "enabled": false
+            },
+            "openrouter": {
+                "provider_id": "openrouter",
+                "protocol": "openai",
+                "base_url": "https://openrouter.ai/api/v1",
+                "credential_env": "OPENROUTER_API_KEY",
+                "allowed_hosts": ["openrouter.ai"],
+                "exposed_models": ["openrouter/auto"],
+                "enabled": false
+            },
+            "groq": {
+                "provider_id": "groq",
+                "protocol": "openai",
+                "base_url": "https://api.groq.com/openai/v1",
+                "credential_env": "GROQ_API_KEY",
+                "allowed_hosts": ["api.groq.com"],
+                "exposed_models": ["llama-3.3-70b-versatile", "moonshotai/kimi-k2-instruct"],
+                "enabled": false
+            },
+            "anthropic": {
+                "provider_id": "anthropic",
+                "protocol": "anthropic",
+                "base_url": "https://api.anthropic.com",
+                "credential_env": "ANTHROPIC_API_KEY",
+                "exposed_models": ["claude-sonnet-4-5", "claude-opus-4-5"],
+                "enabled": false
+            }
+        }
+    },
+    "mitm_proxy": {
+        "host": "127.0.0.1",
+        "port": 8764,
+        "unmatched_host_action": "passthrough",
+        "log_unmatched_hosts": true,
+        "connect_timeout_sec": 10.0,
+        "tunnel_idle_timeout_sec": 300.0,
+        "max_concurrent_tunnels": 256,
+        "clients": [
+            {
+                "client_id": "claude-code-cli",
+                "match_hosts": ["api.anthropic.com", "console.anthropic.com", "statsig.anthropic.com"],
+                "capture_mode": "passthrough",
+                "enabled": true,
+                "description": "Claude Code CLI — прозрачный туннель. Запись сессий идёт не здесь, а через reverse-proxy на 8767 (ANTHROPIC_BASE_URL, ставит лаунчер mnemo). MITM тут ничего не давал: api.anthropic.com в _OBSERVE_SKIP_HOSTS, а inject_hook указывал на несуществующую функцию"
+            },
+            {
+                "client_id": "opencode-gateway",
+                "match_hosts": ["api.deepseek.com", "openrouter.ai"],
+                "capture_mode": "intercept",
+                "inject_hook": "mnemostroma.observer.pipeline.on_openai_compatible_response",
+                "enabled": true,
+                "description": "opencode CLI через OpenAI-совместимый gateway"
+            }
+        ]
+    }
 }

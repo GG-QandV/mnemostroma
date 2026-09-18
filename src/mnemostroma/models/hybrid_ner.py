@@ -68,25 +68,81 @@ class _GateClosed(Exception):
     """Internal signal: the gate skipped the model, this is not a failure."""
 
 
+# Types asked of a prompt-driven NER model. Measured on real weights in round 11
+# (docs/embedding/round11_report_20260918.md, P-3), not chosen by how they sound:
+#
+#   kept     person, location, date, technology, product — fire reliably, scores 0.54-0.99
+#   kept     organization — low recall and it leaks into `location` ("Газпроме" comes
+#            back as a place). Names still get captured, just sometimes mistyped, and
+#            dropping the type would guarantee that outcome instead of softening it.
+#   dropped  artifact, concept, question — noise: "мегабайт" as an artifact, "деплоя"
+#            as a concept, "решение" as a question, all at 0.33-0.49.
+#   dropped  decision, prohibition — never fired once, not even on "Решение: перейти
+#            на…" or "Запрещено…". They stay with the regex half (DECISION_PATTERNS,
+#            PROHIBITION_PATTERNS), which is where they have always actually come from.
+#
+# Asking for more types is nearly free (+5-10 ms from 3 to 8 in round 9), so the list
+# is trimmed for precision, not for speed.
+DEFAULT_ENTITY_TYPES = [
+    "person", "organization", "location", "date", "technology", "product",
+]
+
+_ENGINES = ("bert", "gliner")
+
+
 class HybridNER:
-    """Combines DistilBERT token classification with regex patterns.
+    """Combines a model NER half with regex patterns.
 
-    DistilBERT handles: PER, ORG, LOC, DATE
-    Regex handles: technology, decision, prohibition, outcome
+    The model half is one of two engines:
+      * `bert`   — token classification, labels baked into the weights
+                   (PER, ORG, LOC, DATE; the shipped distilbert has no ru/uk);
+      * `gliner` — types passed in the prompt, so one set of weights covers both
+                   the four classic types and the domain ones.
+    Regex handles: technology, decision, prohibition, outcome — in every case.
 
-    Why: DistilBERT-NER is weak on multilingual subword splits.
-    Regex reliably catches structured patterns that models miss.
-    Expected latency: <50ms combined.
+    Why the regex half stays: models are weak on multilingual subword splits, and
+    regex reliably catches structured patterns they miss. It also keeps working
+    when the NER gate skips the model entirely.
     """
 
-    def __init__(self, model_path: str, tokenizer_path: str, **session_kwargs):
-        self._bert = BertNER(
-            model_path=model_path, tokenizer_path=tokenizer_path, **session_kwargs
-        )
+    def __init__(
+        self,
+        model_path: str,
+        tokenizer_path: str,
+        engine: str | None = None,
+        entity_types: list[str] | None = None,
+        **session_kwargs,
+    ):
+        engine = engine or "bert"
+        if engine not in _ENGINES:
+            # A typo in the manifest must not silently fall back to the old model:
+            # entities would keep arriving, just without ru/uk, and nothing would say so.
+            raise ValueError(f"Unknown NER engine: {engine!r} (expected one of {_ENGINES})")
+        self._engine = engine
+        self._entity_types = list(entity_types) if entity_types else DEFAULT_ENTITY_TYPES
+
+        if engine == "gliner":
+            from .gliner_engine import GLiNEREngine
+
+            self._model = GLiNEREngine(
+                model_path=model_path, tokenizer_path=tokenizer_path, **session_kwargs
+            )
+        else:
+            self._model = BertNER(
+                model_path=model_path, tokenizer_path=tokenizer_path, **session_kwargs
+            )
 
     def load(self) -> None:
-        """Load ONNX model (lazy by default via BertNER)."""
-        self._bert.load()
+        """Load the ONNX session (BertNER is lazy; GLiNEREngine loads in __init__)."""
+        loader = getattr(self._model, "load", None)
+        if loader is not None:
+            loader()
+
+    def _predict(self, text: str, threshold: float) -> list[dict[str, Any]]:
+        """Run the model half. Both engines return the same entity dict shape."""
+        if self._engine == "gliner":
+            return self._model.extract_entities(text, self._entity_types, threshold)
+        return self._model.predict_entities(text, threshold)
 
     async def extract_entities(
         self, text: str, threshold: float = 0.5, use_model: bool = True
@@ -109,7 +165,7 @@ class HybridNER:
                 raise _GateClosed
             loop = asyncio.get_running_loop()
             model_entities = await loop.run_in_executor(
-                None, self._bert.predict_entities, text, threshold
+                None, self._predict, text, threshold
             )
             entities.extend(model_entities)
         except _GateClosed:
@@ -187,5 +243,14 @@ class HybridNER:
         return False
 
     def close(self, *, shutdown: bool = False) -> None:
-        """Release resources. Shutdown-only."""
-        self._bert.close(shutdown=shutdown)
+        """Release resources. Shutdown-only.
+
+        BertNER guards the shutdown flag itself; GLiNEREngine has no such guard,
+        so the check lives here for it.
+        """
+        if self._engine == "gliner":
+            if not shutdown:
+                raise RuntimeError("Unexpected HybridNER.close outside shutdown")
+            self._model.close()
+            return
+        self._model.close(shutdown=shutdown)

@@ -183,6 +183,15 @@ class ModelDefinition:
     # default keeps current behaviour and only models that need it opt out.
     graph_optimization_level: str | None = None
     disable_prepacking: bool = False
+    # NER only. "bert" is token classification with a fixed label set baked into the
+    # weights; "gliner" takes the types in the prompt, so the same weights serve
+    # person/organization/location and the domain types. Absent -> "bert", which
+    # keeps the shipped distilbert working as the fallback for an instant rollback.
+    engine: str | None = None
+    # NER only, gliner engine: the types asked for on every call. They are part of
+    # the request, not of the model, so they belong in the manifest next to the model
+    # that reads them.
+    entity_types: list[str] | None = None
 
 @dataclass(frozen=True)
 class ModelManifest:

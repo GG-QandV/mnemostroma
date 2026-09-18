@@ -183,6 +183,16 @@ class PersistenceLayer:
         """Load all session embeddings for MatrixSearch hydration."""
         return await self._db.get_all_embeddings(expected_dim)
 
+    async def get_all_chunk_vectors(self, expected_dim: int) -> list[Any]:
+        """Load chunk vectors for the second level of the session index (E-2, D2)."""
+        return await self._db.get_all_chunk_vectors(expected_dim)
+
+    async def save_chunk_vectors(
+        self, session_id: str, vectors: list, dim: int, model_version: str | None = None
+    ) -> None:
+        """Persist a session's chunk vectors, replacing whatever was there."""
+        await self._db.save_chunk_vectors(session_id, vectors, dim, model_version)
+
     async def get_all_content_embeddings(self, expected_dim: int) -> list[Any]:
         """Load all content embeddings for content_index hydration."""
         return await self._db.get_all_content_embeddings(expected_dim)

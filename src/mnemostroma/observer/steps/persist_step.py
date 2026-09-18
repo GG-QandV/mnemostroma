@@ -49,6 +49,21 @@ def _derive_content_id(entities: list[dict], session_id: str) -> str:
     return f"{session_id}_content"
 
 
+def _index_chunk_vectors(ctx, session_id: str, chunk_vectors: list) -> None:
+    """Add a session's chunk vectors to the index under their own labels.
+
+    Search deduplicates by `session_id`, so several labels pointing at one session
+    collapse into a single result — the second level makes the session findable by its
+    parts without changing what a hit means.
+    """
+    if not ctx.session_index or not chunk_vectors:
+        return
+    labels = [ctx.allocate_chunk_label(session_id) for _ in chunk_vectors]
+    ctx.session_index.add_items(
+        [np.asarray(v, dtype=np.float32).flatten() for v in chunk_vectors], labels
+    )
+
+
 class PersistStep:
     """Steps 6-8: Create objects, update indices, and enqueue persistence."""
 
@@ -85,6 +100,9 @@ class PersistStep:
             content_full=pctx.event.text or None,
             event_role=getattr(pctx.event, "role", None),
         )
+        # Второй уровень индекса. На брифе они нужны потому, что перестроение
+        # индекса после вытеснения синхронно и до диска не дотянется.
+        pctx.sb.chunk_vectors = list(pctx.metadata.get("chunk_vectors_f32") or [])
 
         # ── Content Branch routing (Mechanism #12) ──────────────────────────
         _n_classify = getattr(ctx.config, "session_type_classify_after_n", 5)
@@ -166,6 +184,7 @@ class PersistStep:
                     ctx.session_index.add_items([vec_f32], [label])
                     ctx.id_to_sid[label] = session_id
                     ctx.sid_to_id[session_id] = label
+                    _index_chunk_vectors(ctx, session_id, pctx.sb.chunk_vectors)
         else:
             async with ctx.index_lock:
                 cont = detect_continuation(
@@ -183,6 +202,7 @@ class PersistStep:
                     ctx.session_index.add_items([vec_f32], [label])
                     ctx.id_to_sid[label] = session_id
                     ctx.sid_to_id[session_id] = label
+                    _index_chunk_vectors(ctx, session_id, pctx.sb.chunk_vectors)
 
         # Process continuation result
         is_new_entity = True
@@ -242,6 +262,18 @@ class PersistStep:
 
         if ctx.persistence is not None:
             await ctx.persistence.save_anchor(pctx.anchor)
+            if pctx.sb.chunk_vectors:
+                # Сессия попадёт в SQLite через очередь записи, а её чанковые
+                # векторы живут отдельной таблицей — без этого они существовали бы
+                # только до перезапуска демона.
+                try:
+                    await ctx.persistence.save_chunk_vectors(
+                        session_id,
+                        pctx.sb.chunk_vectors,
+                        dim=len(pctx.sb.chunk_vectors[0]),
+                    )
+                except Exception as e:
+                    logger.error(f"chunk vectors not persisted for {session_id}: {e}")
 
 
         # 7b. RAM indices

@@ -42,7 +42,6 @@ export function initSubmitListener(cb) {
   let isSubmitting = false;
 
   const handleSubmit = () => {
-    console.debug('[Mnemostroma-Perplexity-Debug] initSubmitListener: handleSubmit triggered, isSubmitting =', isSubmitting);
     if (isSubmitting) return;
     isSubmitting = true;
     cb();
@@ -52,9 +51,7 @@ export function initSubmitListener(cb) {
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       const activeEl = document.activeElement;
-      console.debug('[Mnemostroma-Perplexity-Debug] initSubmitListener: KeyDown Enter, activeElement =', activeEl);
       if (activeEl && activeEl.matches('[contenteditable="true"]')) {
-        console.debug('[Mnemostroma-Perplexity-Debug] initSubmitListener: Matches [contenteditable="true"], text =', activeEl.textContent);
         // Даем браузеру обработать событие, затем вызываем cb
         setTimeout(handleSubmit, 0);
       }
@@ -64,7 +61,6 @@ export function initSubmitListener(cb) {
   const handleClick = (e) => {
     const button = e.target.closest('button[aria-label*="Отправить"], button[aria-label*="Надіслати"], button[aria-label*="Send"], button.bg-button-bg');
     if (button) {
-      console.debug('[Mnemostroma-Perplexity-Debug] initSubmitListener: Click on submit button =', button);
       handleSubmit();
     }
   };
@@ -123,28 +119,21 @@ export function getStreamEndSignal(_selector, cb) {
  * @returns {string}
  */
 export function extractUserMessage(selector = '[contenteditable="true"]') {
-  console.debug('[Mnemostroma-Perplexity-Debug] extractUserMessage called with selector =', selector);
   try {
     const activeInput = document.querySelector(selector);
-    console.debug('[Mnemostroma-Perplexity-Debug] extractUserMessage: activeInput =', activeInput);
     if (activeInput) {
       const text = activeInput.textContent.trim();
-      console.debug('[Mnemostroma-Perplexity-Debug] extractUserMessage: activeInput text =', text);
       if (text) return text;
     }
 
     const sentMessages = document.querySelectorAll('[class*="group/query"]');
-    console.debug('[Mnemostroma-Perplexity-Debug] extractUserMessage: sentMessages found count =', sentMessages.length);
     if (sentMessages.length > 0) {
       const lastText = sentMessages[sentMessages.length - 1].textContent.trim();
-      console.debug('[Mnemostroma-Perplexity-Debug] extractUserMessage: sentMessages lastText =', lastText);
       return lastText;
     }
 
-    console.debug('[Mnemostroma-Perplexity-Debug] extractUserMessage: returning empty string');
     return '';
   } catch (err) {
-    console.error('[Mnemostroma-Perplexity-Debug] extractUserMessage error:', err);
     return '';
   }
 }
@@ -154,16 +143,12 @@ export function extractUserMessage(selector = '[contenteditable="true"]') {
  * @returns {string}
  */
 export function extractLlmResponse(selector) {
-  console.debug('[Mnemostroma-Perplexity-Debug] extractLlmResponse called with selector =', selector);
   try {
     const all = document.querySelectorAll(selector);
-    console.debug('[Mnemostroma-Perplexity-Debug] extractLlmResponse: elements found count =', all.length);
     if (all.length === 0) return '';
     const lastText = all[all.length - 1].textContent.trim();
-    console.debug('[Mnemostroma-Perplexity-Debug] extractLlmResponse: lastText =', lastText);
     return lastText;
   } catch (err) {
-    console.error('[Mnemostroma-Perplexity-Debug] extractLlmResponse error:', err);
     return '';
   }
 }

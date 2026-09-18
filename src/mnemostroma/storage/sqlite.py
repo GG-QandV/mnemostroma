@@ -529,6 +529,11 @@ class DatabaseManager:
             await self.db.execute("DELETE FROM sessions WHERE session_id = ?", (session_id,))
             await self.db.execute("DELETE FROM content_blocks WHERE session_id = ?", (session_id,))
             await self.db.execute("DELETE FROM precision_log WHERE session_id = ?", (session_id,))
+            # Orphan chunk vectors would hydrate into the index on the next start and
+            # answer searches for a session that no longer exists.
+            await self.db.execute(
+                "DELETE FROM session_chunk_vectors WHERE session_id = ?", (session_id,)
+            )
             await self.db.commit()
             logger.info(f"Session {session_id} deleted from SQLite")
         except Exception as e:
@@ -1400,6 +1405,72 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"load_session_steps failed: {e}")
         return results
+
+    async def save_chunk_vectors(
+        self, session_id: str, vectors: list, dim: int, model_version: str | None = None
+    ) -> None:
+        """Replace the chunk vectors of one session (E-2, D2).
+
+        Replace, not append: a re-embedded session must not leave the vectors of its
+        previous text in the index, or search would answer from text that no longer
+        exists.
+        """
+        import time
+
+        try:
+            await self.db.execute(
+                "DELETE FROM session_chunk_vectors WHERE session_id = ?", (session_id,)
+            )
+            if vectors:
+                now = int(time.time())
+                version = model_version or self._resolve_embedding_model_key(self.config)
+                await self.db.executemany(
+                    """INSERT INTO session_chunk_vectors
+                       (session_id, chunk_index, vec, dim, model_version, ts)
+                       VALUES (?, ?, ?, ?, ?, ?)""",
+                    [
+                        (session_id, i, vec.astype("float16").tobytes(), dim, version, now)
+                        for i, vec in enumerate(vectors)
+                    ],
+                )
+            await self.db.commit()
+        except Exception as e:
+            logger.error(f"save_chunk_vectors failed for {session_id}: {e}")
+
+    async def get_all_chunk_vectors(self, expected_dim: int) -> list[tuple[str, int, Any]]:
+        """All chunk vectors for index hydration: (session_id, chunk_index, vector)."""
+        import numpy as np
+
+        results: list[tuple[str, int, Any]] = []
+        try:
+            async with self.db.execute(
+                "SELECT session_id, chunk_index, vec FROM session_chunk_vectors "
+                "ORDER BY session_id, chunk_index"
+            ) as cursor:
+                async for session_id, chunk_index, raw in cursor:
+                    vec = np.frombuffer(raw, dtype=np.float16)
+                    if vec.shape[0] != expected_dim:
+                        # A vector of another model's dimension is not comparable; the
+                        # model_key check handles migration, this is the last guard.
+                        logger.warning(
+                            "chunk vector dim mismatch for %s#%s: expected %s, got %s",
+                            session_id, chunk_index, expected_dim, vec.shape[0],
+                        )
+                        continue
+                    results.append((session_id, chunk_index, vec))
+        except Exception as e:
+            logger.error(f"get_all_chunk_vectors failed: {e}")
+        return results
+
+    async def delete_chunk_vectors(self, session_id: str) -> None:
+        """Drop a session's chunk vectors — called when the session itself is deleted."""
+        try:
+            await self.db.execute(
+                "DELETE FROM session_chunk_vectors WHERE session_id = ?", (session_id,)
+            )
+            await self.db.commit()
+        except Exception as e:
+            logger.error(f"delete_chunk_vectors failed for {session_id}: {e}")
 
     async def insert_experience_vector(self, tag: str, charge: str,
                                        vec: bytes, dim: int, w0: float,

@@ -8,3 +8,4 @@ Core vector indexing and semantic logic.
 - `ConsolidationWorker`: Background process for Hot→Warm→Cold migration.
 - `ExperienceIndex`: Long-term experience clusters with decay support.
 - `Reranker`: TinyBERT cross-encoder for result reranking (lazy-loaded).
+- `process_vec.py`: Build Process Vector from step_log for Pattern Encoder (called by `dreamer.py` on idle close).

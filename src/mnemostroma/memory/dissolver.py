@@ -79,10 +79,9 @@ class Dissolver:
             if not can_evict(sb, self.ctx):
                 continue
             del self.ctx.ram_index[sb.session_id]
-            # P0: clean label mappings
-            label = self.ctx.sid_to_id.pop(sb.session_id, None)
-            if label is not None:
-                self.ctx.id_to_sid.pop(label, None)
+            # P0: clean label mappings — summary and chunk labels alike, or evicted
+            # text keeps answering searches through the labels left behind.
+            self.ctx.release_session_labels(sb.session_id)
             evicted_sessions.append(sb)      # F-2: track before count increment
             evicted_count += 1
 
@@ -210,6 +209,7 @@ def _rebuild_session_index(ctx: "SystemContext") -> None:
     ctx.session_index.clear()
     ctx.sid_to_id.clear()
     ctx.id_to_sid.clear()
+    ctx.sid_to_chunk_labels.clear()
     ctx._next_session_label = 0
 
     vectors, labels = [], []
@@ -224,6 +224,12 @@ def _rebuild_session_index(ctx: "SystemContext") -> None:
         ctx.id_to_sid[label] = sid
         vectors.append(np.array(emb, dtype='float32').flatten())
         labels.append(label)
+        # Chunk vectors ride along: they are held on the brief precisely so that a
+        # rebuild does not quietly drop the second level of the index.
+        for chunk_vec in getattr(sb, 'chunk_vectors', None) or []:
+            chunk_label = ctx.allocate_chunk_label(sid)
+            vectors.append(np.array(chunk_vec, dtype='float32').flatten())
+            labels.append(chunk_label)
 
     if vectors:
         ctx.session_index.add_items(vectors, labels)

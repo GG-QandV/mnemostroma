@@ -1,5 +1,5 @@
 {
-  "version": "1.1",
+  "version": "1.2",
   "active_models": {
     "session_embedder": {
       "path": "models/multilingual-e5-small/onnx/model_int8.onnx",
@@ -16,8 +16,18 @@
       "max_length": 512
     },
     "ner": {
-      "path": "models/distilbert-ner/onnx/model_int8.onnx",
-      "tokenizer_path": "models/distilbert-ner/tokenizer.json"
+      "path": "models/gliner-small-v25/model_quantized.onnx",
+      "tokenizer_path": "models/gliner-small-v25/tokenizer.json",
+      "engine": "gliner",
+      "entity_types": [
+        "person",
+        "organization",
+        "location",
+        "date",
+        "technology",
+        "product"
+      ],
+      "graph_optimization_level": "ORT_DISABLE_ALL"
     },
     "reranker": {
       "path": "models/tinybert-l2-v2/onnx/model_quint8_avx2.onnx",
@@ -40,17 +50,18 @@
       "size_mb": 118,
       "description": "Multilingual E5-small INT8 — session & content embedder (384d)"
     },
-    "distilbert-ner": {
-      "hf_repo": "Xenova/distilbert-base-multilingual-cased-ner-hrl",
-      "local_dir": "models/distilbert-ner",
+    "gliner-small-v25": {
+      "hf_repo": "GG-QandV/gliner_small-v2.5-onnx",
+      "local_dir": "models/gliner-small-v25",
       "files": [
-        "onnx/model_int8.onnx",
+        "model_quantized.onnx",
         "tokenizer.json",
-        "config.json"
+        "tokenizer_config.json",
+        "gliner_config.json"
       ],
       "license": "Apache-2.0",
-      "size_mb": 130,
-      "description": "DistilBERT multilingual NER INT8 — HybridNER base model"
+      "size_mb": 196,
+      "description": "GLiNER small v2.5 INT8 (ONNX export of gliner-community/gliner_small-v2.5) — HybridNER model half: ru/uk, prompt-driven entity types"
     },
     "tinybert-l2-v2": {
       "hf_repo": "cross-encoder/ms-marco-TinyBERT-L2-v2",

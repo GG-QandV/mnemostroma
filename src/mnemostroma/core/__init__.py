@@ -106,6 +106,8 @@ class ModelRegistry:
             self._ner = GLiNERObserver(
                 path,
                 tok_path,
+                engine=m_def.engine,
+                entity_types=m_def.entity_types,
                 graph_optimization_level=m_def.graph_optimization_level,
                 disable_prepacking=m_def.disable_prepacking,
             )
@@ -242,6 +244,10 @@ class SystemContext:
     precision_ram: dict[tuple, dict[str, Any]] = field(default_factory=dict)
     precision_warnings: list[Any] = field(default_factory=list)
 
+    # session_id -> labels of its chunk vectors (E-2, D2). Separate from sid_to_id,
+    # which stays 1:1 and holds the summary vector's label.
+    sid_to_chunk_labels: dict[str, list[int]] = field(default_factory=dict)
+
     # subconscious anchors
     anchor_index: Optional['AnchorIndex'] = field(default_factory=lambda: AnchorIndex(max_capacity=1000))
 
@@ -299,6 +305,38 @@ class SystemContext:
         label = self._next_session_label
         self._next_session_label += 1
         return label
+
+    def allocate_chunk_label(self, session_id: str) -> int:
+        """Assign one more index label to a session, for a chunk vector (E-2, D2).
+
+        `sid_to_id` stays 1:1 and keeps pointing at the summary vector — it is what
+        the rest of the code means by "the session's label". Chunk labels only ever
+        need the reverse direction, and `id_to_sid` already provides it: search
+        deduplicates by session_id (`memory/search.py:55`), so several labels for one
+        session collapse into one result on their own.
+        """
+        label = self._next_session_label
+        self._next_session_label += 1
+        self.id_to_sid[label] = session_id
+        self.sid_to_chunk_labels.setdefault(session_id, []).append(label)
+        return label
+
+    def release_session_labels(self, session_id: str) -> list[int]:
+        """Forget every label of a session — summary and chunks alike.
+
+        Returns the labels that were dropped. Leaving chunk labels behind would keep
+        evicted text answering searches, which is exactly the failure the summary
+        label cleanup was written to prevent.
+        """
+        dropped: list[int] = []
+        label = self.sid_to_id.pop(session_id, None)
+        if label is not None:
+            self.id_to_sid.pop(label, None)
+            dropped.append(label)
+        for chunk_label in self.sid_to_chunk_labels.pop(session_id, []):
+            self.id_to_sid.pop(chunk_label, None)
+            dropped.append(chunk_label)
+        return dropped
 
     def get_content_label(self, content_id: str) -> int:
         """Get existing or assign new deterministic label for content vector."""

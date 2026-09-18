@@ -67,10 +67,16 @@ class ContentManager:
 
         # 2. Vectorization (BGE-M3)
         from ..models.embedding_utils import aencode_chunks, chunk_content
-        chunks = chunk_content(text, content_type)
-        
-        if self.ctx.models and self.ctx.models.content_embedder:
-            embedding = await aencode_chunks(self.ctx.models.content_embedder, chunks)
+
+        # Границы считаются в токенах той модели, которая потом их и кодирует —
+        # иначе чанк «влезает» по нашим меркам и обрезается по её.
+        embedder = self.ctx.models.content_embedder if self.ctx.models else None
+        chunks = chunk_content(
+            text, content_type, tokenizer=getattr(embedder, "tokenizer", None)
+        )
+
+        if embedder:
+            embedding = await aencode_chunks(embedder, chunks)
         else:
             dim = 768
             embedding = np.zeros(dim, dtype=np.float16)

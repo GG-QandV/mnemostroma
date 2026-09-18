@@ -13,10 +13,23 @@ class NERObserver:
     Adheres to Mnemostroma Rule 1: No torch, no transformers.
     Optimized for DistilBERT int8 models in 700MB budget environments.
     """
-    def __init__(self, model_path: str, tokenizer_path: str, **session_kwargs):
+    def __init__(
+        self,
+        model_path: str,
+        tokenizer_path: str,
+        engine: str | None = None,
+        entity_types: list[str] | None = None,
+        **session_kwargs,
+    ):
         self.model_path = model_path
         self.tokenizer_path = tokenizer_path
-        self.model = HybridNER(model_path, tokenizer_path, **session_kwargs)
+        self.model = HybridNER(
+            model_path,
+            tokenizer_path,
+            engine=engine,
+            entity_types=entity_types,
+            **session_kwargs,
+        )
         self._loaded = False
         
     def _load(self) -> None:

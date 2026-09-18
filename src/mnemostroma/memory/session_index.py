@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -72,3 +72,10 @@ class SessionBrief:
     content_full: str | None = None
     # Source role for the session (user/agent, set by Observer from pctx.event.role)
     event_role: str | None = None
+
+    # Vectors of the chunks this session's text was split into (E-2, D2). Kept in RAM
+    # so that rebuilding the index after eviction restores them: they live in SQLite
+    # too, but a rebuild is synchronous and cannot go to disk, and a rebuilt index
+    # without them would silently stop matching anything below the summary level.
+    # ~768 bytes per chunk, a few per session — cheap next to what they buy.
+    chunk_vectors: list = field(default_factory=list)

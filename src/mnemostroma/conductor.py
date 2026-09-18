@@ -313,11 +313,33 @@ class Conductor:
             vectors.append(vec.astype('float32'))
             labels.append(label)
 
-        ctx.session_index.add_items(vectors, labels)
-        ctx._next_session_label = len(embeddings)
+        # Chunk vectors (E-2, D2): the second level of the index. Loaded after the
+        # summaries so their labels continue the same sequence.
+        chunk_rows = []
+        if hasattr(ctx.persistence, "get_all_chunk_vectors"):
+            chunk_rows = await ctx.persistence.get_all_chunk_vectors(expected_dim)
+        elif getattr(ctx, "db", None) is not None:
+            chunk_rows = await ctx.db.get_all_chunk_vectors(expected_dim)
 
-        logger.info(f"Hydration complete: {len(embeddings)} sessions restored. "
-                    f"next_label={ctx._next_session_label}")
+        chunks_loaded = 0
+        for sid, _chunk_index, vec in chunk_rows:
+            if sid not in ctx.ram_index:
+                # The session did not make it into the window; its chunks would be
+                # vectors pointing at a brief that is not in RAM.
+                continue
+            chunk_label = ctx.allocate_chunk_label(sid)
+            vectors.append(vec.astype('float32'))
+            labels.append(chunk_label)
+            ctx.ram_index[sid].chunk_vectors.append(vec)
+            chunks_loaded += 1
+
+        ctx.session_index.add_items(vectors, labels)
+        # max + 1, not len(): chunk labels make the sequence longer than the number of
+        # sessions, and a count here would hand out labels that are already in use.
+        ctx._next_session_label = max(labels) + 1 if labels else 0
+
+        logger.info(f"Hydration complete: {len(embeddings)} sessions restored, "
+                    f"{chunks_loaded} chunk vectors. next_label={ctx._next_session_label}")
 
         # 3. Hydrate content matrix
         content_model_def = ctx.config.manifest.active_models.get("content_embedder") if ctx.config.manifest else None
