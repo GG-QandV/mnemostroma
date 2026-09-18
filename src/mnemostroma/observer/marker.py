@@ -279,26 +279,7 @@ async def marker(
         logger.debug(f"marker: discarding text in stoplist: {stripped[:50]}...")
         return MarkerResult.discard()
 
-    # ── User path: structural only, nearly always creates an Entity ───────
-    if role == SourceType.USER:
-        temp = infer_temporal(text, chain)
-        entity = Entity.create(
-            what=stripped,
-            entity_type=EntityType.FACT,
-            source=SourceType.USER,
-            temp=temp,
-            importance=0.7,  # USER_INTENT default
-            t_rel=_build_t_rel(temp, chain),
-        )
-        if pending_emotions:
-            resolve_pending_emotions(entity, pending_emotions)
-        return MarkerResult(
-            action=MarkerAction.CREATE_ENTITY,
-            entity=entity,
-            confidence=1.0,
-        )
-
-    # ── Agent / tool path: structural prefilter + semantic classification ──
+    # ── General path: structural prefilter + semantic classification ─────
     if not structural_prefilter(stripped):
         # Atmosphere: text has time signal but no entity content
         temp = infer_temporal(text, chain)
@@ -398,9 +379,9 @@ def _importance_from_label(label: str) -> float:
         EntityType.DECISION.value: 0.9,
         "principle":               1.0,
         "urgency":                 0.85,
-        EntityType.FACT.value:     0.6,
+        EntityType.FACT.value:     0.45,
         EntityType.CODE.value:     0.7,
-        EntityType.EVENT.value:    0.65,
+        EntityType.EVENT.value:    0.50,
         EntityType.QUESTION.value: 0.5,
         EntityType.RESULT.value:   0.75,
     }.get(label, 0.5)
@@ -408,6 +389,9 @@ def _importance_from_label(label: str) -> float:
 
 # Lightweight keyword classifier — used when embedder is unavailable
 _KEYWORD_MAP = [
+    # Critical signals (high priority — prevents background fallback for urgent content)
+    (EntityType.DECISION.value, re.compile(
+        r"\b(critical|urgent|blocker|required|mandatory|критичн|требовани[ея]|дедлайн|блокер|обязательн|срочн)\b", re.I)),
     (EntityType.DECISION.value, re.compile(
         r"\b(decided|chosen|rejected|forbidden|решили|выбрали|отказались)\b", re.I)),
     (EntityType.CODE.value, re.compile(

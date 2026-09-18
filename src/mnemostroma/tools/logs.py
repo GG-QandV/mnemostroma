@@ -102,26 +102,37 @@ def analyze_filter(logs: list[dict], report: AnalysisReport):
     if not filter_logs:
         return
 
-    importance_counts = Counter(l["data"].get("importance") for l in filter_logs)
-    ner_requested = sum(1 for l in filter_logs if l["data"].get("needs_ner"))
+    # Two kinds of record share this component: the gate event carries needs_ner,
+    # importance is decided later. Counting each over the other's records would
+    # report a 0% background rate that says nothing about the filter.
+    graded = [l for l in filter_logs if l["data"].get("importance") is not None]
+    gated = [l for l in filter_logs if "needs_ner" in l["data"]]
+    importance_counts = Counter(l["data"]["importance"] for l in graded)
+    ner_requested = sum(1 for l in gated if l["data"]["needs_ner"])
 
     report.filter_stats = {
         "total": len(filter_logs),
         "importance_distribution": dict(importance_counts),
-        "ner_call_rate_actual": round(ner_requested / len(filter_logs), 3) if filter_logs else 0,
-        "background_percent": round(importance_counts.get("background", 0) / len(filter_logs) * 100, 1),
+        "ner_call_rate_actual": round(ner_requested / len(gated), 3) if gated else 0,
+        "ner_gate_reasons": dict(Counter(l["data"].get("reason") for l in gated)),
+        "background_percent": (
+            round(importance_counts.get("background", 0) / len(graded) * 100, 1)
+            if graded else None
+        ),
     }
 
     # Warning: if >80% background — filter is too aggressive
     bg_pct = report.filter_stats["background_percent"]
-    if bg_pct > 80:
+    if bg_pct is None:
+        pass
+    elif bg_pct > 80:
         report.warnings.append(
             f"Filter marks {bg_pct}% as background — possibly too aggressive. "
             f"Consider adding more importance_signals or ↓ observer_ner_call_rate_target."
         )
 
     # Warning: if <30% background — filter is too permissive
-    if bg_pct < 30:
+    elif bg_pct < 30:
         report.warnings.append(
             f"Filter marks only {bg_pct}% as background — possibly too permissive. "
             f"RAM may fill with low-value sessions."

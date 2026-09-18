@@ -16,10 +16,11 @@ if TYPE_CHECKING:
 
 @dataclass
 class IOEvent:
-    """Input event for the observer pipeline."""
     text: str
     session_id: str
     intent_vector: np.ndarray | None = None
+    role: str | None = None
+    project_id: str | None = None
 
 
 @dataclass

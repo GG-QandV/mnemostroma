@@ -137,6 +137,31 @@ def validate_gateway_config(config: GatewayConfig) -> None:
             + "\n".join(credential_issues)
         )
 
+    for pid, profile in config.providers.items():
+        if profile.enabled and not profile.exposed_models:
+            raise GatewayProfileError(
+                f"providers.{pid}: exposed_models must not be empty "
+                "when enabled=true"
+            )
+
+    all_model_ids: list[str] = []
+    for pid, profile in config.providers.items():
+        if profile.enabled:
+            all_model_ids.extend(profile.exposed_models)
+
+    from collections import Counter
+    duplicates = [
+        model_id for model_id, count in Counter(all_model_ids).items()
+        if count > 1
+    ]
+    if duplicates:
+        import warnings
+        warnings.warn(
+            f"Duplicate model_id across providers (cosmetic only "
+            f"under path-based routing): {duplicates}",
+            stacklevel=2,
+        )
+
     if config.observation_mode not in ("off", "active"):
         raise GatewayConfigError(
             f"gateway.observation_mode must be 'off' or 'active', "

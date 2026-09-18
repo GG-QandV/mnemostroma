@@ -1,3 +1,24 @@
+## Unreleased
+
+### Added
+- **feat(models)**: режимы pooling `mean|cls` в `ONNXEmbeddingEngine` — нужны для эмбеддеров с CLS-пулингом (granite-embedding-r2). Неизвестный режим — `ValueError`, без молчаливого отката на mean.
+- **feat(config)**: `ModelDefinition.model_key` — идентификатор эмбеддера для инвалидации индекса. Проверка по размерности не ловит смену модели 384 → 384: векторы читаются, но несравнимы.
+- **feat(config)**: `ModelDefinition.graph_optimization_level` и `disable_prepacking` — настройки сессии ORT на модель. `ORT_ENABLE_ALL` сливает Gather+LayerNorm в `EmbedLayerNormalization` и разворачивает низкобитные таблицы эмбеддингов в fp32 (замерено: +486 MB на INT4-энкодере). Дефолт сохраняет прежнее поведение.
+- **feat(storage)**: `DatabaseManager.check_embedding_model()` — инвалидация индекса по `model_key` поверх таблицы `embedding_model_registry`. Вайп запрещён, пока тексты сессий целы: пишется ERROR `reembed_required` и флаг `embedding_migration_pending`, память сохраняется.
+- **feat(models)**: `models/footprint.py` — процесс-уровневый учёт памяти ONNX-сессий. Каждая сессия записывает свой прирост RSS при загрузке и снимает его при освобождении.
+- **feat(observer)**: гейт модельного NER — `needs_model_ner()` в `observer/filter.py`. Модель — самый дорогой шаг конвейера и запускалась на 100% наблюдений при цели `observer.ner_call_rate_target` = 0.3. Гейт открывают детерминированные сигналы: заглавная буква в середине предложения, дата, precision-items, длинный текст. Решение детерминированное намеренно: сэмплирование ради попадания в целевую долю заставило бы один и тот же текст вести себя по-разному от прогона к прогону, а невоспроизводимую память нечем отлаживать. Регексная половина `HybridNER` работает всегда, гейт снимает только модель.
+- **test**: `tests/test_pooling_modes.py`, `tests/test_embedding_model_migration.py`, `tests/test_model_footprint.py`, `tests/test_ner_label_map.py`, `tests/test_ner_gate.py`.
+
+### Changed
+- **fix(observer)**: при сбое эмбеддера сессия больше не индексируется случайным вектором. Случайный единичный вектор в 384 измерениях не нейтрален — он оказывается на среднем косинусе ко всему и всплывает в выдаче как шум, попутно смещая пороги continuation/conflict. Сессия сохраняется в SQLite с `embedding = NULL`, растёт счётчик `embed_failures`, вектор восстанавливается переэмбеддингом.
+- **fix(models)**: `id2label` для NER читается из `config.json` модели, а не из захардкоженной карты на 9 меток. Модель с другим числом меток (WikiANN — 7, без DATE) сдвигала бы каждый id: PER читался бы как DATE, ORG как PER, без единой ошибки в логе. На первом прогоне число меток сверяется с размерностью логитов, при несовпадении — `ValueError`.
+- **fix(models)**: ключ дедупликации `EnginePool` учитывает pooling и query-префикс. Раньше две записи манифеста на один файл с разным pooling получали один движок, и вторая роль молча работала в режиме первой.
+- **fix(memory)**: `onnx_baseline_mb` больше не одноразовый снимок RSS. Модели грузятся лениво, поэтому их вес попадал на «вытесняемую» сторону `evictable_mb = rss - baseline` (`dissolver.py:44`) — и сессии вытеснялись, чтобы освободить память под веса моделей, которую вытеснение освободить не может. Теперь baseline хранит только процессную часть, а вес моделей учитывается динамически через `models/footprint.py`; Dissolver читает `ctx.onnx_baseline_total_mb`.
+- **fix(cli)**: `mnemostroma --help` и `-h` завершались кодом 2. Парсер строится с `add_help=False` и своих опций не имеет, поэтому argparse считал флаг лишним аргументом. Теперь оба, как и `help`, печатают справку.
+- **fix(deps)**: `mcp>=1.0` допускал mcp 2.x, где низкоуровневый `Server` лишился декораторов `list_tools`/`call_tool` — свежая установка падала на импорте `integration/mcp_server.py`. Пин `mcp>=1.0,<2`. В dev-extras добавлен `pytest-mock`: без него не собирались тесты с фикстурой `mocker`.
+- **test**: полный прогон приведён в зелёное (1729 passed, 52 skipped). `tests/test_behavioral.py` был написан под давно удалённый API (`SQLiteStorage.create`, `ScoringComponents`, `HNSW`, `http_gateway`, `MCPStdioAdapter`, `Config.version`) и местами не запускался годами — переписан под живой код. Тесты, которым нужны веса моделей или установленный демон, теперь пропускаются с причиной, а не падают.
+- **fix(storage)**: метка `embedding_model_version` берётся из активного манифеста, а не из литерала `"multilingual-e5-small"` в четырёх местах.
+
 ## 2.5.0 — 2026-07-01
 
 ### Added

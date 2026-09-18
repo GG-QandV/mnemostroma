@@ -6,7 +6,8 @@ Encapsulates all SQLite access behind two explicit write paths:
   Path 1 — enqueue_session():  queued, 5-second batch cycle.
             Sessions can tolerate up to 5-second loss on crash.
 
-  Path 2 — save_anchor() / save_experience():  guaranteed immediate await.
+  Path 2 — save_anchor() / save_experience() / null_content_full():
+            guaranteed immediate await.
             These are sacred writes — NEVER lost, pipeline blocks until done.
 
 Also provides:
@@ -108,6 +109,19 @@ class PersistenceLayer:
             emotion_intensity_sum=emotion_intensity_sum,
         )
 
+    async def null_content_full(self, session_id: str) -> None:
+        """Nullify content_full at Skeleton level (decay_level >= 2).
+
+        Sacred write: executed immediately, caller blocks until committed.
+        Reduces storage footprint for long-lived unused sessions once
+        their anchor descends to Skeleton dissolution level.
+        """
+        await self._db.db.execute(
+            "UPDATE sessions SET content_full = NULL WHERE session_id = ?",
+            (session_id,),
+        )
+        await self._db.db.commit()
+
     # ------------------------------------------------------------------
     # Flush / sync
     # ------------------------------------------------------------------
@@ -161,9 +175,9 @@ class PersistenceLayer:
     # Hydration reads — startup only (WorkingMemory bootstrap)
     # ------------------------------------------------------------------
 
-    async def get_all_session_briefs(self) -> list[Any]:
-        """Load all session metadata for ram_index hydration."""
-        return await self._db.get_all_session_briefs()
+    async def get_all_session_briefs(self, limit: int | None = None) -> list[Any]:
+        """Load session metadata for ram_index hydration (capped)."""
+        return await self._db.get_all_session_briefs(limit=limit)
 
     async def get_all_embeddings(self, expected_dim: int) -> list[Any]:
         """Load all session embeddings for MatrixSearch hydration."""
@@ -241,28 +255,36 @@ class PersistenceLayer:
                 id         INTEGER PRIMARY KEY AUTOINCREMENT,
                 session_id TEXT    NOT NULL,
                 text       TEXT    NOT NULL,
+                project_id TEXT,
                 created_at INTEGER NOT NULL DEFAULT (unixepoch()),
                 status     TEXT    NOT NULL DEFAULT 'pending',
                 retry      INTEGER NOT NULL DEFAULT 0
             )
         ''')
+        try:
+            await self._db.db.execute(
+                "ALTER TABLE observe_outbox ADD COLUMN project_id TEXT"
+            )
+            await self._db.db.commit()
+        except Exception:
+            pass
         await self._db.db.execute(
             "CREATE INDEX IF NOT EXISTS idx_outbox_status "
             "ON observe_outbox(status, created_at)"
         )
         await self._db.db.commit()
 
-    async def outbox_put(self, session_id: str, text: str) -> int:
+    async def outbox_put(self, session_id: str, text: str, project_id: str | None = None) -> int:
         cur = await self._db.db.execute(
-            "INSERT INTO observe_outbox (session_id, text) VALUES (?,?)",
-            (session_id, text),
+            "INSERT INTO observe_outbox (session_id, text, project_id) VALUES (?,?,?)",
+            (session_id, text, project_id),
         )
         await self._db.db.commit()
         return cur.lastrowid
 
     async def outbox_pending(self, limit: int = 20) -> list[dict]:
         async with self._db.db.execute(
-            '''SELECT id, session_id, text, retry
+            '''SELECT id, session_id, text, retry, project_id
                FROM observe_outbox
                WHERE status = 'pending'
                ORDER BY created_at
@@ -271,7 +293,7 @@ class PersistenceLayer:
         ) as cur:
             rows = await cur.fetchall()
         return [
-            {"id": r[0], "session_id": r[1], "text": r[2], "retry": r[3]}
+            {"id": r[0], "session_id": r[1], "text": r[2], "retry": r[3], "project_id": r[4]}
             for r in rows
         ]
 

@@ -205,6 +205,69 @@ async def _check_proxy(timeout: int) -> None:
         _kill(_PID_PROXY, signal.SIGKILL)
 
 
+# PID → monotonic timestamp when this PID was first observed in state T.
+# Cleared once the PID is no longer found in T (resumed, or gone).
+_stopped_adapters_seen_at: dict[int, float] = {}
+
+
+def _check_stale_adapters(threshold_sec: int) -> None:
+    """Kill mcp_stdio_adapter processes stuck in Stopped (T) state.
+
+    Each IDE owns its own adapter instance via stdin/stdout pipe — unlike
+    the daemon this is NOT a singleton, so duplicates are normal and must
+    never be swept. Only individual PIDs stuck in T longer than
+    threshold_sec (measured from first sighting, not process age) are killed.
+    Zombie (Z) processes are left alone — kill -9 is a no-op on them, only
+    the parent/init reaping them clears it.
+    """
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["pgrep", "-f", "mcp_stdio_adapter"],
+            capture_output=True, text=True,
+        )
+        pids = [int(p) for p in result.stdout.split()]
+    except Exception as e:
+        logger.error(f"_check_stale_adapters pgrep failed: {e}")
+        return
+
+    if not pids:
+        _stopped_adapters_seen_at.clear()
+        return
+
+    now = time.monotonic()
+    seen_now: set[int] = set()
+
+    for pid in pids:
+        try:
+            with open(f"/proc/{pid}/stat") as f:
+                stat_field = f.read().split(")", 1)[1].split()[0]
+        except Exception:
+            continue
+
+        if stat_field != "T":
+            continue
+
+        seen_now.add(pid)
+        first_seen = _stopped_adapters_seen_at.setdefault(pid, now)
+        stalled_for = now - first_seen
+
+        if stalled_for >= threshold_sec:
+            logger.warning(
+                f"mcp_stdio_adapter PID {pid} stuck in T for {stalled_for:.0f}s → SIGKILL"
+            )
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                pass
+            _stopped_adapters_seen_at.pop(pid, None)
+
+    # Drop bookkeeping for PIDs that resumed or disappeared.
+    for pid in list(_stopped_adapters_seen_at):
+        if pid not in seen_now:
+            _stopped_adapters_seen_at.pop(pid, None)
+
+
 async def run() -> None:
     logging.basicConfig(
         level=logging.INFO,
@@ -220,12 +283,14 @@ async def run() -> None:
         check_int = config.watchdog.check_interval_sec
         startup_failsafe = config.watchdog.startup_failsafe_sec
         proxy_timeout = getattr(config.watchdog, "proxy_timeout_sec", PROXY_TIMEOUT)  # PATCH-WD-2026-05-17
+        adapter_stale_threshold = config.watchdog.adapter_stale_threshold_sec
     except Exception as e:
         logger.warning(f"Failed to load config, using defaults: {e}")
         hb_timeout = HEARTBEAT_TIMEOUT
         check_int = CHECK_INTERVAL
         startup_failsafe = STARTUP_FAILSAFE
         proxy_timeout = PROXY_TIMEOUT  # PATCH-WD-2026-05-17
+        adapter_stale_threshold = 20
 
     logger.info(
         f"Watchdog started: check every {check_int}s, "
@@ -293,6 +358,8 @@ async def run() -> None:
             _check_daemon(hb_timeout),
             _check_proxy(proxy_timeout)
         )
+
+        _check_stale_adapters(adapter_stale_threshold)
 
         # Embedded SSE health — warn only, do not kill daemon
         if not await _sse_healthy():

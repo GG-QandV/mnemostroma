@@ -1302,7 +1302,7 @@ def dispatch(args_namespace: argparse.Namespace) -> None:
     command = args_namespace.command
     cargs = args_namespace.args
     
-    if not command:
+    if not command or command == "help":
         _print_help()
         return
 

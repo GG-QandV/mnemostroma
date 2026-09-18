@@ -86,6 +86,9 @@ class Conductor:
         
         # B0.5: Dimension Migration (Wipe stale embeddings if 768 -> 384 mismatch)
         await db_manager.check_embedding_dim(config.search.embedding_dim)
+        # B0.5b: Embedder Migration (same dim, different model — e5 -> granite).
+        # Refuses to wipe while session texts survive; asks for re-embedding instead.
+        await db_manager.check_embedding_model()
         # B0.6: Experience schema migration (adds emotion columns if missing — v1.4)
         await db_manager.check_experience_schema()
         # B0.7: Anchor t_rel migration (adds t_rel column if missing — v1.6 §5.1)

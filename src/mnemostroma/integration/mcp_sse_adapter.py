@@ -148,7 +148,6 @@ def make_mcp_app(conductor=None):
         ]
     )
 
-
 def make_observe_app(conductor=None):
     async def handle_mcp_config(request):
         from mnemostroma.integration.tunnel.state import get_tunnel_url
@@ -228,20 +227,32 @@ async def run(
     mcp_host = host if embedded else "0.0.0.0"
     signal_handlers = not embedded  # daemon owns signal handlers in embedded mode
 
+    import contextlib
+
     mcp_config = uvicorn.Config(
         make_mcp_app(conductor=conductor),
         host=mcp_host,
         port=port,
         log_level="warning" if embedded else "info",
     )
+    mcp_config.install_signal_handlers = signal_handlers
+
     obs_config = uvicorn.Config(
         make_observe_app(conductor=conductor),
         host="127.0.0.1",
         port=port_ext or 8766,
         log_level="warning" if embedded else "info",
     )
+    obs_config.install_signal_handlers = signal_handlers
 
-    servers = [uvicorn.Server(mcp_config)]
+    mcp_server = uvicorn.Server(mcp_config)
+    if not signal_handlers:
+        @contextlib.contextmanager
+        def fake_capture_signals():
+            yield
+        mcp_server.capture_signals = fake_capture_signals
+
+    servers = [mcp_server]
 
     if not embedded:
         logging.basicConfig(level=logging.INFO)
@@ -249,13 +260,28 @@ async def run(
         logger.info(f"  MCP SSE: http://127.0.0.1:{port}/sse (Auth required)")
 
     if port_ext and not is_port_in_use(port_ext, "127.0.0.1"):
-        servers.append(uvicorn.Server(obs_config))
+        obs_server = uvicorn.Server(obs_config)
+        if not signal_handlers:
+            @contextlib.contextmanager
+            def fake_capture_signals():
+                yield
+            obs_server.capture_signals = fake_capture_signals
+        servers.append(obs_server)
         if not embedded:
             logger.info(f"  Observe: http://127.0.0.1:{port_ext}/observe (Localhost only)")
     elif not embedded:
         logger.info(f"  Observe: Port {port_ext} already in use (handled by another adapter)")
 
-    await asyncio.gather(*(s.serve() for s in servers))
+    coros = [s.serve() for s in servers]
+
+    # opencode MITM proxy — only if the MITM CA exists (mnemostroma setup)
+    if (_MNEMO_DIR / "mitm-ca-cert.pem").exists():
+        from .mnemo_mitm_proxy import run as run_mitm_proxy
+        coros.append(run_mitm_proxy(conductor=conductor))
+        if not embedded:
+            logger.info("  MITM proxy: http://127.0.0.1:8764 (opencode HTTPS_PROXY)")
+
+    await asyncio.gather(*coros)
 
 
 if __name__ == "__main__":

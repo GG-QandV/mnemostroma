@@ -5,6 +5,20 @@ import numpy as np
 
 
 @dataclass
+class RawObservation:
+    """Raw MITM proxy observation queued for async SQLite write.
+
+    Created by mnemo_mitm_proxy._observe() via dispatch("observe_raw", ...),
+    queued via DatabaseManager.queue_write(), and flushed to the
+    raw_observations table by the single-writer worker task — never
+    on the caller's event loop.
+    """
+    session_id: str
+    role: str
+    text: str
+
+
+@dataclass
 class SessionBrief:
     """Single session in RAM memory index.
     
@@ -36,8 +50,7 @@ class SessionBrief:
     score: float
     resolution: float
     created_at: int
-    
-    # v1.3 / v1.4 fields
+    project_id: str | None = None
     conflict_flag: bool = False
     urgency: str = "none"
     deadline_ts: int | None = None

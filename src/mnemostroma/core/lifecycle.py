@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
 import asyncio
 import logging
+import os
 import signal
 import sys
 from typing import TYPE_CHECKING
@@ -21,6 +22,11 @@ def register_signal_handlers(conductor: "Conductor") -> None:
         # Unix: add_signal_handler works on SelectorEventLoop
         def handle_termination():
             logger.info("Graceful shutdown triggered via signal.")
+            # Kill the entire process group — catches any forked orphans
+            try:
+                os.killpg(os.getpgid(0), signal.SIGTERM)
+            except (ProcessLookupError, PermissionError, OSError):
+                pass
             if main_task:
                 main_task.cancel()
 

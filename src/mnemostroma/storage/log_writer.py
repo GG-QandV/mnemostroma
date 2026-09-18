@@ -23,8 +23,10 @@ class LogWriter:
     async def start(self):
         """Initialize DB and start flush worker."""
         self._db = await aiosqlite.connect(self.db_path)
-        await self._db.execute("PRAGMA journal_mode=WAL")
-        await self._db.execute("PRAGMA synchronous=NORMAL")
+        async with self._db.execute("PRAGMA journal_mode=WAL") as cur:
+            await cur.fetchall()
+        async with self._db.execute("PRAGMA synchronous=NORMAL") as cur:
+            await cur.fetchall()
         
         await self._db.execute("""
         CREATE TABLE IF NOT EXISTS onnx_logs (
@@ -124,7 +126,8 @@ class LogWriter:
                     if self._flush_count >= 5000:
                         self._flush_count = 0
                         try:
-                            await self._db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                            async with self._db.execute("PRAGMA wal_checkpoint(TRUNCATE)") as cur:
+                                await cur.fetchall()
                         except Exception as e:
                             logger.warning(f"LogWriter checkpoint failed: {e}")
 

@@ -4,6 +4,7 @@
 SCHEMA_SESSIONS = """
 CREATE TABLE IF NOT EXISTS sessions (
     session_id              TEXT PRIMARY KEY,
+    project_id              TEXT DEFAULT NULL,
     created_at              INTEGER,
     updated_at              INTEGER,
     importance              TEXT,
@@ -28,6 +29,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     urgency_active          INTEGER DEFAULT 0,
     urgency_expired         INTEGER DEFAULT 0,
     bare_entity             INTEGER DEFAULT 0,
+    event_role              TEXT,
     embedding_model_version TEXT    DEFAULT 'multilingual-e5-small',
     embedding               BLOB    -- float16 768d binary
 );
@@ -109,6 +111,7 @@ INDICES = [
     "CREATE INDEX IF NOT EXISTS idx_sessions_importance ON sessions(importance);",
     "CREATE INDEX IF NOT EXISTS idx_sessions_age ON sessions(age_signal);",
     "CREATE INDEX IF NOT EXISTS idx_sessions_type ON sessions(session_type);",
+    "CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id);",
     "CREATE INDEX IF NOT EXISTS idx_sessions_urgency ON sessions(urgency_active, deadline_ts) WHERE urgency_active = 1;",
     "CREATE INDEX IF NOT EXISTS idx_sessions_principle ON sessions(importance) WHERE importance = 'principle';",
     "CREATE INDEX IF NOT EXISTS idx_anchors_type ON anchors(anchor_type);",

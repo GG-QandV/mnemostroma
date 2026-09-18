@@ -192,11 +192,14 @@ async def proxy_messages(request: Request) -> Response:
     fwd         = _forward_headers(request)
     extra       = {"X-Session-Id": sid} if is_new else {}
 
+    qs   = f"?{request.url.query}" if request.url.query else ""
+    path = f"{_ANTHROPIC}/v1/messages{qs}"
+
     client = _client or httpx.AsyncClient(base_url=_ANTHROPIC)
     if streaming:
-        return await _handle_stream(client, _ANTHROPIC + "/v1/messages", body, fwd, sid, extra, "anthropic")
+        return await _handle_stream(client, path, body, fwd, sid, extra, "anthropic")
     else:
-        return await _handle_simple(client, _ANTHROPIC + "/v1/messages", body, fwd, sid, extra, "anthropic")
+        return await _handle_simple(client, path, body, fwd, sid, extra, "anthropic")
 
 
 async def proxy_gemini(request: Request) -> Response:
@@ -212,11 +215,14 @@ async def proxy_gemini(request: Request) -> Response:
     fwd         = _forward_headers(request)
     extra       = {"X-Session-Id": sid} if is_new else {}
 
+    qs   = f"?{request.url.query}" if request.url.query else ""
+    path = f"{_GEMINI}{request.url.path}{qs}"
+
     client = _client or httpx.AsyncClient(base_url=_GEMINI)
     if streaming:
-        return await _handle_stream(client, _GEMINI + request.url.path, body, fwd, sid, extra, "gemini")
+        return await _handle_stream(client, path, body, fwd, sid, extra, "gemini")
     else:
-        return await _handle_simple(client, _GEMINI + request.url.path, body, fwd, sid, extra, "gemini")
+        return await _handle_simple(client, path, body, fwd, sid, extra, "gemini")
 
 
 async def proxy_gemini_oai(request: Request) -> Response:
@@ -240,7 +246,11 @@ async def proxy_gemini_oai(request: Request) -> Response:
 
 
 async def _handle_simple(client, path, body, headers, sid, extra, provider) -> Response:
-    resp = await client.post(path, json=body, headers=headers)
+    for attempt in range(3):
+        resp = await client.post(path, json=body, headers=headers)
+        if resp.status_code < 500 or attempt == 2:
+            break
+        await asyncio.sleep(1 + attempt * 2)
     try:
         data = resp.json()
         if provider == "anthropic":
@@ -274,9 +284,14 @@ async def _handle_stream(client, path, body, headers, sid, extra, provider) -> S
 
     async def generate() -> AsyncIterator[bytes]:
         try:
-            async with client.stream(
-                "POST", path, json=body, headers=headers
-            ) as resp:
+            for attempt in range(3):
+                stream_ctx = client.stream("POST", path, json=body, headers=headers)
+                resp = await stream_ctx.__aenter__()
+                if resp.status_code < 500 or attempt == 2:
+                    break
+                await stream_ctx.__aexit__(None, None, None)
+                await asyncio.sleep(1 + attempt * 2)
+            try:
                 async for chunk in resp.aiter_bytes():
                     # Parse SSE to collect text
                     try:
@@ -303,6 +318,8 @@ async def _handle_stream(client, path, body, headers, sid, extra, provider) -> S
                     except Exception:
                         pass
                     yield chunk
+            finally:
+                await stream_ctx.__aexit__(None, None, None)
         finally:
             # finally guarantees call even on client disconnect
             asyncio.create_task(_observe("".join(collected), sid))

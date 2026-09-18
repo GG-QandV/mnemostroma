@@ -69,3 +69,27 @@ def validate_provider_base_url(value: str) -> str:
     path = parsed.path.rstrip("/")
 
     return f"{parsed.scheme}://{host}{':' + str(parsed.port) if parsed.port else ''}{path}"
+
+
+def validate_allowed_host(base_url: str, allowed_hosts: tuple[str, ...]) -> None:
+    """Verify that *base_url*'s hostname is present in *allowed_hosts*.
+
+    Called AFTER validate_provider_base_url() has already normalized
+    and validated the URL structure — this function only enforces the
+    per-provider allowlist barrier described in ADR-005 / Gateway spec
+    v1.0 (SSRF egress control).
+
+    Empty *allowed_hosts* means the allowlist check is skipped (backward
+    compatible with providers that have not yet declared allowed_hosts).
+    Raises GatewayConfigError on mismatch — does not echo the host.
+    """
+    if not allowed_hosts:
+        return
+
+    parsed = urlparse(base_url)
+    host = parsed.hostname or ""
+
+    if host not in allowed_hosts:
+        raise GatewayConfigError(
+            "provider base_url host is not in allowed_hosts allowlist"
+        )

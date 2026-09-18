@@ -118,11 +118,21 @@ async def ctx_get(session_id: str, ctx: SystemContext) -> Any | None:
 
     return None
 
+def _match_project(sb: Any, project_id: str | None, cross_project: bool) -> bool:
+    """Filter session/projection by project_id if scoping is active."""
+    if cross_project or project_id is None:
+        return True
+    sb_project_id = getattr(sb, "project_id", None)
+    return sb_project_id in (None, project_id)
+
+
 async def ctx_semantic(
     query: str, 
     ctx: SystemContext, 
     k: int = 20, 
-    top_n: int = 5
+    top_n: int = 5,
+    project_id: str | None = None,
+    cross_project: bool = False,
 ) -> list[Any]:
     """Perform high-precision semantic search.
 
@@ -136,7 +146,11 @@ async def ctx_semantic(
         top_n: Final results after reranking.
     """
     start = time.time()
-    results = await semantic_search(query, ctx, k=k, top_n=top_n)
+    results = await semantic_search(query, ctx, k=k, top_n=max(top_n * 3, 20))
+    results = [
+        sb for sb in results
+        if _match_project(sb, project_id, cross_project)
+    ][:top_n]
     latency = (time.time() - start) * 1000
 
     # B02: Emit IGNORE/USE signals via tracker (feedback_loop_v1.5.md § 4)
@@ -251,7 +265,7 @@ async def ctx_search(
 async def ctx_full(
     session_id: str,
     ctx: SystemContext,
-    max_chars: int = 2000
+    max_chars: int = 20000
 ) -> dict[str, Any] | None:
     """Load full session record via session_repo including content_full.
 
@@ -279,6 +293,8 @@ async def ctx_anchors(
     anchor_type: str | None = None,
     session_id: str | None = None,
     limit: int = 20,
+    project_id: str | None = None,
+    cross_project: bool = False,
 ) -> list[dict[str, Any]]:
     """Read anchors from RAM index (subconscious layer).
 
@@ -296,9 +312,16 @@ async def ctx_anchors(
     if session_id:
         anchors = [a for a in anchors if a.session_id == session_id]
 
+    if project_id is not None and not cross_project:
+        ram_index = getattr(ctx, "ram_index", {})
+        anchors = [
+            a for a in anchors
+            if getattr(ram_index.get(a.session_id), "project_id", None) in (None, project_id)
+        ]
+
     anchors.sort(key=lambda a: a.last_accessed_at, reverse=True)
 
-    result = []
+    result: list[dict[str, Any]] = []
     for a in anchors[:limit]:
         result.append({
             "anchor_id": a.anchor_id,
@@ -343,6 +366,8 @@ async def ctx_recent(
     days: float = 7.0,
     by: str = "created",
     limit: int = 20,
+    project_id: str | None = None,
+    cross_project: bool = False,
 ) -> list[dict[str, Any]]:
     """Return sessions observed or accessed within the last N days."""
     import time as _time
@@ -350,13 +375,18 @@ async def ctx_recent(
     if ctx.session_repo:
         results, error = await ctx.session_repo.load_recent(days, by, limit)
         if error is None:
+            if project_id is not None and not cross_project:
+                results = [
+                    r for r in results
+                    if r.get("project_id") in (None, project_id)
+                ]
             return results
 
     # LEGACY mode fallback: scan ram_index directly
     cutoff = _time.time() - days * 86400
     candidates = [
         sb for sb in ctx.ram_index.values()
-        if sb.created_at >= cutoff
+        if sb.created_at >= cutoff and _match_project(sb, project_id, cross_project)
     ]
     # by='accessed' → approximate via score (no last_use_ts in RAM)
     candidates.sort(key=lambda x: x.created_at, reverse=True)

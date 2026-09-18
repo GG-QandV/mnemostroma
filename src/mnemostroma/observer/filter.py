@@ -111,6 +111,67 @@ _CODE_PATTERN = re.compile(
 )
 
 
+# ── NER gate ─────────────────────────────────────────────────────────────────
+# Model NER is the most expensive step of the pipeline (gliner_small-v2.5: ~3.9 s
+# on 512 tokens), and it was running on 100% of observations while the project
+# targets `observer.ner_call_rate_target` = 0.3. These signals decide when the
+# model is worth running; the regex half of HybridNER always runs, it is cheap.
+
+# A capitalised word that does not open a sentence — the strongest cheap signal of
+# a PER/ORG/LOC being present. Latin and Cyrillic, including ru/uk-specific letters.
+_WORD_RE = re.compile(r"[^\W\d_]+", re.UNICODE)
+_UPPER_RE = re.compile(r"[A-ZА-ЯЁЄІЇҐ]", re.UNICODE)
+
+# Dates the model can type as `date`; the regex half does not cover absolute ones.
+_DATE_LIKE = re.compile(
+    r"\d{1,2}[./-]\d{1,2}(?:[./-]\d{2,4})?"
+    r"|\b\d{4}-\d{2}-\d{2}\b"
+    r"|\b\d{1,2}\s+(?:янв|фев|мар|апр|мая|июн|июл|авг|сен|окт|ноя|дек"
+    r"|січ|лют|бер|кві|трав|черв|лип|серп|вер|жовт|лист|груд"
+    r"|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)",
+    re.IGNORECASE,
+)
+
+
+def _has_mid_sentence_capital(text: str) -> bool:
+    """True when a capitalised word appears somewhere other than a sentence start.
+
+    Deliberately crude: it costs microseconds and only decides whether to spend
+    seconds on the model. A missed proper noun degrades one session's tags; a
+    false positive costs one model call.
+    """
+    sentence_start = True
+    for match in _WORD_RE.finditer(text):
+        word = match.group()
+        if not sentence_start and _UPPER_RE.match(word):
+            return True
+        # The next word opens a sentence only if a terminator sits between them.
+        tail = text[match.end() : match.end() + 3]
+        sentence_start = any(ch in ".!?\n" for ch in tail)
+    return False
+
+
+def needs_model_ner(text: str, precision_items: list | None = None) -> tuple[bool, str]:
+    """Decide whether this text is worth a model NER pass.
+
+    Returns the decision and the reason, so `observer.filter` logs can explain the
+    actual call rate rather than just report it.
+
+    The decision is deterministic on purpose. Sampling down to hit the target rate
+    would make the same text behave differently from run to run, and memory that
+    is not reproducible cannot be debugged.
+    """
+    if _has_mid_sentence_capital(text):
+        return True, "proper_noun"
+    if _DATE_LIKE.search(text):
+        return True, "date_like"
+    if precision_items:
+        return True, "precision_items"
+    if len(text) > 300:
+        return True, "long_text"
+    return False, "none"
+
+
 def _has_structural_importance(text: str, precision_items: list) -> bool:
     """True if text contains language-agnostic signals of importance."""
     if precision_items:

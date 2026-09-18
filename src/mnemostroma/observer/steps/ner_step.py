@@ -19,9 +19,13 @@ class NERStep:
     async def run(self, pctx: PipelineContext) -> PipelineContext:
         if pctx.ctx.models and pctx.ctx.models.ner:
             try:
+                # The gate decides only whether the MODEL runs; regex patterns still
+                # cover decisions, prohibitions, technologies and outcomes.
+                use_model = pctx.metadata.get("needs_ner", True)
                 pctx.entities = await pctx.ctx.models.ner.extract_entities(
                     pctx.event.text,
-                    threshold=pctx.ctx.config.importance.ner_score_threshold
+                    threshold=pctx.ctx.config.importance.ner_score_threshold,
+                    use_model=use_model,
                 )
             except Exception as e:
                 logger.warning(f"observer: pre-ner failed: {e}")

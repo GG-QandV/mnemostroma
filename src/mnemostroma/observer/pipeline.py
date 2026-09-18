@@ -32,16 +32,21 @@ def _float_to_importance(importance: float) -> str:
 
 
 async def observer_pipeline(
-    text: str, 
-    session_id: str, 
+    text: str,
+    session_id: str,
     ctx: SystemContext,
-    intent_vector: np.ndarray | None = None
+    intent_vector: np.ndarray | None = None,
+    role: str | None = None,
+    project_id: str | None = None,
 ) -> SessionBrief | None:
     """Process agent output through the modular StepChain.
-    
+
     Budget: 40ms. Parallel NER/Embed preserved via asyncio.gather.
     """
-    event = IOEvent(text=text, session_id=session_id, intent_vector=intent_vector)
+    event = IOEvent(
+        text=text, session_id=session_id,
+        intent_vector=intent_vector, role=role, project_id=project_id
+    )
     pctx = PipelineContext(event=event, ctx=ctx)
     
     # Init steps
@@ -81,13 +86,17 @@ async def observer_pipeline(
     pctx.metadata["embedding_f32"] = embed_pctx.metadata.get("embedding_f32")
 
 
-    # Fallback embedding if pre-embed failed
+    # Embedding failed: do NOT substitute a random vector. A random unit vector in
+    # 384 dimensions is not neutral — it sits at a middling cosine to everything and
+    # surfaces as noise in search, while also skewing continuation/conflict thresholds.
+    # The session is still persisted (text, tags, brief) and gets re-indexed later.
     embedding_f32 = pctx.metadata.get("embedding_f32")
     if embedding_f32 is None:
-        dim = ctx.config.search.embedding_dim
-        v = np.random.rand(dim).astype(np.float32)
-        embedding_f32 = v / np.linalg.norm(v)
-        pctx.metadata["embedding_f32"] = embedding_f32
+        ctx.metrics["embed_failures"] = ctx.metrics.get("embed_failures", 0) + 1
+        logger.error(
+            "embed_failed | session=%s — not indexed, re-embedding required",
+            session_id,
+        )
 
     # 3. Anchor Guardian & Surfacing (Phase 11.A/C/E)
     if embedding_f32 is not None and (
@@ -179,4 +188,5 @@ async def observer_pipeline(
 
     if pctx.sb:
         pctx.sb.entities = pctx.entities
+        pctx.sb.project_id = getattr(event, "project_id", None)
     return pctx.sb

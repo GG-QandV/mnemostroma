@@ -1,11 +1,20 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
+import difflib
+import re
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
 from ..core import SystemContext
+from ..observer.utils import is_quality_brief
 from ..tools.read import ctx_semantic
+
+# Потолки на количество строк в статических секциях инжекта: без капов
+# `<conflicts>`/`<principles>` разрастались до сотен строк мусора.
+CAP_DECISIONS = 7
+CAP_PRINCIPLES = 5
+CAP_CONFLICTS = 5
 
 
 @dataclass
@@ -24,6 +33,34 @@ PROTOCOL_BLOCK = (
     "You do not write memory. You only read. Reading is not optional.\n"
     "</agent_protocol>"
 )
+
+
+def _sb_attr(sb: Any, name: str, default: Any = "") -> Any:
+    """Читает атрибут SessionBrief либо ключ dict (duck-typed слой)."""
+    value = getattr(sb, name, None)
+    if value is None and isinstance(sb, dict):
+        value = sb.get(name)
+    return value if value is not None else default
+
+
+def _normalize_dedup(text: str) -> str:
+    """Нормализует brief для дедупликации: нижний регистр, без пунктуации."""
+    return re.sub(r"[^\w\s]", "", text.lower()).strip()
+
+
+def _dedupe_briefs(briefs: list[str]) -> list[str]:
+    """Убирает точные и почти повторные briefs, сохраняя порядок следования."""
+    seen: set[str] = set()
+    out: list[str] = []
+    for b in briefs:
+        key = _normalize_dedup(b)
+        if not key or key in seen:
+            continue
+        if any(difflib.SequenceMatcher(None, key, seen_k).ratio() > 0.85 for seen_k in seen):
+            continue
+        seen.add(key)
+        out.append(b)
+    return out
 
 
 class ConductorProxy:
@@ -51,6 +88,9 @@ class ConductorProxy:
         sessions.sort(key=lambda x: x.created_at, reverse=True)
         
         for sb in sessions:
+            # Мусорные/обрубленные briefs не должны попадать в инжект
+            if not is_quality_brief(sb.brief):
+                continue
             if sb.conflict_flag:
                 conflicts.append(f"- {sb.brief}")
             
@@ -59,8 +99,10 @@ class ConductorProxy:
             elif sb.importance in ("critical", "important"):
                 decisions.append(f"- {sb.brief}")
                 
-        # Limit quantities 
-        decisions = decisions[:7]
+        # Дедупликация похожих briefs + капы на каждую секцию
+        decisions = _dedupe_briefs(decisions)[:CAP_DECISIONS]
+        principles = _dedupe_briefs(principles)[:CAP_PRINCIPLES]
+        conflicts = _dedupe_briefs(conflicts)[:CAP_CONFLICTS]
         
         # Deadlines
         deadlines = []
@@ -86,10 +128,11 @@ class ConductorProxy:
         if deadlines:
             xml.append("<deadlines>\n" + "\n".join(deadlines) + "\n</deadlines>")
             
-        # Last session
+        # Last session — только связный brief
         if sessions:
-            last_session = sessions[0].brief
-            xml.append("<last_session>\n" + last_session + "\n</last_session>")
+            last_session = next((s.brief for s in sessions if is_quality_brief(s.brief)), None)
+            if last_session:
+                xml.append("<last_session>\n" + last_session + "\n</last_session>")
         
         return "\n\n".join(xml)
 
@@ -123,16 +166,19 @@ class ConductorProxy:
         top_k = 20 if deep else 10
         top_n = 5 if deep else 3
         relevant_sessions = await ctx_semantic(user_message, self.ctx, k=top_k, top_n=top_n)
-        if relevant_sessions:
+        # Фильтруем мусорные briefs до сборки инжекта: только связные строки
+        filtered_sessions = [
+            sb for sb in (relevant_sessions or [])
+            if is_quality_brief(_sb_attr(sb, "brief", ""))
+        ]
+        if filtered_sessions:
             # GAP 2: record which session IDs were injected for implicit feedback analysis
             self.ctx._last_injected_ids = [
-                getattr(sb, "session_id", None) or sb.get("session_id", "?")
-                for sb in relevant_sessions
+                _sb_attr(sb, "session_id", "?") for sb in filtered_sessions
             ]
             lines = [
-                f"- {getattr(sb, 'session_id', None) or sb.get('session_id', '?')}: "
-                f"{getattr(sb, 'brief', None) or sb.get('brief', '')}"
-                for sb in relevant_sessions
+                f"- {_sb_attr(sb, 'session_id', '?')}: {_sb_attr(sb, 'brief', '')}"
+                for sb in filtered_sessions
             ]
             relevant_xml = "<relevant>\n" + "\n".join(lines) + "\n</relevant>"
         else:

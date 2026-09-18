@@ -31,7 +31,9 @@ class TinyBERTReranker:
             if not os.path.exists(self.tokenizer_path):
                 raise FileNotFoundError(f"Reranker Tokenizer not found at {self.tokenizer_path}")
                 
-            self.session = InferenceSession(self.model_path)
+            from . import footprint
+            with footprint.measure(f"reranker:{self.model_path}"):
+                self.session = InferenceSession(self.model_path)
             self.tokenizer = Tokenizer.from_file(self.tokenizer_path)
             self._loaded = True
             logger.info("Successfully loaded TinyBERT Reranker ONNX")

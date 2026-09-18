@@ -33,10 +33,15 @@ async def init_db(db_path: str | Path, config: Any | None = None) -> aiosqlite.C
         mmap_sz = int(config.resources.sqlite_mmap_mb * 1024 * 1024)
 
     # Required PRAGMAs per spec (architecture_overview.md § 7)
-    await db.execute("PRAGMA journal_mode=WAL")
-    await db.execute("PRAGMA synchronous=NORMAL")
-    await db.execute(f"PRAGMA cache_size={cache_sz}")
-    await db.execute(f"PRAGMA mmap_size={mmap_sz}")
+    # Consume results to avoid aiosqlite pending cursor leak
+    async with db.execute("PRAGMA journal_mode=WAL") as cur:
+        await cur.fetchall()
+    async with db.execute("PRAGMA synchronous=NORMAL") as cur:
+        await cur.fetchall()
+    async with db.execute(f"PRAGMA cache_size={cache_sz}") as cur:
+        await cur.fetchall()
+    async with db.execute(f"PRAGMA mmap_size={mmap_sz}") as cur:
+        await cur.fetchall()
 
     # Apply all table schemas and indices
     for schema in ALL_SCHEMAS:
@@ -169,10 +174,24 @@ class DatabaseManager:
     def __init__(self, db: aiosqlite.Connection, config: Any, ctx: Any | None = None):
         self.db = db
         self.config = config.storage
+        self._embedding_model_key = self._resolve_embedding_model_key(config)
         self.ctx = ctx  # SystemContext — wired after bootstrap
         self.queue: asyncio.Queue = asyncio.Queue()
         self._worker_task: asyncio.Task | None = None
         self._running: bool = False
+
+    @staticmethod
+    def _resolve_embedding_model_key(config: Any) -> str:
+        """Active embedder identifier, used as the index-invalidation marker."""
+        default = "multilingual-e5-small"
+        try:
+            manifest = getattr(config, "manifest", None)
+            if manifest is None:
+                return default
+            m_def = manifest.active_models.get("session_embedder")
+            return getattr(m_def, "model_key", None) or default
+        except Exception:
+            return default
 
     async def start(self) -> None:
         """Start the async flush worker."""
@@ -263,6 +282,88 @@ class DatabaseManager:
             logger.error(f"dim_migration check failed (SQLite): {e}")
         except Exception as e:
             logger.error(f"dim_migration check failed: {e}")
+
+    async def check_embedding_model(self, model_key: str | None = None) -> bool:
+        """Wipe embeddings when the active embedder differs from the registered one.
+
+        check_embedding_dim() cannot catch a same-dimension model swap
+        (e5-small 384d -> granite-r2 384d): the vectors stay readable but are no
+        longer comparable, and the search silently returns noise.
+
+        Data is never dropped while it can be recovered: if session texts are still
+        present, the wipe is refused and a re-embedding run is requested instead
+        (scripts/reembed_history.py). Returns True only when a wipe happened.
+        """
+        key = model_key or self._embedding_model_key
+        try:
+            async with self.db.execute(
+                "SELECT model_key FROM embedding_model_registry WHERE is_current = 1 LIMIT 1"
+            ) as cursor:
+                row = await cursor.fetchone()
+            registered = row[0] if row else None
+
+            if registered is None:
+                # First run under this mechanism — infer from the rows themselves.
+                async with self.db.execute(
+                    "SELECT embedding_model_version FROM sessions "
+                    "WHERE embedding IS NOT NULL LIMIT 1"
+                ) as cursor:
+                    row = await cursor.fetchone()
+                registered = row[0] if row and row[0] else None
+
+            if registered is None or registered == key:
+                await self._register_embedding_model(key)
+                return False
+
+            # Model changed. Prefer re-embedding over destroying the user's memory.
+            async with self.db.execute(
+                "SELECT COUNT(*) FROM sessions WHERE content_full IS NOT NULL"
+            ) as cursor:
+                recoverable = (await cursor.fetchone())[0]
+
+            if recoverable:
+                logger.error(
+                    "reembed_required | registered=%s active=%s recoverable_sessions=%d "
+                    "-> index is stale, run scripts/reembed_history.py",
+                    registered, key, recoverable,
+                )
+                if self.ctx is not None:
+                    self.ctx.metrics["embedding_migration_pending"] = True
+                return False
+
+            logger.warning(
+                "wipe_no_source_text | registered=%s active=%s -> wiping stale embeddings",
+                registered, key,
+            )
+            await self.db.execute("DELETE FROM sessions")
+            await self.db.execute("DELETE FROM content_blocks")
+            await self.db.execute("DELETE FROM content_versions")
+            await self.db.commit()
+            await self._register_embedding_model(key)
+            return True
+
+        except aiosqlite.Error as e:
+            logger.error(f"embedding model check failed (SQLite): {e}")
+        except Exception as e:
+            logger.error(f"embedding model check failed: {e}")
+        return False
+
+    async def _register_embedding_model(self, key: str) -> None:
+        """Mark `key` as the current embedder in embedding_model_registry."""
+        import time
+        try:
+            await self.db.execute("UPDATE embedding_model_registry SET is_current = 0")
+            await self.db.execute(
+                "INSERT INTO embedding_model_registry "
+                "(model_key, model_name, dim, quantization, registered_at, is_current) "
+                "VALUES (?, ?, ?, ?, ?, 1) "
+                "ON CONFLICT(model_key) DO UPDATE SET registered_at = excluded.registered_at, "
+                "is_current = 1",
+                (key, key, getattr(self.config, "embedding_dim", None), "int8", int(time.time())),
+            )
+            await self.db.commit()
+        except aiosqlite.Error as e:
+            logger.error(f"embedding model registry update failed: {e}")
 
     async def get_all_embeddings(self, expected_dim: int = 768) -> list[tuple[str, Any]]:
         """Retrieve all session embeddings from SQLite for HNSW hydration.
@@ -362,7 +463,7 @@ class DatabaseManager:
                         implicit_score=implicit_score,
                         intensity=intensity,
                         project_id=project_id,
-                        embedding_model_version="multilingual-e5-small"
+                        embedding_model_version=self._embedding_model_key
                     )
                     results.append(sb)
         except Exception as e:
@@ -413,7 +514,7 @@ class DatabaseManager:
                     implicit_score=implicit_score,
                     intensity=intensity,
                     project_id=project_id,
-                    embedding_model_version="multilingual-e5-small"
+                    embedding_model_version=self._embedding_model_key
                 )
         except Exception as e:
             logger.error(f"get_session_by_id({session_id}): {e}")
@@ -485,7 +586,7 @@ class DatabaseManager:
                         embedding=embedding,
                         implicit_score=row[10] if row[10] is not None else 0.5,
                         intensity=row[12] if row[12] is not None else 0.0,
-                        embedding_model_version="multilingual-e5-small",
+                        embedding_model_version=self._embedding_model_key,
                         project_id=row[14] if row[14] is not None else None,
                     ))
         except Exception as e:
@@ -836,7 +937,7 @@ class DatabaseManager:
                         embedding=embedding,
                         implicit_score=row[10] if row[10] is not None else 0.5,
                         intensity=row[12] if row[12] is not None else 0.0,
-                        embedding_model_version="multilingual-e5-small",
+                        embedding_model_version=self._embedding_model_key,
                         project_id=row[14] if row[14] is not None else None,
                     ))
         except Exception as e:

@@ -93,17 +93,20 @@ async def handle_mcp(scope, receive, send):
         await response(scope, receive, send)
         return
     
-    # Accept-patch для Perplexity (HTTP 406 workaround)
+    # Accept-patch: POST → application/json (Perplexity workaround), GET → text/event-stream (SSE notifications)
     headers = list(scope.get("headers", []))
+    method = scope.get("method", "GET")
     has_accept = False
     for i, (k, v) in enumerate(headers):
         if k.lower() == b"accept":
             has_accept = True
-            if b"application/json" not in v:
-                headers[i] = (b"accept", b"application/json")
+            target = b"application/json" if method == "POST" else b"text/event-stream"
+            if target not in v:
+                headers[i] = (b"accept", target)
             break
     if not has_accept:
-        headers.append((b"accept", b"application/json"))
+        target = b"application/json" if method == "POST" else b"text/event-stream"
+        headers.append((b"accept", target))
     scope["headers"] = headers
 
     sm = scope["app"].state.sm
@@ -229,6 +232,8 @@ async def run(
         host=mcp_host,
         port=port,
         log_level="warning" if embedded else "info",
+        timeout_keep_alive=120,
+        timeout_graceful_shutdown=10,
     )
     servers = [uvicorn.Server(mcp_config)]
 
@@ -237,7 +242,9 @@ async def run(
         logger.info("Mnemostroma HTTP Adapter starting...")
         logger.info("  MCP HTTP: http://127.0.0.1:%s/mcp (Auth required)", port)
         obs_config = uvicorn.Config(
-            make_observe_app(), host="127.0.0.1", port=8766, log_level="info"
+            make_observe_app(), host="127.0.0.1", port=8766, log_level="info",
+            timeout_keep_alive=120,
+            timeout_graceful_shutdown=10,
         )
         if not is_port_in_use(8766, "127.0.0.1"):
             servers.append(uvicorn.Server(obs_config))
@@ -247,7 +254,13 @@ async def run(
     else:
         logger.info("Embedded MCP HTTP server starting on %s:%s", mcp_host, port)
 
-    await asyncio.gather(*(s.serve() for s in servers))
+    results = await asyncio.gather(
+        *(s.serve() for s in servers),
+        return_exceptions=True
+    )
+    for r in results:
+        if isinstance(r, Exception):
+            logger.error("Server crashed: %r", r)
 
 if __name__ == "__main__":
     asyncio.run(run())

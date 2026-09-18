@@ -41,7 +41,12 @@ class Dissolver:
             soft_limit = self.ctx.config.resources.ram_soft_limit_mb
             process = psutil.Process(os.getpid())
             ram_used_mb = process.memory_info().rss / 1024 / 1024
-            evictable_mb = ram_used_mb - self.ctx.onnx_baseline_mb
+            # Model weights are not evictable, and they load lazily — hence the
+            # dynamic total rather than the one-off bootstrap snapshot.
+            baseline = getattr(
+                self.ctx, "onnx_baseline_total_mb", self.ctx.onnx_baseline_mb
+            )
+            evictable_mb = ram_used_mb - baseline
 
             if evictable_mb > soft_limit:
                 n_to_evict = max(1, int(current_count * 0.10))

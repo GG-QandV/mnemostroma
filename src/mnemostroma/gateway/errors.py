@@ -35,3 +35,27 @@ class MemoryUnavailable(RuntimeError):
     @property
     def message(self) -> str:
         return self._msg
+
+
+class ModelNotFoundError(KeyError):
+    """Raised when ModelRouter.validate_model_for_provider() finds no match."""
+
+    def __init__(self, model_id: str) -> None:
+        super().__init__(f"No route found for model: {model_id!r}")
+        self.model_id = model_id
+
+
+class ProviderNotFoundError(KeyError):
+    """Raised when path-based routing resolves an unknown or disabled provider."""
+
+    def __init__(self, provider_id: str) -> None:
+        super().__init__(f"Provider not found or disabled: {provider_id!r}")
+        self.provider_id = provider_id
+
+
+class InvalidClientIdError(GatewayConfigError):
+    """Raised when require_client_id_header=True and header is missing."""
+
+
+class ConversationIdDerivationError(Exception):
+    """Raised when conversation_id cannot be safely derived."""

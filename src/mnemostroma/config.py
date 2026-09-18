@@ -4,6 +4,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from mnemostroma.gateway.config import GatewayConfig
+from mnemostroma.gateway.policy import validate_gateway_config
+from mnemostroma.proxy.models import MitmProxyConfig
+from mnemostroma.proxy.validation import (
+    _MITM_RESERVED_PORTS,
+    validate_mitm_proxy_config,
+)
+
 
 @dataclass(frozen=True)
 class ResourcesConfig:
@@ -18,6 +26,7 @@ class ResourcesConfig:
     db_growth_budget_mb_per_day: float
     onnx_inter_threads: int = 2
     onnx_intra_threads: int = 2
+    hydration_session_limit: int = 500
 
 @dataclass(frozen=True)
 class ScoreConfig:
@@ -114,6 +123,7 @@ class TunerConfig:
     recalibration_drift_threshold: float
     check_interval_sec: int
     conflict_hold_max_days: int
+    conflict_min_age_sec: int = 7200
 
 @dataclass(frozen=True)
 class UrgencyConfig:
@@ -163,6 +173,16 @@ class ModelDefinition:
     dim: int | None = None
     max_length: int | None = None
     pooling: str | None = None
+    # Identifier used to invalidate the vector index when the embedder changes.
+    # Dimension-based migration cannot catch a same-dim model swap (384 -> 384):
+    # vectors stay readable but are no longer comparable.
+    model_key: str | None = None
+    # ONNX Runtime session tuning, per model. ORT_ENABLE_ALL fuses Gather+LayerNorm
+    # into EmbedLayerNormalization, which materialises low-bit embedding tables in
+    # fp32 (measured: +486 MB on an INT4 encoder). Harmless for int8 models, so the
+    # default keeps current behaviour and only models that need it opt out.
+    graph_optimization_level: str | None = None
+    disable_prepacking: bool = False
 
 @dataclass(frozen=True)
 class ModelManifest:
@@ -292,6 +312,7 @@ class WatchdogConfig:
     check_interval_sec: int = 15
     heartbeat_timeout_sec: int = 120
     startup_failsafe_sec: int = 100
+    adapter_stale_threshold_sec: int = 20
 
 @dataclass(frozen=True)
 class SseConfig:
@@ -305,6 +326,13 @@ class SseConfig:
 class HttpConfig:
     autostart: bool = True
     port: int = 8768
+    host: str = "127.0.0.1"
+
+
+@dataclass(frozen=True)
+class HttpReadConfig:
+    autostart: bool = True
+    port: int = 8762
     host: str = "127.0.0.1"
 
 
@@ -343,7 +371,10 @@ class Config:
     ui: UiConfig = field(default_factory=UiConfig)
     sse: SseConfig = field(default_factory=SseConfig)
     http: HttpConfig = field(default_factory=HttpConfig)
+    http_read: HttpReadConfig = field(default_factory=HttpReadConfig)
+    gateway: GatewayConfig | None = None
     manifest: ModelManifest | None = None
+    mitm_proxy: MitmProxyConfig | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert config to dictionary for JSON serialization."""
@@ -369,6 +400,18 @@ class Config:
                 k: v for k, v in data.items()
                 if k in inspect.signature(cls.__init__).parameters
             }
+
+        if 'gateway' in data:
+            gateway = GatewayConfig.from_dict(data['gateway'])
+            validate_gateway_config(gateway)
+        else:
+            gateway = None
+
+        if 'mitm_proxy' in data:
+            mitm_proxy = MitmProxyConfig.from_dict(data['mitm_proxy'])
+            validate_mitm_proxy_config(mitm_proxy, reserved_ports=_MITM_RESERVED_PORTS)
+        else:
+            mitm_proxy = None
 
         return cls(
             resources=ResourcesConfig(**filter_keys(ResourcesConfig, data['resources'])),
@@ -404,5 +447,12 @@ class Config:
             ui=UiConfig(**filter_keys(UiConfig, data['ui'])) if 'ui' in data else UiConfig(),
             sse=SseConfig(**filter_keys(SseConfig, data['sse'])) if 'sse' in data else SseConfig(),
             http=HttpConfig(**filter_keys(HttpConfig, data['http'])) if 'http' in data else HttpConfig(),
-            manifest=ModelManifest.load(Path(path).parent / "models_manifest.json") if (Path(path).parent / "models_manifest.json").exists() else None
+            http_read=HttpReadConfig(**filter_keys(HttpReadConfig, data['http_read'])) if 'http_read' in data else HttpReadConfig(),
+            gateway=gateway,
+            manifest=(
+                ModelManifest.load(Path(path).parent / "models_manifest.json")
+                if (Path(path).parent / "models_manifest.json").exists()
+                else None
+            ),
+            mitm_proxy=mitm_proxy,
         )

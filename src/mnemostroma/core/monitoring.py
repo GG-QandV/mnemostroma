@@ -76,6 +76,36 @@ async def run_background_workers(conductor: "Conductor") -> None:
                     "Embedded MCP HTTP server starting on %s:%s", http_cfg.host, http_cfg.port
                 )
 
+        # Embedded HTTP Read server (direct REST retrieval — no MCP overhead)
+        http_read_cfg = getattr(getattr(conductor, "ctx", None) and conductor.ctx.config, "http_read", None)
+        if http_read_cfg is None:
+            from mnemostroma.config import HttpReadConfig
+            http_read_cfg = HttpReadConfig()
+        if http_read_cfg.autostart:
+            from mnemostroma.integration.mcp_http_adapter import is_port_in_use
+            if is_port_in_use(http_read_cfg.port, http_read_cfg.host):
+                logger.warning(
+                    "Port %s already in use — embedded HTTP Read not started. "
+                    "Stop any standalone 'mnemostroma http-read' process first.",
+                    http_read_cfg.port,
+                )
+            else:
+                from mnemostroma.integration.http_read_adapter import run as _http_read_run
+                http_read_task = tg.create_task(
+                    _http_read_run(
+                        conductor=conductor,
+                        port=http_read_cfg.port,
+                        host=http_read_cfg.host,
+                    ),
+                    name="http-read-server",
+                )
+                conductor._http_read_task = http_read_task
+                logger.info(
+                    "Embedded HTTP Read server starting on %s:%s",
+                    http_read_cfg.host,
+                    http_read_cfg.port,
+                )
+
         logger.info("Daemon is running. Press Ctrl+C to stop.")
 
         while True:

@@ -26,7 +26,11 @@ fi
 # executed, `export`/`unset` would leak the MITM proxy and CA into the
 # calling shell for its whole lifetime, breaking unrelated tools' TLS.
 # ANTHROPIC_BASE_URL conflicts with MITM for non-Anthropic providers.
-exec env -u ANTHROPIC_BASE_URL "${{MNEMO_ENV[@]}}" "$OPENCODE_BIN" "$@"
+# SSL_CERT_FILE/CURL_CA_BUNDLE/REQUESTS_CA_BUNDLE removed: a global MITM-CA
+# (single root) in the environment would replace the system roots and break
+# TLS for hosts not signed by it. opencode trusts the MITM CA via
+# NODE_EXTRA_CA_CERTS, which ADDS trust instead of replacing it.
+exec env -u ANTHROPIC_BASE_URL -u SSL_CERT_FILE -u CURL_CA_BUNDLE -u REQUESTS_CA_BUNDLE "${{MNEMO_ENV[@]}}" "$OPENCODE_BIN" "$@"
 """,
         encoding="utf-8",
     )

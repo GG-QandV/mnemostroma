@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
 import difflib
 import logging
+import re
 import time
 from typing import Any
 
@@ -10,6 +11,23 @@ from ..core import SystemContext
 from ..memory.session_index import SessionBrief
 
 logger = logging.getLogger("mnemostroma.tuner")
+
+# Окно текста для сравнения выводов: полные транскрипты могут быть огромными,
+# а для edit-ratio достаточно начала текста.
+_COMPARISON_WINDOW = 400
+
+
+def _comparison_text(sb: SessionBrief, limit: int = _COMPARISON_WINDOW) -> str:
+    """Текст для сравнения выводов: полный текст события, если он есть.
+
+    Раньше сравнение шло по ``brief``, но мусорные обрывки briefs давали
+    ложные конфликты (см. ТЗ про garbage briefs). Полный текст (``content_full``)
+    семантически согласован с эмбеддингом, по которому проходит порог схожести.
+    """
+    source = sb.content_full or sb.brief or ""
+    collapsed = re.sub(r"\s+", " ", source).strip()
+    return collapsed[:limit]
+
 
 def extract_key_entities(text: str) -> set[str]:
     """Simplified NER: extracts potential nouns and named entities."""
@@ -42,8 +60,8 @@ def decisions_contradict(
         True: Same subject, but different conclusion (Conflict).
         False: Different subjects or duplicate conclusions.
     """
-    text_A = sb_a.brief
-    text_B = sb_b.brief
+    text_A = _comparison_text(sb_a)
+    text_B = _comparison_text(sb_b)
     
     # 2. Embedding via shared embedder (if missing, use stored embedding)
     vec_A = sb_a.embedding
@@ -147,6 +165,14 @@ def check_conflict(new_sb: SessionBrief, ctx: SystemContext) -> bool:
 
         # Check importance bounds
         if neighbor_sb.importance in ("critical", "important") and new_sb.importance in ("critical", "important"):
+            # Time proximity gate: skip if sessions are too close in time
+            # (same dialog → false positive)
+            min_age = getattr(ctx.config.tuner, "conflict_min_age_sec", 7200)
+            if abs(new_sb.created_at - neighbor_sb.created_at) < min_age:
+                neighbor_info["skipped_reason"] = "time_proximity"
+                neighbors_analyzed.append(neighbor_info)
+                continue
+
             if decisions_contradict(new_sb, neighbor_sb, ctx.models.embedder):
                 # Flag both sessions
                 new_sb.conflict_flag = True

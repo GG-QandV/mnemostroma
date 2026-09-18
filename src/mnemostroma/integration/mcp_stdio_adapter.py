@@ -150,6 +150,16 @@ _TOOLS = [
             },
         },
     },
+    {
+        "name": "ctx_help",
+        "description": "Returns a brief markdown cheat sheet on when and how to use Mnemostroma tools.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "section": {"type": "string"}
+            }
+        },
+    },
 ]
 
 # ── IPC client ────────────────────────────────────────────────────────

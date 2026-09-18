@@ -121,8 +121,8 @@ def start_services() -> None:
             print(f"Failed to run Windows scheduled tasks: {e}")
     else:
         print("Starting systemd user services...")
-        # Start daemon, proxy, watchdog
-        for svc in ["mnemostroma-daemon.service", "mnemostroma-proxy.service", "mnemostroma-watchdog.service", "mnemostroma-tunnel.service"]:
+        # Start daemon, proxy, watchdog, ui, tunnel
+        for svc in ["mnemostroma-daemon.service", "mnemostroma-proxy.service", "mnemostroma-watchdog.service", "mnemostroma-ui.service", "mnemostroma-tunnel.service"]:
             try:
                 subprocess.run(
                     ["systemctl", "--user", "start", svc],

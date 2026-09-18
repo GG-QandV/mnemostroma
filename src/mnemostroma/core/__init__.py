@@ -67,7 +67,10 @@ class ModelRegistry:
             tokenizer_path=self._resolve_model_path(m_def.tokenizer_path) if m_def.tokenizer_path else None,
             dim=m_def.dim,
             max_length=m_def.max_length,
-            pooling=m_def.pooling
+            pooling=m_def.pooling,
+            model_key=m_def.model_key,
+            graph_optimization_level=m_def.graph_optimization_level,
+            disable_prepacking=m_def.disable_prepacking,
         )
         return self._pool.get(m_def)
 
@@ -85,7 +88,10 @@ class ModelRegistry:
             tokenizer_path=self._resolve_model_path(m_def.tokenizer_path) if m_def.tokenizer_path else None,
             dim=m_def.dim,
             max_length=m_def.max_length,
-            pooling=m_def.pooling
+            pooling=m_def.pooling,
+            model_key=m_def.model_key,
+            graph_optimization_level=m_def.graph_optimization_level,
+            disable_prepacking=m_def.disable_prepacking,
         )
         return self._pool.get(m_def)
 
@@ -97,7 +103,12 @@ class ModelRegistry:
             m_def = self.config.manifest.active_models["ner"]
             path = self._resolve_model_path(m_def.path)
             tok_path = self._resolve_model_path(m_def.tokenizer_path) if m_def.tokenizer_path else None
-            self._ner = GLiNERObserver(path, tok_path)
+            self._ner = GLiNERObserver(
+                path,
+                tok_path,
+                graph_optimization_level=m_def.graph_optimization_level,
+                disable_prepacking=m_def.disable_prepacking,
+            )
         return self._ner
 
     @property
@@ -199,7 +210,11 @@ class SystemContext:
     # Urgency Pulse cache (session_id -> last known level)
     urgency_level_cache: dict[str, str] = field(default_factory=dict)
 
-    # ONNX model memory baseline — set once after all models are loaded
+    # ONNX model memory baseline. `onnx_baseline_mb` holds the *process* part only
+    # (interpreter, indices, caches); model weights are tracked separately by
+    # models.footprint, because they load and unload lazily. Use
+    # `onnx_baseline_total_mb` wherever the boundary between evictable and
+    # non-evictable memory is needed — see Dissolver._maybe_evict.
     onnx_baseline_mb: float = 0.0
     onnx_baseline_ready: bool = False
 
@@ -231,21 +246,51 @@ class SystemContext:
     anchor_index: Optional['AnchorIndex'] = field(default_factory=lambda: AnchorIndex(max_capacity=1000))
 
     def set_onnx_baseline(self) -> None:
-        """Measure current RSS as ONNX model overhead. Call after all models are loaded."""
+        """Snapshot the non-model part of RSS as the eviction baseline.
+
+        Model weights already loaded are subtracted: they are accounted for by
+        models.footprint and would otherwise be counted twice once a model is
+        released and re-loaded.
+        """
         try:
             import os
 
             import psutil
+
+            from ..models import footprint
             rss = psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024
-            self.onnx_baseline_mb = rss
+            models_mb = footprint.total_mb()
+            if models_mb > rss:
+                # Should not happen: tracked model memory cannot exceed process RSS.
+                # Clamping silently would zero the baseline and make eviction fire on
+                # every check, so say it out loud instead.
+                logging.getLogger("mnemostroma.ctx").warning(
+                    "baseline mismatch | models=%.1f MB > rss=%.1f MB — clamping to 0",
+                    models_mb, rss,
+                )
+            self.onnx_baseline_mb = max(0.0, rss - models_mb)
             self.onnx_baseline_ready = True
             logging.getLogger("mnemostroma.ctx").info(
-                f"ONNX baseline set: {rss:.1f} MB"
+                "ONNX baseline set: process=%.1f MB models=%.1f MB total=%.1f MB",
+                self.onnx_baseline_mb, models_mb, self.onnx_baseline_total_mb,
             )
         except Exception as e:
             logging.getLogger("mnemostroma.ctx").warning(
                 f"Failed to set ONNX baseline: {e} — RAM-based eviction disabled"
             )
+
+    @property
+    def onnx_baseline_total_mb(self) -> float:
+        """Non-evictable memory: process baseline plus currently loaded models.
+
+        Follows lazy loading and unloading, so eviction is never asked to free
+        memory that belongs to model weights.
+        """
+        try:
+            from ..models import footprint
+            return self.onnx_baseline_mb + footprint.total_mb()
+        except Exception:
+            return self.onnx_baseline_mb
 
     def get_session_label(self, session_id: str) -> int:
         """Get existing or assign new deterministic label for session vector."""

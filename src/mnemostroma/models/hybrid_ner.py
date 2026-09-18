@@ -64,6 +64,10 @@ PROHIBITION_PATTERNS = [
 ]
 
 
+class _GateClosed(Exception):
+    """Internal signal: the gate skipped the model, this is not a failure."""
+
+
 class HybridNER:
     """Combines DistilBERT token classification with regex patterns.
 
@@ -75,15 +79,17 @@ class HybridNER:
     Expected latency: <50ms combined.
     """
 
-    def __init__(self, model_path: str, tokenizer_path: str):
-        self._bert = BertNER(model_path=model_path, tokenizer_path=tokenizer_path)
+    def __init__(self, model_path: str, tokenizer_path: str, **session_kwargs):
+        self._bert = BertNER(
+            model_path=model_path, tokenizer_path=tokenizer_path, **session_kwargs
+        )
 
     def load(self) -> None:
         """Load ONNX model (lazy by default via BertNER)."""
         self._bert.load()
 
     async def extract_entities(
-        self, text: str, threshold: float = 0.5
+        self, text: str, threshold: float = 0.5, use_model: bool = True
     ) -> list[dict[str, Any]]:
         """Extract entities using both model and regex.
 
@@ -96,14 +102,18 @@ class HybridNER:
         """
         entities: list[dict[str, Any]] = []
 
-        # 1. Model-based NER (PER, ORG, LOC, DATE)
+        # 1. Model-based NER (PER, ORG, LOC, DATE), when the gate allows it.
         # Adheres to Rule 2: ONNX inference runs in executor
         try:
+            if not use_model:
+                raise _GateClosed
             loop = asyncio.get_running_loop()
             model_entities = await loop.run_in_executor(
                 None, self._bert.predict_entities, text, threshold
             )
             entities.extend(model_entities)
+        except _GateClosed:
+            logger.debug("NER gate closed — regex patterns only")
         except Exception as e:
             logger.error(f"BertNER failed: {e}")
 

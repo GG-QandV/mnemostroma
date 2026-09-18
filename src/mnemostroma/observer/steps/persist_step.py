@@ -76,7 +76,7 @@ class PersistStep:
             score=pctx.score or 0.0,
             resolution=1.0,
             created_at=created_at,
-            conflict_flag=pctx.metadata.get("conflict_signal", False),
+            conflict_flag=False,  # set only by tuner semantic check, not keyword noise
             urgency=pctx.metadata.get("urgency", "none"),
             deadline_ts=pctx.metadata.get("deadline_ts"),
             bare_entity=is_bare,
@@ -131,7 +131,14 @@ class PersistStep:
             detected_flags["mention_type"] = detect_mention_type(pctx.event.text, pctx.entities)
 
         # 6.5 + 7. Continuation + conflict + write
-        vec_f32 = embedding_f32.astype(np.float32).flatten() if embedding_f32 is not None else _normalized_rand(384)
+        # No embedding -> no index entry. A random vector would be indistinguishable
+        # from a real one at query time while meaning nothing; the session stays in
+        # SQLite with embedding NULL and is picked up by re-embedding.
+        vec_f32 = (
+            embedding_f32.astype(np.float32).flatten()
+            if embedding_f32 is not None
+            else None
+        )
 
         pipeline_width = ctx.config.search.pipeline_width
 
@@ -154,7 +161,7 @@ class PersistStep:
             cont, pctx.sb = await asyncio.gather(_run_continuation(), _run_conflict())
 
             async with ctx.index_lock:
-                if ctx.session_index:
+                if ctx.session_index and vec_f32 is not None:
                     label = ctx.get_session_label(session_id)
                     ctx.session_index.add_items([vec_f32], [label])
                     ctx.id_to_sid[label] = session_id
@@ -171,7 +178,7 @@ class PersistStep:
                     pctx.sb = await tuner_check(pctx.sb, ctx)
                 except Exception as e:
                     logger.error(f"Tuner failed, skipping conflict check: {e}")
-                if ctx.session_index:
+                if ctx.session_index and vec_f32 is not None:
                     label = ctx.get_session_label(session_id)
                     ctx.session_index.add_items([vec_f32], [label])
                     ctx.id_to_sid[label] = session_id
@@ -400,8 +407,3 @@ class PersistStep:
         # Log Save
         
         return pctx
-
-def _normalized_rand(dim: int) -> np.ndarray:
-    """Normalized random fallback vector."""
-    v = np.random.rand(dim).astype(np.float32)
-    return v / np.linalg.norm(v)

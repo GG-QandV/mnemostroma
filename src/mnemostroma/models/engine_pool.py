@@ -48,8 +48,11 @@ class EnginePool:
             model_path=model_def.path,
             tokenizer_path=model_def.tokenizer_path,
             dim=model_def.dim,
-            max_length=getattr(model_def, "max_length", 512),
-            query_prefix=getattr(model_def, "query_prefix", ""),
+            max_length=getattr(model_def, "max_length", 512) or 512,
+            query_prefix=getattr(model_def, "query_prefix", "") or "",
+            pooling=getattr(model_def, "pooling", None) or "mean",
+            graph_optimization_level=getattr(model_def, "graph_optimization_level", None),
+            disable_prepacking=bool(getattr(model_def, "disable_prepacking", False)),
             threads=self._inter_threads,
             intra_threads=self._intra_threads,
         )
@@ -82,13 +85,24 @@ class EnginePool:
     
     @staticmethod
     def _make_key(model_def: Any) -> str:
-        return f"{model_def.path}::{model_def.tokenizer_path}"
-    
+        """Deduplication key.
+
+        Pooling and query prefix are part of the identity: the same file used with
+        two different pooling modes is two different engines, and sharing one would
+        silently run the second role in the first role's mode.
+        """
+        pooling = getattr(model_def, "pooling", None) or "mean"
+        prefix = getattr(model_def, "query_prefix", None) or ""
+        return f"{model_def.path}::{model_def.tokenizer_path}::{pooling}::{prefix}"
+
     @staticmethod
     def _short_key(key: str) -> str:
         """Shorten for readable logs."""
         parts = key.split("::")
         from pathlib import Path
-        if len(parts) == 2:
-            return f"{Path(parts[0]).name}+{Path(parts[1]).name}"
+        if len(parts) >= 2:
+            short = f"{Path(parts[0]).name}+{Path(parts[1]).name}"
+            if len(parts) >= 3 and parts[2]:
+                short += f"/{parts[2]}"
+            return short
         return key

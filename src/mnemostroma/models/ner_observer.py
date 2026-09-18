@@ -13,10 +13,10 @@ class NERObserver:
     Adheres to Mnemostroma Rule 1: No torch, no transformers.
     Optimized for DistilBERT int8 models in 700MB budget environments.
     """
-    def __init__(self, model_path: str, tokenizer_path: str):
+    def __init__(self, model_path: str, tokenizer_path: str, **session_kwargs):
         self.model_path = model_path
         self.tokenizer_path = tokenizer_path
-        self.model = HybridNER(model_path, tokenizer_path)
+        self.model = HybridNER(model_path, tokenizer_path, **session_kwargs)
         self._loaded = False
         
     def _load(self) -> None:
@@ -32,17 +32,22 @@ class NERObserver:
             logger.error(f"Failed to load HybridNER: {e}")
             raise
 
-    async def extract_entities(self, text: str, threshold: float = 0.5) -> list[dict[str, Any]]:
+    async def extract_entities(
+        self, text: str, threshold: float = 0.5, use_model: bool = True
+    ) -> list[dict[str, Any]]:
         """Extract entities from text using HybridNER.
         
         Interface is async and uses executor for CPU-bound parts.
         """
-        if not self._loaded:
+        # Loading costs hundreds of MB; with the gate closed there is nothing to load for.
+        if use_model and not self._loaded:
             self._load()
-            
+
         try:
             # HybridNER.extract_entities is already async and uses executor
-            entities = await self.model.extract_entities(text, threshold=threshold)
+            entities = await self.model.extract_entities(
+                text, threshold=threshold, use_model=use_model
+            )
             return entities
         except Exception as e:
             logger.error(f"HybridNER extraction failed: {e}")

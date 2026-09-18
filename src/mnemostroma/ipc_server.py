@@ -16,6 +16,7 @@ No external dependencies — stdlib only.
 import asyncio
 import json
 import logging
+import socket
 import sys
 import time as _time
 from pathlib import Path
@@ -74,10 +75,14 @@ class IPCServer:
                 logger.info(f"IPC server listening on {PIPE_NAME}")
             except OSError as e:
                 # TCP fallback if Named Pipe fails
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                if hasattr(socket, "SO_REUSEPORT"):
+                    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+                sock.bind(("127.0.0.1", 8767))
                 self._server = await asyncio.start_server(
                     self._handle_client,
-                    host="127.0.0.1",
-                    port=8767,
+                    sock=sock,
                     limit=1024 * 1024 * 16,
                 )
                 logger.info(f"IPC server listening on TCP 127.0.0.1:8767 (pipe failed: {e})")
@@ -93,10 +98,14 @@ class IPCServer:
                 logger.info(f"IPC server listening on {SOCKET_PATH}")
             except OSError as e:
                 # TCP fallback for Unix as well
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                if hasattr(socket, "SO_REUSEPORT"):
+                    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+                sock.bind(("127.0.0.1", 8767))
                 self._server = await asyncio.start_server(
                     self._handle_client,
-                    host="127.0.0.1",
-                    port=8767,
+                    sock=sock,
                     limit=1024 * 1024 * 16,
                 )
                 logger.info(f"IPC server listening on TCP 127.0.0.1:8767 (unix socket failed: {e})")
