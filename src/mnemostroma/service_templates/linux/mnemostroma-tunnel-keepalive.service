@@ -1,0 +1,11 @@
+[Unit]
+Description=Mnemostroma Tunnel HTTP Keepalive
+ConditionPathExists=%h/.mnemostroma/tunnel_url
+ConditionUnitState=mnemostroma-tunnel.service=active
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c '\
+  URL=$(cat %h/.mnemostroma/tunnel_url 2>/dev/null) && \
+  [ -n "$URL" ] && \
+  curl -sf --max-time 10 -H "serveo-skip-browser-warning: true" "$URL/health" > /dev/null || true'

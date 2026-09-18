@@ -1,0 +1,11 @@
+[Unit]
+Description=Mnemostroma Tunnel Keepalive — каждые 25 минут
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=25min
+AccuracySec=60
+Persistent=false
+
+[Install]
+WantedBy=timers.target

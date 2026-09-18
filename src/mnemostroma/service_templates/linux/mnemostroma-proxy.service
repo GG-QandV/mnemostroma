@@ -1,0 +1,28 @@
+[Unit]
+Description=Mnemostroma HTTP Proxy (port 8767)
+After=mnemostroma-daemon.service network.target
+BindsTo=mnemostroma-daemon.service
+
+[Service]
+Type=simple
+KillMode=control-group
+
+WorkingDirectory=%h/.mnemostroma
+ExecStartPre=-/usr/bin/fuser -k -TERM 8767/tcp
+ExecStartPre=/bin/sleep 1
+ExecStart=%VENV_BIN%/python3 -m mnemostroma.integration.http_proxy
+ExecReload=/bin/kill -HUP $MAINPID
+
+Restart=always
+RestartSec=1
+TimeoutStartSec=45
+TimeoutStopSec=10
+
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mnemostroma-proxy
+
+
+[Install]
+WantedBy=default.target

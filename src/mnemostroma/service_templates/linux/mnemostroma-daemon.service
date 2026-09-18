@@ -1,0 +1,40 @@
+[Unit]
+Description=Mnemostroma Daemon (Conductor)
+After=network.target
+Wants=mnemostroma-proxy.service mnemostroma-watchdog.service
+# Prevent runaway restarts: max 5 starts per 60s, then stop
+StartLimitBurst=5
+StartLimitIntervalSec=60s
+
+[Service]
+Type=simple
+KillMode=control-group
+
+WorkingDirectory=%h/.mnemostroma
+ExecStartPre=-/usr/bin/fuser -k -TERM 8767/tcp
+ExecStartPre=/bin/sleep 1
+ExecStart=%VENV_BIN%/python3 -m mnemostroma run
+ExecReload=/bin/kill -HUP $MAINPID
+
+# Restart only on failure, not on clean stop (exit 0)
+Restart=on-failure
+RestartSec=10s
+RestartPreventExitStatus=0
+OnFailure=
+
+Environment="DISPLAY=:0"
+Environment="XAUTHORITY=%h/.Xauthority"
+MemoryMax=750M
+
+# Startup timeout (v1.8.4)
+TimeoutStartSec=30
+TimeoutStopSec=10
+
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mnemostroma-daemon
+
+
+[Install]
+WantedBy=default.target

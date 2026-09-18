@@ -1,0 +1,21 @@
+[Unit]
+Description=Mnemostroma Serveo Tunnel & OAuth Adapter
+After=mnemostroma-daemon.service network.target
+Wants=mnemostroma-daemon.service
+StartLimitBurst=0
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+WorkingDirectory=%h/.mnemostroma
+ExecStart=%VENV_BIN%/python3 -m mnemostroma tunnel start --foreground
+Environment=PYTHONUNBUFFERED=1
+Restart=always
+RestartSec=10
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mnemostroma-tunnel
+
+[Install]
+WantedBy=default.target
